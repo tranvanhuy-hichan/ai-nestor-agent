@@ -17,6 +17,7 @@ Trợ lý AI cá nhân chạy trên máy bạn: gateway chạy nền, giao diệ
 - **Skills**: đọc định dạng skill `SKILL.md` (tương thích [ClawHub](https://clawhub.ai)), duyệt, cài và cập nhật từ ClawHub.
 - **MCP client**: nối MCP server của bạn (stdio, HTTP, SSE); tool xuất hiện dưới dạng `tênserver__têntool`.
 - **Cho app khác gọi agent**: `POST /v1/run` với API token, hoặc MCP server (`agent_run`) dùng được trong Claude Code, Cursor...
+- **Trợ lý văn phòng (kiểu COffice AI)**: tạo file Word/Excel (công thức sống)/PowerPoint thật, soạn và **rà thể thức văn bản hành chính theo NĐ 30/2020**; 10 **trợ lý chuyên trách** (văn thư, văn bản Đảng HD 05, tổng hợp báo cáo, thư ký, kế toán, nhân sự, kinh doanh, dự án, pháp chế, IT) và trợ lý tự tạo; kênh **Zalo OA** (nhắn việc, nhận kết quả, ghép đôi như Telegram); automation **Tóm tắt buổi sáng**; nút **đúc kết hội thoại thành Skill/Rule**; **tổ công tác** nhiều agent chạy song song có bảng ghi chép chung; agent **tự viết và chạy script** xử lý hàng loạt rồi lưu thành kỹ năng.
 - **Chủ động**: Automations (cron), Heartbeat (agent tự kiểm tra `HEARTBEAT.md` và nhắn khi cần), Hộp thư thông báo, kênh **Telegram** (nút phê duyệt ngay trong chat, nhận/gửi file).
 - **Bộ nhớ**: `MEMORY.md`, tìm kiếm toàn văn mọi hội thoại cũ (`memory_search`), tự tóm tắt hội thoại dài.
 - **Song ngữ Việt/Anh**: đổi ngôn ngữ ở đầu thanh bên (và CLI theo `--lang`). Thêm chuỗi mới: bọc `t('câu tiếng Việt')` rồi thêm bản Anh vào `app/frontend/src/i18n/en/`; `npm run i18n:check` bắt chuỗi sót, thiếu bản dịch hoặc dịch xung đột.

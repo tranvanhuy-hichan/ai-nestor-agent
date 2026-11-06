@@ -638,6 +638,15 @@ Thêm vào `PRESETS` và `SERVICES` trong `features/providers/ProvidersPage.tsx`
 - Thông điệp cho người dùng sinh ở backend phải là mẫu tiếng Việt + biến (xem `ui_event`), không ghép chuỗi tự do, để giao diện dịch được.
 - Không bắt lỗi rộng để nuốt lỗi; riêng công cụ và tác vụ nền thì phải bắt để không làm sập vòng lặp, và trả lỗi dạng văn bản cho mô hình.
 
+## 12b. Trợ lý văn phòng kiểu COffice AI
+
+- **Tạo file Office** (`services/tools_office.py`): `create_docx`, `create_xlsx` (công thức sống), `create_pptx`, `vanban_types` + `vanban_write_docx` (writer theo role từ skill van-ban-hanh-chinh, thể thức NĐ 30/2020), `review_vn_document` (rà lỗi thể thức + cảnh báo địa danh cũ), `run_script` (viết và chạy script Python trong thư mục phiên, có timeout, luôn hỏi phép trừ chế độ Toàn quyền), `save_script_as_skill`.
+- **Trợ lý chuyên trách** (`services/assistants.py`, `api/assistants.py`): 10 persona dựng sẵn + trợ lý tự tạo lưu ở `workspace/assistants.json`. Chat nhận trường `assistant`; prompt trợ lý được nối vào system prompt qua `system_extra`.
+- **Kênh Zalo OA** (`services/zalo_channel.py`): Zalo gọi webhook `POST /api/channels/zalo/webhook` (bỏ qua kiểm tra Host/cookie, tự xác thực bằng `X-ZEvent-Signature` hoặc `?secret=`; chưa đặt `webhook_secret` thì từ chối hết). Trả lời qua `/v3.0/oa/message/cs`, tự làm mới token khi gặp lỗi -216/-124. Xin phép bằng tin nhắn văn bản ("ok"/"không"). Thông báo (automation, heartbeat) được đẩy sang Zalo qua `notifications.listeners`.
+- **Tóm tắt buổi sáng** (`services/brief.py`): `POST /api/automations/templates/morning-brief` tạo (hoặc cập nhật) automation cron; kết quả vào Hộp thư và tự sang Telegram/Zalo đã bật.
+- **Đúc kết Skill/Rule** (`services/distill.py`, `services/rules.py`): `POST /api/sessions/{id}/distill` dùng model mặc định tóm hội thoại thành `skills/<tên>/SKILL.md` hoặc một dòng quy tắc trong `workspace/RULES.md` (nạp vào mọi system prompt).
+- **Tổ công tác** (`services/teams.py`, `tools_agents.team_run`): các thành viên chạy song song qua `jobs.run_subagent`, dùng chung bảng ghi chép (`team_note_write/read`), một agent `reviewer` kiểm tra chéo. Trạng thái sống ở `GET /api/teams/{id}/status` (trong bộ nhớ, giữ 50 tổ gần nhất). Tôn trọng `agents.max_depth`.
+
 ## 13. Kiểm thử và CI
 
 - **Backend:** `cd app/backend && ../../.venv/bin/python -m pytest -q`. Có khoảng 140 test: lõi và đường dẫn, cấu hình và mã hóa, sao lưu/khôi phục, kỹ năng, MCP, Telegram (máy chủ giả), agent và việc nền (mô hình giả), trình duyệt, ảnh, điều khiển máy tính (mock), trí nhớ (máy chủ embedding giả), CLI (chạy như tiến trình thật) và trình hướng dẫn cài đặt (qua pty).
@@ -658,3 +667,23 @@ Dockerfile nhiều giai đoạn: build giao diện bằng Node, rồi image Pyth
 ### Cập nhật
 
 Mã cố định nằm riêng trong `app/`, nên cập nhật là `git pull`, cài lại gói (`pip install -e app/backend`), build lại giao diện (`npm run build`) và `argus restart`. Dữ liệu trong `user-data/` không bị đụng tới; các thay đổi schema được áp dụng khi khởi động (`db.init()` thêm bảng và cột còn thiếu).
+
+- **Trợ lý chuyên trách "thật"** (`services/assistants.py`, `assistant_defs/`, `bundled_skills/`): định nghĩa gộp từ `assistant_defs/*.py`; `prompt_for` = persona + toàn văn skill đi kèm + cổng chất lượng (done_criteria, deliverables); `tool_allow` ép allowlist trong `agent.run_turn(tool_allow=...)`; trợ lý lưu ở `sessions.assistant`. `skills.discover` nạp thêm `bundled_skills` (chỉ đọc, workspace thắng, không vào danh sách skill chung). Chi tiết và giới hạn: `docs/api-assistants.md`.
+
+## Tool xử lý văn bản và bảng tính (`services/tools_docs.py`)
+
+Các tool dùng chung cho skill (đều `risk="file"`, đọc/ghi qua `_resolve`, lỗi trả tiếng Việt):
+
+| Tool | Việc |
+|---|---|
+| `docx_fill_template(template_path, data, data_path, output_dir, name_field)` | Điền trường `{{...}}` vào mẫu Word, giữ định dạng; trường bị tách giữa nhiều run, trong bảng, đầu/chân trang; bộ lọc `upper`, `lower`, `title`, `number`, `date:dd/mm/yyyy`; 1 văn bản (JSON object) hoặc nhiều (mảng JSON / `.xlsx` / `.csv`), tối đa 500 |
+| `excel_merge_reports(paths, output_path, header_hints)` | Gộp nhiều báo cáo Excel khác bố cục: tự tìm dòng tiêu đề, ghép cột gần giống (không dấu), cột `Nguồn`, sheet `Sai lệch` (cột không khớp/thiếu, khóa trùng, chữ trong cột số, tổng từng file so với tổng gộp) |
+| `grade_summary(path, he_so, output_path)` | Điểm trung bình theo hệ số, xếp loại (ngưỡng sửa được ở sheet `Cấu hình`), thứ hạng, thống kê lớp; kết quả dùng công thức Excel sống |
+| `convert_to_pdf(path)` | Đổi docx/xlsx/pptx sang PDF bằng LibreOffice (timeout 180s) |
+| `compare_documents(path_a, path_b)` | So sánh hai văn bản (.docx/.pdf/.txt) từng đoạn: thêm, xóa, sửa, số và ngày khác nhau |
+| `deadline_report(path, today)` | Sổ văn bản Excel: quá hạn, sắp đến hạn (≤ 3 ngày), theo người; xuất Excel tô màu |
+| `place_name_check(path, mapping_path)` | Rà cấp hành chính cũ (huyện, quận, thị xã, thị trấn); có file ánh xạ thì thay tên và lưu bản sửa giữ định dạng |
+| `excel_audit(path)` | Kiểm tra bảng tính kế toán: ô lỗi công thức, số lưu dạng chữ, dòng Tổng lệch/SUM thiếu ô, ô trống, dòng trùng, xếp theo mức ưu tiên |
+
+Giới hạn: không xử lý chữ trong hộp văn bản (text box) của Word; ghép cột báo cáo là gần đúng theo tên cột, nên luôn xem sheet `Sai lệch` trước khi dùng số liệu.
+
