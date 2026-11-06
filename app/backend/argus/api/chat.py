@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ..core import config as cfgmod
-from ..services import chat_runner, sessions, usage, workfiles
+from ..services import assistants, chat_runner, sessions, usage, workfiles
 
 router = APIRouter()
 
@@ -69,6 +69,21 @@ def rename_session(sid: str, body: Rename):
     return {"ok": True}
 
 
+class AssistantPick(BaseModel):
+    assistant: str = ""
+
+
+@router.put("/sessions/{sid}/assistant")
+def set_session_assistant(sid: str, body: AssistantPick):
+    """Chon hoac bo chon tro ly chuyen trach cua phien ('' = bo chon)."""
+    if not sessions.get(sid):
+        raise HTTPException(404, "không có phiên này")
+    if body.assistant and not assistants.get(body.assistant):
+        raise HTTPException(400, "không có trợ lý này")
+    sessions.set_assistant(sid, body.assistant)
+    return {"ok": True, "assistant": body.assistant}
+
+
 @router.post("/sessions/{sid}/pin")
 def pin_session(sid: str, body: PinBody):
     sessions.pin(sid, body.pinned)
@@ -94,19 +109,23 @@ class ChatBody(BaseModel):
     session: str | None = None
     provider: str | None = None
     attachments: list[str] = []
-    permission: Literal["default", "readonly", "guarded", "full"] = "default"
+    permission: Literal["default", "readonly", "guarded", "full", "plan"] = "default"
     effort: Literal["auto", "low", "medium", "high", "thinking"] = "auto"
     docs: bool = False  # "Hỏi từ tài liệu": chỉ trả lời dựa trên kho tài liệu, có nguồn
     temperature: float | None = None
     max_tokens: int | None = None
+    assistant: str | None = None  # id tro ly chuyen trach (services/assistants.py)
 
 
 @router.post("/chat")
 def chat(body: ChatBody):
+    stored = (sessions.get(body.session) or {}).get("assistant") if body.session else ""
+    eff = body.assistant if body.assistant is not None else stored  # khong gui thi dung tro ly da luu cua phien
     def gen():
         for ev in chat_runner.stream_chat(body.session, body.text, body.provider, attachments=body.attachments, permission=body.permission,
                                             effort=None if body.effort == "auto" else body.effort, docs=body.docs,
-                                            temperature=body.temperature, max_tokens=body.max_tokens, detach=True):
+                                            temperature=body.temperature, max_tokens=body.max_tokens, detach=True,
+                                            system_extra=assistants.prompt_for(eff), tool_allow=assistants.tool_allow(eff), assistant=body.assistant):
             yield _sse(ev)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)

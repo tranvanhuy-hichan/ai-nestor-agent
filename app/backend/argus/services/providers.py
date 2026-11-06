@@ -88,7 +88,8 @@ class OpenAICompat:
         if max_tokens:
             body["max_tokens"] = max_tokens
         if tools:
-            body["tools"] = [{"type": "function", "function": t} for t in tools]
+            # Groq/OpenAI chi nhan toi da 128 tool moi yeu cau: giu 128 tool dau (tool co san truoc, MCP sau).
+            body["tools"] = [{"type": "function", "function": t} for t in tools[:128]]
         if effort in ("low", "medium", "high", "thinking"):
             body["reasoning_effort"] = "high" if effort == "thinking" else effort
             if effort in ("high", "thinking"):
@@ -110,6 +111,11 @@ class OpenAICompat:
                         yield from _do_stream(no_effort_body)
                         return
                     raise ProviderError(f"HTTP {r.status_code}: {r.text[:300]}", r.status_code)
+                elif r.status_code in (400, 404, 422) and "tools" in req_body and (r.read() or True) and "tool" in r.text.lower() and "maximum number" not in r.text.lower():
+                    # Model khong ho tro tool (Cohere Aya, mot so model Cloudflare...) -> goi lai khong kem tool, chi chat thuong
+                    no_tools_body = {k: v for k, v in req_body.items() if k not in ("tools", "tool_choice")}
+                    yield from _do_stream(no_tools_body)
+                    return
                 elif r.status_code >= 400:
                     r.read()
                     raise ProviderError(f"HTTP {r.status_code}: {r.text[:300]}", r.status_code)

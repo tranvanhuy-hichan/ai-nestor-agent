@@ -72,3 +72,19 @@ def run_job(job_id: str):
     import threading
     threading.Thread(target=scheduler.run_job, args=(job_id,), daemon=True).start()
     return {"ok": True}
+
+
+class BriefBody(BaseModel):
+    time: str = "07:30"  # HH:MM theo gio may chu
+    provider: str | None = None
+
+
+@router.post("/automations/templates/morning-brief")
+def morning_brief(b: BriefBody | None = None):
+    """Tạo (hoặc cập nhật) automation 'Tóm tắt buổi sáng': email + lịch + việc quá hạn, gửi vào Hộp thư và Telegram/Zalo nếu đã bật."""
+    from ..services import brief
+    b = b or BriefBody()
+    try:
+        return brief.create(b.time, b.provider)
+    except scheduler.ScheduleError as e:
+        raise HTTPException(400, str(e)) from e

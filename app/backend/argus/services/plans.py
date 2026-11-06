@@ -41,6 +41,23 @@ def update(sid: str, step: int, status: str, note: str = "") -> list[dict]:
     raise ValueError(f"không có bước {step} (có {len(items)} bước)")
 
 
+def finalize(sid: str) -> list[dict] | None:
+    """Agent da tra loi cuoi (khong goi tool nua): model hay quen plan_update cho buoc cuoi. Dong buoc dang lam, va buoc BAO CAO cuoi cung neu day la buoc duy nhat con lai.
+    Cac buoc khac chua xong van de nguyen (khong lam ke hoach trong nhu da hoan tat khi thuc ra con do)."""
+    items = get(sid)
+    if not items:
+        return None
+    before_last_done = all(it["status"] == "done" for it in items[:-1])  # tinh TRUOC khi dong buoc dang lam
+    changed = False
+    for it in items:
+        if it["status"] == "in_progress":
+            it["status"], changed = "done", True
+    last = items[-1]
+    if last["status"] == "pending" and before_last_done:
+        last["status"], changed = "done", True
+    return _save(sid, items) if changed else None
+
+
 def render(items: list[dict]) -> str:
     return "\n".join(f"{it['id']}. {MARK[it['status']]} {it['text']}" + (f"  ({it['note']})" if it["note"] else "") for it in items)
 

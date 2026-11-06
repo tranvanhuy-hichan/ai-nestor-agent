@@ -9,6 +9,7 @@ from . import secrets
 from .paths import CONFIG_PATH, ROOT
 
 MASK = "***"
+ZALO_SECRETS = ("app_secret", "access_token", "refresh_token", "webhook_secret")
 
 
 class ProviderCfg(BaseModel):
@@ -75,8 +76,20 @@ class TelegramCfg(BaseModel):
     api_base: str = "https://api.telegram.org"
 
 
+class ZaloCfg(BaseModel):
+    enabled: bool = False
+    oa_id: str = ""
+    app_id: str = ""
+    app_secret: str = ""
+    access_token: str = ""
+    refresh_token: str = ""
+    webhook_secret: str = ""  # OA secret key: xac thuc chu ky X-ZEvent-Signature (hoac ?secret= tren URL webhook)
+    allowed_users: list[str] = []  # Zalo user_id da ghep doi
+
+
 class ChannelsCfg(BaseModel):
     telegram: TelegramCfg = TelegramCfg()
+    zalo: ZaloCfg = ZaloCfg()
 
 
 class AuthCfg(BaseModel):
@@ -190,6 +203,9 @@ def masked(cfg: Config) -> dict:
         s["env"] = {k: (MASK if v else "") for k, v in s["env"].items()}
     if out["channels"]["telegram"]["token"]:
         out["channels"]["telegram"]["token"] = MASK
+    for k in ZALO_SECRETS:
+        if out["channels"]["zalo"][k]:
+            out["channels"]["zalo"][k] = MASK
     out["auth"] = {"has_password": bool(cfg.auth.password_hash)}
     for m in out["mcp_servers"].values():
         m["env"] = {k: (MASK if v else "") for k, v in m["env"].items()}
@@ -212,6 +228,9 @@ def merge_secrets(new: Config, old: Config) -> Config:
     merge_mcp_secrets(new.mcp_servers, old.mcp_servers)
     if new.channels.telegram.token == MASK:
         new.channels.telegram.token = old.channels.telegram.token
+    for k in ZALO_SECRETS:
+        if getattr(new.channels.zalo, k) == MASK:
+            setattr(new.channels.zalo, k, getattr(old.channels.zalo, k))
     new.auth = old.auth  # mat khau chi doi qua /api/auth
     return new
 

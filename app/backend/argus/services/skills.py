@@ -66,6 +66,7 @@ class Skill:
     enabled: bool = True
     missing: list[str] = field(default_factory=list)
     origin: dict | None = None
+    bundled: bool = False  # skill di kem Argus (chi doc); chi tro ly chuyen trach nap, khong dua vao danh sach skill chung
 
     @property
     def eligible(self) -> bool:
@@ -85,7 +86,7 @@ class Skill:
             "emoji": self.meta.get("emoji") or "", "homepage": self.front.get("homepage") or "",
             "primary_env": self.meta.get("primaryEnv") or "", "origin": self.origin,
             "requires": self.meta.get("requires") or {},
-            "model_invocable": not self.front.get("disable-model-invocation", False),
+            "model_invocable": not self.front.get("disable-model-invocation", False), "bundled": self.bundled,
         }
 
 
@@ -138,6 +139,9 @@ def load_one(d: Path, cfg: Config) -> Skill:
                  enabled=entry.enabled if entry else True, missing=_gate(meta, cfg, name), origin=origin)
 
 
+BUNDLED_DIR = Path(__file__).resolve().parent.parent / "bundled_skills"
+
+
 def discover(cfg: Config) -> dict[str, Skill]:
     skills: dict[str, Skill] = {}
     for d in _find_skill_dirs(cfg.workspace_path() / "skills"):
@@ -145,6 +149,13 @@ def discover(cfg: Config) -> dict[str, Skill]:
             s = load_one(d, cfg)
         except OSError:
             continue
+        skills.setdefault(s.name, s)
+    for d in _find_skill_dirs(BUNDLED_DIR):  # skill di kem: skill cung ten trong workspace thang
+        try:
+            s = load_one(d, cfg)
+        except OSError:
+            continue
+        s.bundled = True
         skills.setdefault(s.name, s)
     return skills
 
@@ -161,22 +172,31 @@ def env_for(skills: dict[str, Skill], cfg: Config) -> dict[str, str]:
     return env
 
 
-def prompt_block(skills: dict[str, Skill], limit: int = 9000) -> str:
-    items = [s for s in skills.values() if s.active and not s.front.get("disable-model-invocation")]
-    if not items:
-        return ""
+def prompt_block(skills: dict[str, Skill], limit: int = 9000, bundled_limit: int = 8200) -> str:
+    """Danh sach skill cho model tu chon (skills_read). Skill nguoi dung cai: day du; skill di kem cua Argus: rut gon de it ton token."""
+    usable = [s for s in skills.values() if s.active and not s.front.get("disable-model-invocation")]
+    own, bundled = [s for s in usable if not s.bundled], [s for s in usable if s.bundled]
     lines, size = [], 0
-    for s in items:
+    for s in own:
         line = f"  <skill><name>{s.name}</name><description>{s.description[:200]}</description></skill>"
         if size + len(line) > limit:
             lines.append("  <!-- con nhieu skill khac bi luoc bot do gioi han prompt -->")
             break
         lines.append(line)
         size += len(line)
+    blines, bsize = [], 0
+    for s in bundled:
+        line = f"  <skill><name>{s.name}</name><description>{s.description[:105]}</description></skill>"
+        if bsize + len(line) > bundled_limit:
+            break
+        blines.append(line)
+        bsize += len(line)
+    if not lines and not blines:
+        return ""
     return ("Skills la cac goi huong dan chuyen biet. Neu yeu cau cua nguoi dung khop ro rang voi MOT skill, "
-            "hay goi tool skills_read de nap huong dan. SAU KHI doc xong, hay THUC HIEN huong dan do bang tool (vd. chay lenh bang exec) "
+            "hay goi tool skills_read de nap huong dan TRUOC KHI lam (khong can nguoi dung chon skill). SAU KHI doc xong, hay THUC HIEN huong dan do bang tool "
             "roi tra loi nguoi dung dua tren KET QUA that, khong tu bia. Huong dan co the nhac ten tool khac "
-            "(exec, read, write, web_fetch) - dung tool tuong ung dang co.\n<available_skills>\n" + "\n".join(lines) + "\n</available_skills>")
+            "(exec, read, write, web_fetch) - dung tool tuong ung dang co.\n<available_skills>\n" + "\n".join([*lines, *blines]) + "\n</available_skills>")
 
 
 # ---------- cai dat / go bo

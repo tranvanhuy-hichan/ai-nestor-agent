@@ -1,0 +1,114 @@
+[
+ {
+  "layout": "two_columns",
+  "left_width_pct": 40,
+  "left_lines": [
+   {
+    "role": "parent_org",
+    "text": "UBND THÀNH PHỐ ……"
+   },
+   {
+    "role": "issuing_org",
+    "text": "UBND PHƯỜNG ……"
+   },
+   {
+    "role": "document_number",
+    "text": "Số: ……/TTr-UBND"
+   }
+  ],
+  "right_lines": [
+   {
+    "role": "national_name",
+    "text": "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM"
+   },
+   {
+    "role": "motto",
+    "text": "Độc lập - Tự do - Hạnh phúc"
+   },
+   {
+    "role": "place_date",
+    "text": "……, ngày …… tháng …… năm ……"
+   }
+  ]
+ },
+ {
+  "role": "document_type_title",
+  "text": "TỜ TRÌNH"
+ },
+ {
+  "role": "summary",
+  "text": "Về việc ……………………………"
+ },
+ {
+  "role": "recipient",
+  "text": "Kính gửi: ……………………"
+ },
+ {
+  "role": "body",
+  "text": "Căn cứ ……………………;"
+ },
+ {
+  "role": "body",
+  "text": "Căn cứ ……………………, (đơn vị) kính trình …… xem xét, quyết định nội dung sau:"
+ },
+ {
+  "role": "section_heading",
+  "text": "I. Sự cần thiết"
+ },
+ {
+  "role": "body",
+  "text": "…………………"
+ },
+ {
+  "role": "section_heading",
+  "text": "II. Nội dung đề nghị"
+ },
+ {
+  "role": "body",
+  "text": "…………………"
+ },
+ {
+  "role": "section_heading",
+  "text": "III. Kiến nghị"
+ },
+ {
+  "role": "body",
+  "text": "…………………"
+ },
+ {
+  "role": "body",
+  "text": "Kính trình …… xem xét, quyết định./."
+ },
+ {
+  "layout": "two_columns",
+  "left_width_pct": 50,
+  "left_lines": [
+   {
+    "role": "recipients_label",
+    "text": "Nơi nhận:"
+   },
+   {
+    "role": "recipients_item",
+    "text": "- Như trên;"
+   },
+   {
+    "role": "recipients_item",
+    "text": "- Lưu: VT, ……."
+   }
+  ],
+  "right_lines": [
+   {
+    "role": "signature_authority",
+    "text": "TM. ỦY BAN NHÂN DÂN"
+   },
+   {
+    "role": "signature_authority",
+    "text": "CHỦ TỊCH"
+   },
+   {
+    "role": "signature_name",
+    "text": "……………………"
+   }
+  ]
+ }
+]

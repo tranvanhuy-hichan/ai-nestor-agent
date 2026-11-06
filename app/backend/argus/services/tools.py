@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 import httpx
 
-from . import checkpoints
+from . import checkpoints, hooks
 
 
 @dataclass
@@ -41,6 +41,7 @@ class ToolContext:
     full_access: bool = False  # che do 'Toan quyen': khong hoi xac nhan nao
     asker: Callable[[str, list[str]], str] | None = None  # hoi nguoi dung mot cau (ask_user); None = khong hoi duoc (API/CLI)
     sandbox: dict = field(default_factory=dict)  # {"mode": "none|docker", "image", "network"}
+    plan_restore: dict | None = None  # che do Ke hoach: danh sach tool bi tat de khoi phuc khi nguoi dung duyet ke hoach
 
     @property
     def workdir(self) -> Path:
@@ -80,8 +81,12 @@ def call(ctx: ToolContext, name: str, args: dict) -> tuple[str, bool]:
     t = TOOLS.get(name) or ctx.extra.get(name)
     if not t or not ctx.enabled.get(name, True):
         return f"loi: khong co tool {name}", False
+    if blocked := hooks.run(ctx, "PreToolUse", name, args):
+        return f"KHÔNG THỰC HIỆN: hook chặn tool này: {blocked}", False
     try:
-        return str(t.fn(ctx, **args)), True
+        out = str(t.fn(ctx, **args))
+        hooks.run(ctx, "PostToolUse", name, args, out)
+        return out, True
     except TypeError as e:
         return f"loi: tham so khong hop le ({e})", False
     except Exception as e:  # tool khong duoc lam sap vong lap agent
@@ -307,13 +312,52 @@ def grep_tool(ctx, pattern, path=".", include="", ignore_case=False):
     return "\n".join(out) or "(không có kết quả)"
 
 
-@tool("ask_user", "Hỏi người dùng MỘT câu khi thiếu thông tin thật sự không thể tự suy ra. Kèm 2-4 lựa chọn ngắn để họ bấm nhanh (có thể để trống nếu cần câu trả lời tự do). Không dùng cho việc bạn tự quyết được.",
-      {"question": ("string", "câu hỏi ngắn gọn"), "options": ("array", "các lựa chọn gợi ý (tùy chọn)")}, required=["question"])
-def ask_user(ctx, question, options=None):
+@tool("ask_user", "Hỏi người dùng khi thiếu thông tin thật sự không thể tự suy ra. Một câu: dùng question (+ options 2-4 lựa chọn để bấm nhanh). Nhiều câu cần hỏi cùng lúc: dùng questions (JSON mảng [{\"question\":\"...\",\"options\":[\"...\"],\"multi\":false}]) để người dùng trả lời một lần trên các tab, KHÔNG gọi ask_user nhiều lần liên tiếp. Không dùng cho việc bạn tự quyết được.",
+      {"question": ("string", "câu hỏi ngắn gọn (khi chỉ hỏi một câu)"), "options": ("array", "các lựa chọn gợi ý (tùy chọn)"),
+       "questions": ("string", "JSON mảng nhiều câu hỏi, mỗi câu {question, options?, multi?}; tối đa 8 câu")}, required=[])
+def ask_user(ctx, question="", options=None, questions=None):
     if not ctx.asker:
         return "Không hỏi được người dùng ở chế độ này: hãy tự chọn phương án hợp lý nhất, nêu rõ giả định rồi làm tiếp."
+    form = None
+    if questions:
+        try:
+            raw = json.loads(questions) if isinstance(questions, str) else questions
+            form = [{"question": str(q.get("question", "")).strip()[:300], "options": [str(o)[:80] for o in (q.get("options") or [])][:8], "multi": bool(q.get("multi"))}
+                    for q in raw if isinstance(q, dict) and str(q.get("question", "")).strip()][:8]
+        except (ValueError, TypeError, AttributeError):
+            form = None
+        if not form:
+            raise ValueError("questions phải là JSON mảng các object {question, options?, multi?}.")
+    if form and len(form) > 1:
+        raw_ans = ctx.asker("Cần thêm vài thông tin", [], form).strip()
+        try:
+            vals = json.loads(raw_ans)
+            lines = [f"- {q['question']}: {(vals[i] if i < len(vals) and vals[i] else '(chưa trả lời)')}" for i, q in enumerate(form)]
+            return "Người dùng trả lời:\n" + "\n".join(lines)
+        except (ValueError, TypeError, IndexError):
+            return f"Người dùng trả lời: {raw_ans}" if raw_ans else "Người dùng chưa trả lời: hãy tự chọn phương án hợp lý nhất, nêu rõ giả định rồi làm tiếp."
+    if form:
+        question, options = form[0]["question"], form[0]["options"]
+    if not (question or "").strip():
+        raise ValueError("Thiếu câu hỏi.")
     ans = ctx.asker(question, [str(o) for o in (options or [])][:4]).strip()
     return f"Người dùng trả lời: {ans}" if ans else "Người dùng chưa trả lời: hãy tự chọn phương án hợp lý nhất, nêu rõ giả định rồi làm tiếp."
+
+
+@tool("plan_submit", "CHẾ ĐỘ KẾ HOẠCH: sau khi khảo sát xong, trình kế hoạch chi tiết (markdown) cho người dùng duyệt. Chỉ khi được duyệt các tool ghi/chạy lệnh mới được mở.",
+      {"plan": ("string", "kế hoạch chi tiết: mục tiêu, file sẽ sửa, các bước, cách kiểm chứng")})
+def plan_submit(ctx, plan):
+    if ctx.permission != "plan":
+        return "Không ở chế độ kế hoạch: cứ làm việc bình thường."
+    if not ctx.asker:
+        return "Không hỏi được người dùng ở chế độ này nên chưa thể duyệt kế hoạch."
+    ans = ctx.asker("Duyệt kế hoạch này?\n\n" + plan[:6000], ["Duyệt, bắt đầu làm", "Sửa lại kế hoạch"]).strip()
+    if ans.lower().startswith(("duyệt", "duyet", "ok", "yes", "có", "co")):
+        if ctx.plan_restore is not None:
+            ctx.enabled, ctx.plan_restore = ctx.plan_restore, None
+        ctx.permission = "default"
+        return "Người dùng ĐÃ DUYỆT kế hoạch. Các tool ghi file và chạy lệnh đã được mở: hãy thực hiện kế hoạch."
+    return f"Người dùng chưa duyệt: {ans or '(không trả lời)'}. Hãy chỉnh kế hoạch theo góp ý rồi trình lại bằng plan_submit."
 
 
 # ---- lenh chay nen (dev server, test watch...): khong chan luot cua agent
@@ -524,7 +568,7 @@ def notify(ctx, title, message):
 # Module chua ton tai thi bo qua; loi ben trong module (thieu thu vien...) duoc ghi lai de `argus doctor` bao.
 import importlib  # noqa: E402
 
-OPTIONAL_MODULES = ("tools_plan", "tools_agents", "tools_browser", "tools_memory", "tools_kb", "tools_media", "tools_computer")
+OPTIONAL_MODULES = ("tools_plan", "tools_agents", "tools_browser", "tools_memory", "tools_kb", "tools_media", "tools_computer", "tools_office", "tools_docs")
 LOAD_ERRORS: dict[str, str] = {}
 for _m in OPTIONAL_MODULES:
     try:

@@ -97,9 +97,9 @@ def _profile_tools(cfg: cfgmod.Config, role: str, depth: int) -> tuple[list[str]
         raise JobError(f"không có vai trò '{role}'. Có: {', '.join(cfg.agents.profiles) or '(chưa có)'}, general")
     every = [*tools.TOOLS]
     allowed = list(prof.tools) if prof and prof.tools else every
-    allowed += [n for n in ("plan_set", "plan_update", "plan_show") if n not in allowed]
+    allowed += [n for n in ("plan_set", "plan_update", "plan_show", "team_note_write", "team_note_read") if n not in allowed]
     if depth + 1 >= cfg.agents.max_depth:  # agent con o tang cuoi khong duoc tao them agent con
-        allowed = [n for n in allowed if n not in ("delegate", "task_start")]
+        allowed = [n for n in allowed if n not in ("delegate", "task_start", "team_run")]
     return allowed, (prof.prompt if prof else "")
 
 

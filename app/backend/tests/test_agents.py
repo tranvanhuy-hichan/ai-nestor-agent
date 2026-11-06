@@ -60,9 +60,10 @@ def test_plan_tools_persist_emit_and_feed_the_prompt(llm):
     sid, events = run_chat()
     agent_mod.run_turn(sid, "tiếp tục", None, lambda k, d: True, lambda e: None)  # luot sau: ke hoach duoc dua vao prompt he thong
     items = plans.get(sid)
-    assert [(i["id"], i["status"]) for i in items] == [(1, "done"), (2, "pending")]
-    assert [e["items"][0]["status"] for e in events if e["type"] == "plan"] == ["pending", "done"]
-    assert "Kế hoạch hiện tại của hội thoại (1/2 xong)" in seen[-1] and "plan_set" in seen[0]
+    # model quen plan_update cho buoc bao cao cuoi: khi tra loi xong he thong tu dong dong buoc cuoi (moi buoc truoc da xong)
+    assert [(i["id"], i["status"]) for i in items] == [(1, "done"), (2, "done")]
+    assert [e["items"][0]["status"] for e in events if e["type"] == "plan"] == ["pending", "done", "done"]
+    assert "Kế hoạch hiện tại của hội thoại (2/2 xong)" in seen[-1] and "plan_set" in seen[0]
 
 
 @pytest.mark.parametrize("steps,err", [([], "ít nhất"), (["x"] * 26, "tối đa")])
@@ -318,8 +319,8 @@ def test_plan_progress_is_nudged_and_auto_started(llm):
     llm(rule)
     sid, events = run_chat()
     items = plans.get(sid)
-    assert items[0]["status"] == "in_progress" and items[1]["status"] == "pending"  # tu dong bat dau buoc 1 khi agent lam viec khac
-    assert any(e["type"] == "plan" and e["items"][0]["status"] == "in_progress" for e in events)
+    assert any(e["type"] == "plan" and e["items"][0]["status"] == "in_progress" for e in events)  # tu dong bat dau buoc 1 khi agent lam viec khac
+    assert items[0]["status"] == "done" and items[1]["status"] == "pending"  # tra loi xong: buoc dang lam duoc dong, buoc chua tung bat dau thi giu nguyen
     assert 'plan_update(step=1, status="done")' in seen["tool_msg"]  # model duoc nhac cap nhat
     shown = next(e for e in events if e["type"] == "tool_result" and "bước 1 đang làm" not in e["result"] and e["result"] != "")
     assert "Kế hoạch: bước" not in "".join(e["result"] for e in events if e["type"] == "tool_result" and e["id"] == shown["id"])  # nguoi dung khong thay loi nhac

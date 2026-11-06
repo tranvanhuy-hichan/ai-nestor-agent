@@ -111,7 +111,7 @@ def state(sid: str) -> dict:
     """Trang thai cho client noi lai: dang chay khong, da co bao nhieu su kien (cursor), xin phep dang cho."""
     r = _runs.get(sid)
     pending = [{"id": k, "kind": a["kind"], "detail": a["detail"]} for k, a in _approvals.items() if a.get("sid") == sid]
-    questions = [{"id": k, "question": q["question"], "options": q["options"]} for k, q in _questions.items() if q.get("sid") == sid]
+    questions = [{"id": k, "question": q["question"], "options": q["options"], **({"form": q["form"]} if q.get("form") else {})} for k, q in _questions.items() if q.get("sid") == sid]
     return {"active": bool(r and not r.done), "cursor": len(r.events) if r else 0, "pending": pending, "questions": questions}
 
 
@@ -143,10 +143,13 @@ def attach(sid: str, start: int = 0) -> Iterator[dict]:
 def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_override=None, source: str = "chat",
                 only_tools: list[str] | None = None, attachments: list[str] | None = None, permission: str = "default",
                 effort: str | None = None, docs: bool = False, temperature: float | None = None,
-                max_tokens: int | None = None, detach: bool = False) -> Iterator[dict]:
+                max_tokens: int | None = None, detach: bool = False, system_extra: str = "", tool_allow: list[str] | None = None,
+                assistant: str | None = None) -> Iterator[dict]:
     """detach=True (giao dien web): dong ket noi khong dung agent; client noi lai bang attach(). Mac dinh (CLI/API/Telegram): dong ket noi thi dung."""
     if not sid or not sessions.get(sid):
         sid = sessions.create(text, source=source)
+    if assistant is not None:  # None = giu tro ly da luu; '' = bo chon
+        sessions.set_assistant(sid, assistant)
     with _runs_lock:
         _gc()
         if active(sid):
@@ -167,10 +170,10 @@ def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_ov
         run.push({"type": "approval_done", "id": aid, "ok": ok})
         return ok
 
-    def asker(question: str, options: list[str]) -> str:
+    def asker(question: str, options: list[str], form: list[dict] | None = None) -> str:
         qid = uuid.uuid4().hex
-        _questions[qid] = {"event": threading.Event(), "answer": "", "sid": sid, "question": question, "options": options}
-        run.push({"type": "question", "id": qid, "question": question, "options": options})
+        _questions[qid] = {"event": threading.Event(), "answer": "", "sid": sid, "question": question, "options": options, "form": form}
+        run.push({"type": "question", "id": qid, "question": question, "options": options, **({"form": form} if form else {})})
         _questions[qid]["event"].wait(QUESTION_TIMEOUT)
         ans = _questions.pop(qid)["answer"] if not cancel.is_set() else ""
         run.push({"type": "question_done", "id": qid, "answer": ans})
@@ -178,7 +181,7 @@ def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_ov
 
     def worker():
         try:
-            agent.run_turn(sid, text, provider, approver_override or approver, run.push, cancel, only_tools, source, attachments, permission, effort, use_docs=docs, temperature=temperature, max_tokens=max_tokens,
+            agent.run_turn(sid, text, provider, approver_override or approver, run.push, cancel, only_tools, source, attachments, permission, effort, use_docs=docs, temperature=temperature, max_tokens=max_tokens, system_extra=system_extra, tool_allow=tool_allow,
                            asker=None if approver_override else asker)
         except Exception as e:  # loi bat ngo khong duoc lam treo luong SSE
             run.push({"type": "error", "message": f"{type(e).__name__}: {e}"})

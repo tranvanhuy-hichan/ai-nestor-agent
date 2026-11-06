@@ -12,7 +12,7 @@ from ..core import config as cfgmod
 from . import audit, checkpoints, commands, compaction, knowledge, mcp_client, tools_kb, plans, sessions, skills as skillmod, tools, usage, workfiles
 from .providers import ProviderError, make_provider
 
-PROMPT_FILES = ("SOUL.md", "USER.md", "MEMORY.md")
+PROMPT_FILES = ("SOUL.md", "USER.md", "RULES.md", "MEMORY.md")  # RULES.md: quy tac nguoi dung "dung ket" tu hoi thoai (api/rules)
 RETRIES = 4  # tong so lan thu cho loi tam thoi (429/503/timeout)
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 MAX_IMAGES, MAX_IMAGE_BYTES = 4, 5 * 1024 * 1024
@@ -50,6 +50,38 @@ AUTONOMY = ("Cách làm việc: hãy tự quyết và làm cho xong, đừng d�
             "Khi cần hỏi người dùng, dùng tool ask_user với vài lựa chọn bấm nhanh thay vì viết câu hỏi dài. Tiến trình chạy lâu (dev server, watcher) dùng exec_bg/exec_read/exec_stop.")
 
 
+def _project_docs(start: Path) -> str:
+    """AGENTS.md / CLAUDE.md tu thu muc hien tai len cac thu muc cha (toi da 5 cap, dung o thu muc home), cong them ban cua nguoi dung ~/.argus/AGENTS.md."""
+    home = Path.home().resolve()
+    dirs, cur = [], start.resolve()
+    for _ in range(5):
+        dirs.append(cur)
+        if cur == home or cur.parent == cur:
+            break
+        cur = cur.parent
+    seen, out, budget = set(), [], 6000
+    for d in [home / ".argus", *reversed(dirs)]:  # chung nhat -> cu the nhat
+        for name in ("AGENTS.md", "CLAUDE.md"):
+            p = d / name
+            try:
+                body = p.read_text(errors="replace").strip() if p.is_file() else ""
+            except OSError:
+                continue
+            if not body or body in seen or budget <= 0:
+                continue
+            seen.add(body)
+            out.append(f"\n\n## {name} ({d})\n{body[:min(3000, budget)]}")
+            budget -= min(3000, len(body))
+    if not out:  # khong co tai lieu huong dan nao: dung README lam ngu canh
+        p = start / "README.md"
+        if p.is_file():
+            try:
+                out.append(f"\n\n## README.md của dự án\n{p.read_text(errors='replace')[:3000].strip()}")
+            except OSError:
+                pass
+    return "".join(out)
+
+
 def coding_prompt(project, workspace=None) -> str:
     """Chế độ Code: thư mục làm việc là một dự án thật của người dùng."""
     text = (f"CHẾ ĐỘ LẬP TRÌNH. Thư mục làm việc là dự án của người dùng: {project}. Làm việc như một kỹ sư cẩn thận: "
@@ -62,14 +94,7 @@ def coding_prompt(project, workspace=None) -> str:
         if np.is_file():
             text += f"\n\n## Ghi nhớ của bạn về dự án này (project_note)\n{np.read_text(errors='replace')[-2000:].strip()}"
         text += "\nKhi học được điều hữu ích về dự án (cách chạy test, quy ước, cấu trúc), ghi lại bằng project_note."
-    for name in CODING_DOCS:
-        p = Path(project) / name
-        if p.is_file():
-            try:
-                text += f"\n\n## {name} của dự án\n{p.read_text(errors='replace')[:3000].strip()}"
-            except OSError:
-                pass
-            break  # một tài liệu là đủ; AGENTS.md/CLAUDE.md được ưu tiên
+    text += _project_docs(Path(project))
     return text
 
 
@@ -146,7 +171,7 @@ def _images(workdir, names: list[str]) -> list[dict]:
     return out
 
 
-PERMISSIONS = ("default", "readonly", "guarded", "full")
+PERMISSIONS = ("default", "readonly", "guarded", "full", "plan")
 READONLY_BLOCKED = {"write", "edit", "remember", "http_request", "generate_image", "browser_click", "browser_type", "browser_press", "task_start"} | {
     "computer_screenshot", "computer_click", "computer_type", "computer_key", "computer_move", "computer_scroll"}
 READONLY_NOTE = "Chế độ CHỈ ĐỌC: bạn không được ghi/sửa file, chạy lệnh shell hay thay đổi dữ liệu; các tool đó đã bị tắt. Hãy chỉ đọc và tra cứu."
@@ -160,6 +185,10 @@ def is_simple(text: str, attachments, in_project: bool, only_tools) -> bool:
     return not (attachments or in_project or only_tools is not None) and len(text) <= 140 and text.count("\n") < 2 and not _HARD.search(text)
 
 
+PLAN_NOTE = ("CHẾ ĐỘ KẾ HOẠCH: chỉ được đọc/tìm (read, glob, grep, list_dir, web...). Các tool ghi file và chạy lệnh đang bị tắt. "
+             "Hãy khảo sát kỹ, rồi gọi plan_submit với kế hoạch chi tiết để người dùng duyệt; chỉ khi được duyệt mới được sửa code.")
+
+
 def apply_permission(ctx: tools.ToolContext, mode: str) -> str:
     """Che do quyen cho mot hoi thoai. Tra ve doan nhac them cho system prompt (co the rong)."""
     if mode == "readonly":
@@ -167,6 +196,12 @@ def apply_permission(ctx: tools.ToolContext, mode: str) -> str:
         blocked = {n for n, t in every.items() if t.risk == "exec" or n in READONLY_BLOCKED or (t.risk == "mcp" and not t.read_only)}
         ctx.enabled = {**ctx.enabled, **{n: False for n in blocked}}
         return READONLY_NOTE
+    if mode == "plan":
+        every = {**tools.TOOLS, **ctx.extra}
+        blocked = {n for n, t in every.items() if t.risk == "exec" or n in READONLY_BLOCKED or (t.risk == "mcp" and not t.read_only)}
+        ctx.plan_restore = dict(ctx.enabled)
+        ctx.enabled = {**ctx.enabled, **{n: False for n in blocked}}
+        return PLAN_NOTE
     if mode == "guarded":
         ctx.confirm_exec = ctx.confirm_writes = True
     elif mode == "full":
@@ -272,7 +307,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
              source: str = "chat", attachments: list[str] | None = None, permission: str = "default", effort: str | None = None,
              system_extra: str = "", max_steps: int | None = None, depth: int = 0, job_id: str | None = None, workdir_sid: str | None = None,
              use_docs: bool = False, docs_pre: str | None = None, temperature: float | None = None, max_tokens: int | None = None,
-             asker: Callable[[str, list[str]], str] | None = None) -> None:
+             asker: Callable[[str, list[str]], str] | None = None, tool_allow: list[str] | None = None) -> None:
     cfg = cfgmod.load()
     skills = skillmod.discover(cfg)
     workdir = workfiles.workdir_for(cfg, workdir_sid or sid)  # agent con/viec nen dung chung thu muc voi phien da giao viec
@@ -298,7 +333,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
     if not knowledge.has_docs():
         hidden.append("kb_search")
     ctx.enabled = {**ctx.enabled, **{n: False for n in hidden}}
-    ctx.session_id, ctx.permission, ctx.provider, ctx.emit, ctx.cancel = sid, permission if permission in ("default", "readonly", "guarded", "full") else "default", provider, emit, cancel
+    ctx.session_id, ctx.permission, ctx.provider, ctx.emit, ctx.cancel = sid, permission if permission in ("default", "readonly", "guarded", "full", "plan") else "default", provider, emit, cancel
     ctx.extra = mcp_client.manager.tool_defs()
     if use_docs and not knowledge.has_docs():
         emit(ui_event("notice", "Chưa có tài liệu nào sẵn sàng nên Argus trả lời như bình thường"))
@@ -319,6 +354,14 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
     if permission not in PERMISSIONS:
         permission = "default"
     perm_note = apply_permission(ctx, permission)
+    if permission != "plan":
+        ctx.enabled = {**ctx.enabled, "plan_submit": False}
+    if tool_allow is not None:  # tro ly chuyen trach: chi cac tool trong allowlist duoc de xuat va duoc phep goi
+        allowed = set(tool_allow) | {"plan_submit"}
+        lock = lambda en: {n: bool(en.get(n, True)) and n in allowed for n in [*tools.TOOLS, *ctx.extra]}  # noqa: E731
+        ctx.enabled = lock(ctx.enabled)
+        if ctx.plan_restore is not None:
+            ctx.plan_restore = lock(ctx.plan_restore)
     first = provider if provider in cfg.providers else cfg.default_provider
     if first == cfg.default_provider and cfg.agent.fast_provider in cfg.providers and cfg.agent.fast_provider != first and is_simple(user_text, attachments, bool(project), only_tools):
         first = cfg.agent.fast_provider  # cau don gian: dung model nhanh/re de tiet kiem
@@ -390,6 +433,10 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
             emit({"type": "assistant", "content": result["content"], "provider": result["provider"], "usage": result["usage"],
                   "duration_ms": int((time.time() - t0) * 1000)})
         if not result["tool_calls"]:
+            if sid and not (cancel and cancel.is_set()):
+                done_plan = plans.finalize(sid)
+                if done_plan:
+                    emit({"type": "plan", "items": done_plan})
             return
         parallel = {}  # nhieu delegate trong cung mot luot => chay dong thoi
         delegates = [c for c in result["tool_calls"] if c["name"] == "delegate"]

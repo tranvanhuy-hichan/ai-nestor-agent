@@ -18,6 +18,7 @@ from ..core import secrets
 from ..core.paths import CONFIG_PATH
 from ..services import limits, mcp_client, providers, tools
 from ..services.telegram_channel import channel as telegram
+from ..services.zalo_channel import channel as zalo
 
 router = APIRouter()
 STARTED = time.time()
@@ -50,6 +51,7 @@ def put_config(body: dict):
     cfgmod.save(new)
     mcp_client.manager.apply(new.mcp_servers)
     telegram.apply(new.channels.telegram)
+    zalo.apply(new.channels.zalo)
     return {"ok": True}
 
 
