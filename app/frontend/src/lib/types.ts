@@ -60,7 +60,7 @@ export interface ToolInfo { name: string; description: string; risk: 'safe' | 'f
 export interface SecretsStatus { enabled: boolean; source: 'env' | 'keychain' | 'file' | 'none'; encrypted: number; plaintext: number; failed: string[] }
 export interface ConfigResponse { config: AppConfig; tools: ToolInfo[]; secrets?: SecretsStatus }
 
-export interface SessionInfo { id: string; title: string; updated: number; created: number; source: string; turns: number; project?: string; pinned?: number }
+export interface SessionInfo { id: string; title: string; updated: number; created: number; source: string; turns: number; project?: string; pinned?: number; assistant?: string }
 export interface ToolCall { id: string; name: string; args: Record<string, unknown> }
 export interface WireMessage { role: 'user' | 'assistant' | 'tool'; content: string; tool_calls?: ToolCall[]; tool_call_id?: string; attachments?: string[] }
 export interface FileEntry { path: string; dir: boolean; size: number; mtime: number }

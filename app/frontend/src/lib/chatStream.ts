@@ -9,7 +9,7 @@ export type ChatEvent =
   | { type: 'tool'; id: string; name: string; args: Record<string, unknown>; risk?: string }
   | { type: 'tool_result'; id: string; result: string; ok: boolean; duration_ms?: number; decision?: string }
   | { type: 'approval'; id: string; kind: string; detail: string }
-  | { type: 'question'; id: string; question: string; options: string[] }
+  | { type: 'question'; id: string; question: string; options: string[]; form?: FormQuestion[] }
   | { type: 'question_done'; id: string; answer: string }
   | { type: 'turn_summary'; files: { path: string; status: string; added: number; removed: number }[] }
   | { type: 'approval_done'; id: string; ok: boolean }
@@ -20,7 +20,7 @@ export type ChatEvent =
   | { type: 'done' }
 
 export async function streamChat(
-  body: { text: string; session: string | null; provider: string | null; attachments?: string[]; permission?: string; effort?: string },
+  body: { text: string; session: string | null; provider: string | null; attachments?: string[]; permission?: string; effort?: string; assistant?: string },
   onEvent: (e: ChatEvent) => void,
   signal: AbortSignal,
 ) {
@@ -43,7 +43,8 @@ export async function streamChat(
   }
 }
 
-export type RunState = { active: boolean; cursor: number; pending: { id: string; kind: string; detail: string }[]; questions?: { id: string; question: string; options: string[] }[] }
+export type FormQuestion = { question: string; options: string[]; multi?: boolean }
+export type RunState = { active: boolean; cursor: number; pending: { id: string; kind: string; detail: string }[]; questions?: { id: string; question: string; options: string[]; form?: FormQuestion[] }[] }
 
 async function readSse(r: Response, onEvent: (e: ChatEvent) => void) {
   if (r.status === 401) window.dispatchEvent(new Event('auth-required'))

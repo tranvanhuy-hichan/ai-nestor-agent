@@ -1,6 +1,7 @@
+import { useUiMode } from '@/lib/uiMode'
 import { useState } from 'react'
 import { AgentMark } from '../../components/ui/AgentMark'
-import { Brain, Cable, HelpCircle, Undo2, Check, ChevronRight, ExternalLink, Eye, FileText, Globe, Info, Paperclip, Pencil, RefreshCw, ShieldAlert, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
+import { Brain, Cable, Circle, CircleCheck, HelpCircle, Undo2, Check, ChevronRight, ExternalLink, Eye, FileText, Globe, Info, Paperclip, Pencil, RefreshCw, ShieldAlert, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { BrandIcon, detectBrand } from '@/components/ui/BrandIcon'
 import { Button } from '@/components/ui/Button'
@@ -10,9 +11,11 @@ import { cn } from '@/lib/utils'
 import { Markdown } from './Markdown'
 import { Images, SpeakButton } from './Media'
 import { stripImageMarks } from './session'
+import type { FormQuestion } from '@/lib/chatStream'
 import type { Item, ToolItem } from './useChat'
 
 const KIND_LABEL: Record<string, string> = { http_request: tk('gửi yêu cầu HTTP thay đổi dữ liệu'), mcp: tk('gọi tool MCP'), exec: tk('chạy lệnh shell'), file_read: tk('đọc file ngoài workspace'), file_write: tk('ghi file'), browser: tk('điều khiển trình duyệt'), image: tk('tạo ảnh (có thể tốn phí)'), computer: tk('điều khiển máy tính (chuột, bàn phím, màn hình)') }
+const FRIENDLY_LABEL: Record<string, string> = { http_request: tk('gửi dữ liệu lên một trang web'), mcp: tk('dùng một ứng dụng bên ngoài'), exec: tk('chạy một chương trình trên máy bạn'), file_read: tk('đọc một file ngoài thư mục làm việc'), file_write: tk('lưu hoặc sửa một file'), browser: tk('mở và thao tác trên trình duyệt'), image: tk('tạo ảnh (có thể tốn phí)'), computer: tk('điều khiển chuột và bàn phím của máy bạn') }
 const RISK_ICON = { exec: Terminal, file: FileText, network: Globe, mcp: Cable } as const
 
 export const fmtMs = (ms?: number) => (ms === undefined ? '' : ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`)
@@ -175,14 +178,19 @@ function Thinking({ text, streaming, provider }: { text: string; streaming: bool
 }
 
 function ApprovalCard({ item, onDecide }: { item: Extract<Item, { kind: 'approval' }>; onDecide: (aid: string, ok: boolean) => void }) {
+  const simple = useUiMode() === 'simple'
   return (
     <div className="fade-in ml-10 rounded-lg border border-warn/40 bg-warn/5 p-3.5">
-      <div className="flex items-center gap-2 text-sm font-medium"><ShieldAlert className="size-4 text-warn" /><T k="Agent muốn {action}" v={{ action: KIND_LABEL[item.approvalKind] ? t(KIND_LABEL[item.approvalKind]) : item.approvalKind }} /></div>
-      <pre className="my-2.5 overflow-x-auto whitespace-pre-wrap rounded-md bg-bg p-2.5 font-mono text-xs">{item.detail}</pre>
+      <div className="flex items-center gap-2 text-sm font-medium"><ShieldAlert className="size-4 text-warn" />{simple
+        ? <span>{t('Trợ lý xin phép {action}. Bạn có đồng ý không?', { action: FRIENDLY_LABEL[item.approvalKind] ? t(FRIENDLY_LABEL[item.approvalKind]) : item.approvalKind })}</span>
+        : <T k="Agent muốn {action}" v={{ action: KIND_LABEL[item.approvalKind] ? t(KIND_LABEL[item.approvalKind]) : item.approvalKind }} />}</div>
+      {simple
+        ? <details className="my-2 text-xs text-muted"><summary className="cursor-pointer">{t('Xem chi tiết')}</summary><pre className="mt-1.5 overflow-x-auto whitespace-pre-wrap rounded-md bg-bg p-2.5 font-mono">{item.detail}</pre></details>
+        : <pre className="my-2.5 overflow-x-auto whitespace-pre-wrap rounded-md bg-bg p-2.5 font-mono text-xs">{item.detail}</pre>}
       {item.status === 'pending' ? (
         <div className="flex gap-2">
-          <Button size="sm" variant="primary" onClick={() => onDecide(item.aid, true)}>{t('Cho phép')}</Button>
-          <Button size="sm" onClick={() => onDecide(item.aid, false)}>{t('Từ chối')}</Button>
+          <Button size="sm" variant="primary" onClick={() => onDecide(item.aid, true)}>{simple ? t('Đồng ý') : t('Cho phép')}</Button>
+          <Button size="sm" onClick={() => onDecide(item.aid, false)}>{simple ? t('Không đồng ý') : t('Từ chối')}</Button>
         </div>
       ) : (
         <Badge tone={item.status === 'allowed' ? 'ok' : 'bad'}>{item.status === 'allowed' ? t('Đã cho phép') : t('Đã từ chối')}</Badge>
@@ -192,6 +200,11 @@ function ApprovalCard({ item, onDecide }: { item: Extract<Item, { kind: 'approva
 }
 
 function QuestionCard({ item, onAnswer }: { item: Extract<Item, { kind: 'question' }>; onAnswer: (qid: string, text: string) => void }) {
+  const form = item.form && item.form.length > 1 ? item.form : null
+  return form ? <QuestionForm item={item} form={form} onAnswer={onAnswer} /> : <SingleQuestion item={item} onAnswer={onAnswer} />
+}
+
+function SingleQuestion({ item, onAnswer }: { item: Extract<Item, { kind: 'question' }>; onAnswer: (qid: string, text: string) => void }) {
   const [text, setText] = useState('')
   return (
     <div className="fade-in ml-10 rounded-lg border border-accent/40 bg-accent/5 p-3.5">
@@ -205,6 +218,60 @@ function QuestionCard({ item, onAnswer }: { item: Extract<Item, { kind: 'questio
           </form>
         </div>
       ) : <p className="mt-2 text-sm text-muted">{t('Bạn trả lời:')} <span className="text-fg">{item.answer}</span></p>}
+    </div>
+  )
+}
+
+/** Nhiều câu hỏi cùng lúc: mỗi câu một tab, câu có lựa chọn thì bấm chọn (chọn nhiều nếu multi), trả lời một lần. */
+function QuestionForm({ item, form, onAnswer }: { item: Extract<Item, { kind: 'question' }>; form: FormQuestion[]; onAnswer: (qid: string, text: string) => void }) {
+  const [tab, setTab] = useState(0)
+  const [picked, setPicked] = useState<string[][]>(() => form.map(() => []))
+  const [typed, setTyped] = useState<string[]>(() => form.map(() => ''))
+  const value = (i: number) => [...picked[i], ...(typed[i].trim() ? [typed[i].trim()] : [])].join(', ')
+  const done = form.map((_, i) => value(i) !== '')
+  const all = done.every(Boolean)
+  const toggle = (i: number, o: string) => setPicked((p) => p.map((v, j) => (j !== i ? v : form[i].multi ? (v.includes(o) ? v.filter((x) => x !== o) : [...v, o]) : v.includes(o) ? [] : [o])))
+  const next = (i: number) => { const n = done.findIndex((d, j) => !d && j !== i); if (n >= 0) setTab(n); else if (i < form.length - 1) setTab(i + 1) }
+  if (item.answer !== null) {
+    let vals: string[] = []
+    try { vals = JSON.parse(item.answer) } catch { /* trả lời dạng chữ thường */ }
+    return (
+      <div className="fade-in ml-10 rounded-lg border border-accent/40 bg-accent/5 p-3.5">
+        <p className="flex items-center gap-2 text-sm font-medium"><HelpCircle className="size-4 text-accent" />{t('Bạn đã trả lời')}</p>
+        <ul className="mt-2 space-y-1 text-sm">{form.map((q, i) => <li key={i}><span className="text-muted">{q.question}:</span> <span className="text-fg">{vals[i] || item.answer}</span></li>)}</ul>
+      </div>
+    )
+  }
+  const q = form[tab]
+  return (
+    <div className="fade-in ml-10 rounded-lg border border-accent/40 bg-accent/5 p-3.5">
+      <div className="flex items-center gap-2 text-sm font-medium"><HelpCircle className="size-4 shrink-0 text-accent" />{t('Cần thêm vài thông tin')} <span className="text-xs font-normal text-muted">({done.filter(Boolean).length}/{form.length})</span></div>
+      <div className="mt-2.5 flex flex-wrap gap-1.5" role="tablist">
+        {form.map((f, i) => (
+          <button key={i} role="tab" aria-selected={tab === i} onClick={() => setTab(i)} title={f.question}
+            className={cn('flex max-w-[11rem] items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition', tab === i ? 'border-accent bg-accent/15 text-fg' : 'border-line text-muted hover:border-accent/60')}>
+            {done[i] ? <CircleCheck className="size-3.5 shrink-0 text-ok" /> : <Circle className="size-3.5 shrink-0" />}<span className="truncate">{i + 1}. {f.question}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 space-y-2.5" role="tabpanel">
+        <p className="text-sm">{q.question}{q.multi && <span className="ml-1.5 text-xs text-muted">{t('(chọn được nhiều)')}</span>}</p>
+        {q.options.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {q.options.map((o) => <button key={o} onClick={() => { toggle(tab, o); if (!q.multi) setTimeout(() => next(tab), 120) }} aria-pressed={picked[tab].includes(o)}
+              className={cn('rounded-lg border px-3 py-1.5 text-sm transition', picked[tab].includes(o) ? 'border-accent bg-accent text-accent-fg' : 'border-line bg-bg hover:border-accent/60')}>{o}</button>)}
+          </div>
+        )}
+        <input value={typed[tab]} onChange={(e) => setTyped((p) => p.map((v, j) => (j === tab ? e.target.value : v)))} onKeyDown={(e) => { if (e.key === 'Enter' && typed[tab].trim()) next(tab) }}
+          placeholder={q.options.length ? t('Hoặc gõ câu trả lời khác…') : t('Gõ câu trả lời…')} className="w-full rounded-md border border-line bg-bg px-2.5 py-1.5 text-sm outline-none focus:border-accent" />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <Button size="sm" disabled={tab === 0} onClick={() => setTab(tab - 1)}>{t('Câu trước')}</Button>
+        <div className="flex gap-2">
+          {tab < form.length - 1 && <Button size="sm" onClick={() => setTab(tab + 1)}>{t('Câu sau')}</Button>}
+          <Button size="sm" variant="primary" disabled={!all} onClick={() => onAnswer(item.qid, JSON.stringify(form.map((_, i) => value(i))))}>{t('Gửi tất cả')}</Button>
+        </div>
+      </div>
     </div>
   )
 }

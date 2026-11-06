@@ -13,7 +13,7 @@ export type Item =
   | { key: string; kind: 'thinking'; text: string; streaming: boolean; provider?: string }
   | ToolItem
   | { key: string; kind: 'approval'; aid: string; approvalKind: string; detail: string; status: 'pending' | 'allowed' | 'denied' }
-  | { key: string; kind: 'question'; qid: string; question: string; options: string[]; answer: string | null }
+  | { key: string; kind: 'question'; qid: string; question: string; options: string[]; form?: import('@/lib/chatStream').FormQuestion[]; answer: string | null }
   | { key: string; kind: 'summary'; files: { path: string; status: string; added: number; removed: number }[]; undone: boolean }
   | { key: string; kind: 'notice' | 'error'; text: string }
 
@@ -85,7 +85,7 @@ export function useChat() {
         case 'approval':
           return [...base, { key: k(), kind: 'approval', aid: e.id, approvalKind: e.kind, detail: e.detail, status: 'pending' }]
         case 'question':
-          return [...base, { key: k(), kind: 'question', qid: e.id, question: e.question, options: e.options, answer: null }]
+          return [...base, { key: k(), kind: 'question', qid: e.id, question: e.question, options: e.options, form: e.form, answer: null }]
         case 'question_done':
           return base.map((it) => (it.kind === 'question' && it.qid === e.id && it.answer === null ? { ...it, answer: e.answer || '—' } : it))
         case 'turn_summary':
@@ -111,7 +111,7 @@ export function useChat() {
     return r.id
   }, [qc])
 
-  const send = useCallback(async (text: string, provider: string | null, attachments: string[] = [], opts: { permission?: string; effort?: string; docs?: boolean; temperature?: number; max_tokens?: number } = {}) => {
+  const send = useCallback(async (text: string, provider: string | null, attachments: string[] = [], opts: { assistant?: string; permission?: string; effort?: string; docs?: boolean; temperature?: number; max_tokens?: number } = {}) => {
     if (busy || !text.trim()) return
     currentProviderRef.current = provider
     setBusy(true)
@@ -152,7 +152,7 @@ export function useChat() {
     abort.current = ctl
     setBusy(true)
     setStatus(t('Đang xử lý…'))
-    setItems((p) => [...p.filter((it) => it.kind !== 'approval' && it.kind !== 'question'), ...(st.questions ?? []).map((q) => ({ key: k(), kind: 'question' as const, qid: q.id, question: q.question, options: q.options, answer: null })), ...st.pending.map((a) => ({ key: k(), kind: 'approval' as const, aid: a.id, approvalKind: a.kind, detail: a.detail, status: 'pending' as const }))])
+    setItems((p) => [...p.filter((it) => it.kind !== 'approval' && it.kind !== 'question'), ...(st.questions ?? []).map((q) => ({ key: k(), kind: 'question' as const, qid: q.id, question: q.question, options: q.options, form: q.form, answer: null })), ...st.pending.map((a) => ({ key: k(), kind: 'approval' as const, aid: a.id, approvalKind: a.kind, detail: a.detail, status: 'pending' as const }))])
     try {
       await attachChat(sid, st.cursor, apply, ctl.signal)
     } catch (e) {
