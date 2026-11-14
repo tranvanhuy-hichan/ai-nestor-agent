@@ -23,7 +23,7 @@ def get(sid: str) -> dict | None:
 
 def list_all(limit: int = 200, q: str = "") -> list[dict]:
     with db() as c:
-        rows = c.execute("""SELECT s.id,s.title,s.created,s.updated,s.source,s.project,COALESCE(s.pinned,0) AS pinned,
+        rows = c.execute("""SELECT s.id,s.title,s.created,s.updated,s.source,s.project,COALESCE(s.pinned,0) AS pinned, COALESCE(s.assistant,'') AS assistant,
                             (SELECT COUNT(*) FROM messages m WHERE m.session_id=s.id AND m.role='user') AS turns
                             FROM sessions s WHERE (?='' OR s.title LIKE '%'||?||'%') ORDER BY COALESCE(s.pinned,0) DESC, updated DESC LIMIT ?""", (q, q, limit)).fetchall()
     return [dict(r) for r in rows]
@@ -38,6 +38,16 @@ def delete(sid: str) -> None:
         vectorstore.delete_session(sid)
     except Exception:  # noqa: BLE001 - kho vector khong duoc lam hong viec xoa phien
         pass
+
+
+def set_project(sid: str, project: str) -> None:
+    with db() as c:
+        c.execute("UPDATE sessions SET project=? WHERE id=?", (project, sid))
+
+
+def set_assistant(sid: str, assistant: str) -> None:
+    with db() as c:
+        c.execute("UPDATE sessions SET assistant=? WHERE id=?", (assistant or "", sid))
 
 
 def rename(sid: str, title: str) -> None:

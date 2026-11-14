@@ -1,0 +1,98 @@
+[
+ {
+  "layout": "two_columns",
+  "left_width_pct": 40,
+  "left_lines": [
+   {
+    "role": "parent_org",
+    "text": "UBND THÀNH PHỐ ……"
+   },
+   {
+    "role": "issuing_org",
+    "text": "UBND PHƯỜNG ……"
+   },
+   {
+    "role": "document_number",
+    "text": "Số: ……/BB-UBND"
+   }
+  ],
+  "right_lines": [
+   {
+    "role": "national_name",
+    "text": "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM"
+   },
+   {
+    "role": "motto",
+    "text": "Độc lập - Tự do - Hạnh phúc"
+   }
+  ]
+ },
+ {
+  "role": "document_type_title",
+  "text": "BIÊN BẢN"
+ },
+ {
+  "role": "summary",
+  "text": "Cuộc họp …………………………"
+ },
+ {
+  "role": "body",
+  "text": "Thời gian bắt đầu: …… giờ …… phút, ngày …… tháng …… năm ……"
+ },
+ {
+  "role": "body",
+  "text": "Địa điểm: ……"
+ },
+ {
+  "role": "body",
+  "text": "Thành phần tham dự: ……"
+ },
+ {
+  "role": "body",
+  "text": "Chủ trì: ……"
+ },
+ {
+  "role": "body",
+  "text": "Thư ký: ……"
+ },
+ {
+  "role": "body",
+  "text": "Nội dung:"
+ },
+ {
+  "role": "body",
+  "text": "1. ……: …… báo cáo …… Ý kiến thảo luận: …… Kết luận của chủ trì: ……"
+ },
+ {
+  "role": "body",
+  "text": "2. ……"
+ },
+ {
+  "role": "body",
+  "text": "Cuộc họp kết thúc vào …… giờ …… phút cùng ngày. Biên bản đã được thông qua và các thành viên nhất trí./."
+ },
+ {
+  "layout": "two_columns",
+  "left_width_pct": 50,
+  "left_lines": [
+   {
+    "role": "signature_authority",
+    "text": "THƯ KÝ"
+   },
+   {
+    "role": "signature_name",
+    "text": "……………………"
+   }
+  ],
+  "right_lines": [
+   {
+    "role": "signature_authority",
+    "text": "CHỦ TỌA"
+   },
+   {
+    "role": "signature_name",
+    "text": "……………………"
+   }
+  ]
+ }
+]

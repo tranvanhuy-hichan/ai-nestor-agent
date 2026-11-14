@@ -1,4 +1,4 @@
-"""Kenh chat (Telegram), heartbeat va dang nhap giao dien."""
+"""Kenh chat (Telegram, Zalo), heartbeat va dang nhap giao dien."""
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
@@ -6,6 +6,9 @@ from pydantic import BaseModel
 from ..core import config as cfgmod
 from ..services import auth, heartbeat
 from ..services.telegram_channel import channel, new_pair_code
+from ..services.zalo_channel import channel as zalo
+from ..services.zalo_channel import new_pair_code as zalo_pair
+from ..services.zalo_channel import verify as zalo_verify
 
 router = APIRouter()
 
@@ -14,7 +17,8 @@ router = APIRouter()
 @router.get("/channels")
 def channels_status():
     cfg = cfgmod.load().channels.telegram
-    return {"telegram": {**channel.status, "enabled": cfg.enabled, "has_token": bool(cfg.token), "allowed_users": cfg.allowed_users, "api_base": cfg.api_base}}
+    return {"telegram": {**channel.status, "enabled": cfg.enabled, "has_token": bool(cfg.token), "allowed_users": cfg.allowed_users, "api_base": cfg.api_base},
+            "zalo": _zalo_public(cfgmod.load().channels.zalo)}
 
 
 class TgConfig(BaseModel):
@@ -144,3 +148,82 @@ def auth_password(b: SetPassword, request: Request):
     auth.set_password(cfg, b.new)
     cfgmod.save(cfg)
     return {"ok": True, "required": bool(b.new)}
+
+
+# ---------- Zalo OA
+def _zalo_public(z: cfgmod.ZaloCfg) -> dict:
+    return {**zalo.status, "enabled": z.enabled, "oa_id": z.oa_id, "app_id": z.app_id, "allowed_users": z.allowed_users,
+            "has_app_secret": bool(z.app_secret), "has_access_token": bool(z.access_token), "has_refresh_token": bool(z.refresh_token), "has_webhook_secret": bool(z.webhook_secret),
+            "webhook_path": "/api/channels/zalo/webhook"}
+
+
+@router.get("/channels/zalo")
+def zalo_status():
+    return _zalo_public(cfgmod.load().channels.zalo)
+
+
+class ZaloConfig(BaseModel):
+    enabled: bool
+    oa_id: str = ""
+    app_id: str = ""
+    app_secret: str = ""  # de trong hoac '***' = giu gia tri cu (ap dung cho moi truong bi mat)
+    access_token: str = ""
+    refresh_token: str = ""
+    webhook_secret: str = ""
+
+
+@router.put("/channels/zalo")
+def zalo_save(b: ZaloConfig):
+    cfg = cfgmod.load()
+    z = cfg.channels.zalo
+    z.enabled, z.oa_id, z.app_id = b.enabled, b.oa_id.strip(), b.app_id.strip()
+    for k in cfgmod.ZALO_SECRETS:
+        v = getattr(b, k)
+        if v and v != cfgmod.MASK:
+            setattr(z, k, v.strip())
+    if z.enabled and not (z.access_token or z.refresh_token):
+        raise HTTPException(400, "cần nhập access token (hoặc refresh token) của Zalo OA")
+    if z.enabled and not z.webhook_secret:
+        raise HTTPException(400, "cần đặt webhook secret để xác thực tin nhắn từ Zalo")
+    cfgmod.save(cfg)
+    zalo.apply(z)
+    return _zalo_public(z)
+
+
+@router.post("/channels/zalo/pair-code")
+def zalo_pair_code():
+    return {"code": zalo_pair(), "expires_in": 600}
+
+
+class ZaloRemove(BaseModel):
+    user_id: str
+
+
+@router.post("/channels/zalo/remove-user")
+def zalo_remove_user(b: ZaloRemove):
+    cfg = cfgmod.load()
+    cfg.channels.zalo.allowed_users = [u for u in cfg.channels.zalo.allowed_users if u != b.user_id]
+    cfgmod.save(cfg)
+    zalo.apply(cfg.channels.zalo)
+    return {"ok": True}
+
+
+@router.post("/channels/zalo/webhook")
+async def zalo_webhook(request: Request, secret: str = ""):
+    """Zalo goi vao day (qua tunnel/domain cong khai). Xac thuc bang X-ZEvent-Signature hoac ?secret=; xu ly nen, tra 200 ngay."""
+    import json
+    import threading
+    body = await request.body()
+    try:
+        event = json.loads(body)
+    except ValueError:
+        event = None
+    z = cfgmod.load().channels.zalo
+    ts = str(event.get("timestamp", "")) if isinstance(event, dict) else ""
+    if not z.enabled or not zalo_verify(z, body, request.headers.get("x-zevent-signature", ""), ts, secret):
+        raise HTTPException(403, "chữ ký không hợp lệ")
+    if not isinstance(event, dict):
+        raise HTTPException(400, "payload không phải JSON")
+    zalo.apply(z)
+    threading.Thread(target=zalo.handle_event, args=(event,), daemon=True).start()
+    return {"ok": True}

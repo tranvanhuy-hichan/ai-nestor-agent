@@ -15,6 +15,7 @@ from .core.workspace import ensure_workspace
 from .core import config as cfgmod
 from .services import auth, heartbeat, jobs, scheduler
 from .services.telegram_channel import channel as telegram
+from .services.zalo_channel import channel as zalo
 from .services.mcp_client import manager as mcp_manager
 
 # httpx mac dinh ghi ca URL vao log, ma URL cua Telegram chua token bot
@@ -35,6 +36,7 @@ async def lifespan(_: FastAPI):
     cfg = cfgmod.load()
     mcp_manager.apply(cfg.mcp_servers)
     telegram.apply(cfg.channels.telegram)
+    zalo.apply(cfg.channels.zalo)
     heartbeat.start()
     yield
     heartbeat.stop()
@@ -48,6 +50,8 @@ app = FastAPI(title="Argus Agent", version="0.3.0", lifespan=lifespan)
 @app.middleware("http")
 async def guard(request: Request, call_next):
     """Chong DNS-rebinding/CSRF: agent co tool chay lenh nen chi nhan request tu dung host."""
+    if request.url.path == "/api/channels/zalo/webhook":  # Zalo goi qua tunnel (Host la, khong cookie): tu xac thuc bang chu ky trong handler
+        return await call_next(request)
     if request.url.path.startswith("/v1/"):  # API ben ngoai: xac thuc bang Bearer token (khong dung cookie nen khong lo CSRF)
         return await call_next(request)
     host = request.headers.get("host", "")

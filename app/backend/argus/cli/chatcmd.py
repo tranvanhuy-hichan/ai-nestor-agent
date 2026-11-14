@@ -9,7 +9,7 @@ from .ui import L, ask_yes_no, bold, cyan, dim, err, green, interactive, red, ye
 
 KIND = {"exec": ("chạy lệnh shell", "run a shell command"), "mcp": ("gọi tool MCP", "call an MCP tool"), "file_read": ("đọc file ngoài workspace", "read a file outside the workspace"),
         "file_write": ("ghi file", "write a file"), "http_request": ("gửi yêu cầu HTTP thay đổi dữ liệu", "send a state-changing HTTP request")}
-PERMS = ("default", "readonly", "guarded", "full")
+PERMS = ("default", "readonly", "guarded", "full", "plan")
 EFFORTS = ("auto", "low", "medium", "high", "thinking")
 
 

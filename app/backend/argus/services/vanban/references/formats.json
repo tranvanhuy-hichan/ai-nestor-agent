@@ -1,0 +1,353 @@
+{
+  "_meta": {
+    "source": "Nghị định 30/2020/NĐ-CP, Phụ lục I (Thể thức và kỹ thuật trình bày văn bản hành chính), Phụ lục II (Viết hoa), Phụ lục III (Chữ viết tắt tên loại văn bản)",
+    "note": "Nguồn chân lý DUY NHẤT cho định dạng. Không có tầng học động, không có tầng 'active standard' nào khác đè lên. Mỗi role dưới đây map 1-1 với đúng 1 khối thể thức trong Phụ lục I Mục IV (ô số tương ứng ghi trong 'nd30_o_so').",
+    "page_size": "A4 (210mm x 297mm)",
+    "margins_mm": {"top": [20, 25], "bottom": [20, 25], "left": [30, 35], "right": [15, 20]},
+    "font_family": "Times New Roman (Unicode, TCVN 6909:2001)",
+    "font_color": "black"
+  },
+  "roles": {
+    "national_name": {
+      "nd30_o_so": "1",
+      "text_fixed": "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM",
+      "case": "upper",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [12, 13],
+      "note": "In hoa, đứng, đậm, phía trên cùng bên phải trang đầu."
+    },
+    "motto": {
+      "nd30_o_so": "1",
+      "text_fixed": "Độc lập - Tự do - Hạnh phúc",
+      "case": "title_each_phrase",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "underline_paragraph": true,
+      "underline_width": "full_line",
+      "note": "Canh giữa dưới quốc hiệu, đường kẻ ngang nét liền dài bằng đúng dòng chữ (paragraph border thật, không phải underline ký tự). Quốc hiệu và tiêu ngữ cách nhau dòng đơn."
+    },
+    "parent_org": {
+      "nd30_o_so": "2",
+      "case": "upper",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "size_pt": [12, 13],
+      "note": "Tên cơ quan chủ quản trực tiếp (nếu có), dòng trên, không đậm."
+    },
+    "issuing_org": {
+      "nd30_o_so": "2",
+      "case": "upper",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [12, 13],
+      "underline_paragraph": true,
+      "underline_width_ratio": [0.333, 0.5],
+      "note": "Dòng dưới parent_org, đậm. Đường kẻ ngang nét liền dài 1/3-1/2 dòng chữ, đặt cân đối."
+    },
+    "document_number": {
+      "nd30_o_so": "3",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "size_pt": 13,
+      "note": "Từ 'Số' chữ thường cỡ 13 đứng; ký hiệu văn bản in hoa cỡ 13 đứng. Format: 'Số: {số}/{năm nếu VBQPPL}/{viết tắt loại}-{viết tắt cơ quan}'. Công văn không có viết tắt tên loại."
+    },
+    "place_date": {
+      "nd30_o_so": "4",
+      "align": "center",
+      "bold": false,
+      "italic": true,
+      "size_pt": [13, 14],
+      "note": "Cùng dòng với địa danh, canh giữa dưới quốc hiệu/tiêu ngữ. Chữ cái đầu địa danh viết hoa, sau địa danh có dấu phẩy. Ngày <10 và tháng 1-2 thêm số 0. Duy nhất role này được nghiêng trong khối đầu trang."
+    },
+    "document_type_title": {
+      "nd30_o_so": "5a",
+      "case": "upper",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "paragraph_spacing_before_pt_min": 24,
+      "note": "Tên loại văn bản (QUYẾT ĐỊNH, TỜ TRÌNH, BÁO CÁO...). Công văn KHÔNG có role này. Cách biệt rõ với khối đầu trang (quốc hiệu/tiêu ngữ/cơ quan) phía trên bằng khoảng trắng, không dính sát."
+    },
+    "summary": {
+      "nd30_o_so": "5a",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "underline_paragraph": true,
+      "underline_width_ratio": [0.333, 0.5],
+      "paragraph_spacing_after_pt_min": 24,
+      "note": "Trích yếu nội dung, ngay dưới document_type_title. Đường kẻ dưới dài 1/3-1/2 dòng chữ (chốt 1/3 khi ghi). Cách biệt rõ với nội dung chính phía dưới bằng khoảng trắng, không dính sát."
+    },
+    "summary_cong_van": {
+      "nd30_o_so": "5b",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "size_pt": [12, 13],
+      "underline_paragraph": false,
+      "note": "Riêng Công văn: trích yếu dạng 'V/v ...', chữ thường, KHÔNG đậm, KHÔNG có đường kẻ dưới, canh giữa dưới số ký hiệu, cách dòng 6pt với số ký hiệu."
+    },
+    "recipient": {
+      "nd30_o_so": "9a",
+      "align": "left",
+      "bold": false,
+      "italic": false,
+      "size_pt": [13, 14],
+      "paragraph_spacing_after_pt_min": 12,
+      "note": "'Kính gửi:' + tên cơ quan/cá nhân nhận. Áp dụng cho Tờ trình, Báo cáo (gửi cấp trên), Công văn. 1 cơ quan: cùng dòng. ≥2 cơ quan: mỗi cơ quan 1 dòng, gạch đầu dòng, kết thúc dấu ';', dòng cuối kết thúc dấu '.'. Chỉ dòng CUỐI CÙNG của khối (cơ quan cuối cùng) mới mang spacing_after để tạo khoảng trống trước nội dung chính; các dòng trước (nếu ≥2 cơ quan) set `no_underline: true` để dùng chung cơ chế mid-block-line, tránh bị cách dòng giữa các cơ quan."
+    },
+    "legal_basis": {
+      "nd30_o_so": "6",
+      "align": "left",
+      "bold": false,
+      "italic": true,
+      "size_pt": [13, 14],
+      "first_line_indent_cm": [1, 1.27],
+      "note": "Mỗi căn cứ là 1 đoạn riêng, kết thúc dấu ';' (đoạn cuối dấu '.'). Nghiêng, lùi đầu dòng, KHÔNG BAO GIỜ canh đều 2 lề (justify) — dù dòng dài tự nhiên wrap, luôn canh trái."
+    },
+    "body": {
+      "nd30_o_so": "6",
+      "align": "justify",
+      "bold": false,
+      "italic": false,
+      "size_pt": [13, 14],
+      "first_line_indent_cm": [1, 1.27],
+      "line_spacing": "single_to_1.5",
+      "paragraph_spacing_after_pt_min": 6,
+      "case": null,
+      "note": "Thân văn bản: canh đều 2 lề, thụt đầu dòng, cỡ 13-14. KHÔNG BAO GIỜ viết hoa toàn đoạn, KHÔNG BAO GIỜ in đậm toàn đoạn — đây là văn xuôi thường."
+    },
+    "section_heading": {
+      "nd30_o_so": "6",
+      "align": "left",
+      "bold": true,
+      "italic": false,
+      "case": "upper_if_muc",
+      "size_pt": [13, 14],
+      "note": "Áp dụng cho văn bản KHÔNG chia điều (Báo cáo, Tờ trình, Kế hoạch): mục lớn 'I.', 'II.' in hoa đậm canh giữa (nếu là 'Phần'/'Chương') hoặc canh trái có thụt đầu dòng như thân bài (nếu là 'Mục I.', 'II.' đơn giản, KHÔNG canh đều 2 lề)."
+    },
+    "phan_chuong_label": {
+      "nd30_o_so": "6",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "case": "upper",
+      "size_pt": [13, 14],
+      "note": "Dòng 'Phần I', 'Chương I' (số La Mã) — 1 dòng riêng, canh giữa, đứng, đậm."
+    },
+    "phan_chuong_title": {
+      "nd30_o_so": "6",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "case": "upper",
+      "size_pt": [13, 14],
+      "note": "Tiêu đề của Phần/Chương, ngay dưới nhãn, canh giữa, in hoa đậm đứng."
+    },
+    "muc_tieu_muc_label": {
+      "nd30_o_so": "6",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "note": "Dòng 'Mục 1', 'Tiểu mục 1' (số Ả Rập) — 1 dòng riêng, canh giữa, đứng, đậm."
+    },
+    "muc_tieu_muc_title": {
+      "nd30_o_so": "6",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "case": "upper",
+      "size_pt": [13, 14],
+      "note": "Tiêu đề Mục/Tiểu mục, ngay dưới nhãn, canh giữa, in hoa đậm đứng."
+    },
+    "article_heading": {
+      "nd30_o_so": "6",
+      "align": "justify",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "first_line_indent_cm": [1, 1.27],
+      "note": "'Điều N. Tên điều' — chữ thường, đứng, đậm, lùi đầu dòng 1-1.27cm, cỡ bằng thân bài. Nội dung điều dùng role body."
+    },
+    "clause": {
+      "nd30_o_so": "6",
+      "align": "justify",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "first_line_indent_cm": [1, 1.27],
+      "note": "Khoản trong Điều/Mục: số Ả Rập + dấu chấm (vd '1.'), đứng, cỡ thân bài. Đậm CHỈ khi khoản có tiêu đề riêng ngay sau số thứ tự trên cùng 1 dòng — nếu khoản không có tiêu đề riêng (chỉ là đoạn văn đánh số), dùng role body với text bắt đầu bằng số thứ tự, KHÔNG dùng role này (tránh đậm nhầm nội dung thường)."
+    },
+    "point": {
+      "nd30_o_so": "6",
+      "align": "left",
+      "bold": false,
+      "italic": false,
+      "size_pt": [13, 14],
+      "note": "Điểm trong khoản: chữ cái tiếng Việt + dấu ngoặc đơn (vd 'a)', 'b)'), đứng, cỡ thân bài, KHÔNG đậm. Theo thứ tự bảng chữ cái tiếng Việt."
+    },
+    "quyet_dinh_colon": {
+      "nd30_o_so": "6",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "case": "upper",
+      "size_pt": [13, 14],
+      "note": "Dòng 'QUYẾT ĐỊNH:' đứng riêng trước Điều 1, CHỈ dùng cho văn bản Quyết định (QUYET_DINH_TRUC_TIEP/QUYET_DINH_GIAN_TIEP). Nghị quyết dùng role quyet_nghi_colon riêng (chữ khác: 'QUYẾT NGHỊ:'), không dùng chung role này."
+    },
+    "quyet_nghi_colon": {
+      "nd30_o_so": "6",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "case": "upper",
+      "size_pt": [13, 14],
+      "text_fixed": "QUYẾT NGHỊ:",
+      "note": "Dòng 'QUYẾT NGHỊ:' đứng riêng trước nội dung nghị quyết, CHỈ dùng cho NGHI_QUYET (Mẫu 1.1) — khác chữ với quyet_dinh_colon ('QUYẾT ĐỊNH:', dùng cho Quyết định)."
+    },
+    "signature_authority": {
+      "nd30_o_so": "7a",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "case": "upper",
+      "size_pt": [13, 14],
+      "note": "Quyền hạn + chức vụ người ký, phía trên họ tên, cột phải. Ký thay/thừa lệnh/thừa ủy quyền/quyền cấp trưởng thêm tiền tố TM./KT./TL./TUQ./Q. — chỉ khi người ký không phải người đứng đầu, không mặc định."
+    },
+    "signature_name": {
+      "nd30_o_so": "7b",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "note": "Họ và tên người ký, dưới signature_authority. KHÔNG ghi học hàm/học vị/danh hiệu trước tên, trừ đơn vị giáo dục/y tế/khoa học (học hàm/học vị) và lực lượng vũ trang (quân hàm)."
+    },
+    "recipients_label": {
+      "nd30_o_so": "9b",
+      "align": "left",
+      "bold": true,
+      "italic": true,
+      "size_pt": 12,
+      "note": "Nhãn 'Nơi nhận:' — đậm, nghiêng, cỡ 12, canh trái sát lề, ngang hàng dòng quyền hạn/chức vụ người ký (cột trái)."
+    },
+    "recipients_item": {
+      "nd30_o_so": "9b",
+      "align": "left",
+      "bold": false,
+      "italic": false,
+      "size_pt": 11,
+      "note": "Danh sách nơi nhận, mỗi nơi 1 dòng bắt đầu '-' sát lề trái, cuối dòng ';'. Có 'Kính gửi' thì dòng đầu 'Như trên;'. Dòng cuối 'Lưu: VT, {viết tắt đơn vị}.' kết thúc dấu '.'."
+    },
+    "appendix_label": {
+      "nd30_o_so": "phu_luc",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": 14,
+      "note": "'Phụ lục {số La Mã nếu ≥2 phụ lục}' — 1 dòng riêng, canh giữa, đứng, đậm, cỡ 14."
+    },
+    "appendix_title": {
+      "nd30_o_so": "phu_luc",
+      "case": "upper",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "note": "Tên phụ lục, canh giữa, in hoa đứng đậm."
+    },
+    "appendix_attachment_info": {
+      "nd30_o_so": "phu_luc",
+      "align": "center",
+      "bold": false,
+      "italic": true,
+      "size_pt": [13, 14],
+      "underline_paragraph": true,
+      "underline_width_ratio": [0.333, 0.5],
+      "note": "'(Kèm theo {tên loại} số .../... ngày ... tháng ... năm ... của ...)' — nghiêng, canh giữa, có đường kẻ dưới."
+    },
+    "table_title": {
+      "nd30_o_so": null,
+      "align": "left",
+      "bold": false,
+      "italic": true,
+      "size_pt": 12,
+      "note": "Tiêu đề bảng số liệu (không phải khối ND30 chính thức, quy ước dùng chung cho báo cáo có bảng) — nghiêng, cỡ nhỏ hơn thân bài, ngay trên bảng."
+    },
+    "table_header_cell": {
+      "nd30_o_so": null,
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": 11,
+      "note": "Ô tiêu đề cột trong bảng số liệu (không phải khối ND30 chính thức) — đậm, canh giữa, KHÔNG thụt đầu dòng, cỡ NHỎ HƠN thân bài (11pt thay vì 13-14pt) để bảng nhiều cột có đủ chỗ hiển thị mà không phải ép width quá hẹp gây vỡ chữ. Không dùng role 'body' cho ô bảng vì 'body' có first_line_indent_cm (thụt đầu dòng) và align justify, làm chữ trong ô bảng canh lệch/thụt lề sai."
+    },
+    "table_body_cell": {
+      "nd30_o_so": null,
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "size_pt": 11,
+      "note": "Ô dữ liệu trong bảng số liệu (không phải khối ND30 chính thức) — canh giữa, KHÔNG thụt đầu dòng, cỡ NHỎ HƠN thân bài (11pt) để khớp cỡ chữ header cùng bảng, giúp bảng nhiều cột không phải ép width quá hẹp. Không dùng role 'body' cho ô bảng (xem ghi chú table_header_cell)."
+    },
+    "muc_do_mat": {
+      "nd30_o_so": "10a",
+      "case": "upper",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "boxed": true,
+      "border_style": "single",
+      "note": "TUYỆT MẬT/TỐI MẬT/MẬT — khung chữ nhật viền đơn. CHỈ áp dụng khi văn bản thực sự có tính chất mật, KHÔNG mặc định."
+    },
+    "muc_do_khan": {
+      "nd30_o_so": "10b",
+      "case": "upper",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "boxed": true,
+      "border_style": "single",
+      "box_size_mm": {"HOA_TOC": [30, 8], "THUONG_KHAN": [40, 8], "KHAN": [20, 8]},
+      "ink_color": "red",
+      "note": "HỎA TỐC/THƯỢNG KHẨN/KHẨN — khung hình chữ nhật kích thước khắc sẵn theo bảng, mực đỏ tươi. CHỈ áp dụng khi văn bản thực sự khẩn, KHÔNG mặc định."
+    },
+    "pham_vi_luu_hanh": {
+      "nd30_o_so": "11",
+      "case": "upper",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "size_pt": [13, 14],
+      "boxed": true,
+      "border_style": "single",
+      "note": "'XEM XONG TRẢ LẠI', 'LƯU HÀNH NỘI BỘ' — khung chữ nhật viền đơn. CHỈ áp dụng khi có yêu cầu, KHÔNG mặc định."
+    }
+  },
+  "never_italic_roles": [
+    "national_name", "motto", "issuing_org", "parent_org", "document_number",
+    "document_type_title", "summary", "section_heading", "article_heading", "clause", "point",
+    "quyet_dinh_colon", "quyet_nghi_colon", "signature_authority", "signature_name",
+    "phan_chuong_label", "phan_chuong_title", "muc_tieu_muc_label", "muc_tieu_muc_title"
+  ],
+  "never_justify_roles": ["legal_basis", "national_name", "motto", "document_number", "place_date", "document_type_title", "summary", "point"],
+  "always_bold_roles": [
+    "national_name", "motto", "issuing_org", "document_type_title", "summary",
+    "section_heading", "article_heading", "quyet_dinh_colon", "quyet_nghi_colon", "signature_authority",
+    "signature_name", "phan_chuong_label", "phan_chuong_title", "muc_tieu_muc_label",
+    "muc_tieu_muc_title", "recipients_label", "appendix_label", "appendix_title",
+    "muc_do_mat", "muc_do_khan", "pham_vi_luu_hanh"
+  ],
+  "never_bold_roles": ["body", "place_date", "legal_basis", "parent_org", "recipients_item", "summary_cong_van", "appendix_attachment_info", "table_title", "point"]
+}

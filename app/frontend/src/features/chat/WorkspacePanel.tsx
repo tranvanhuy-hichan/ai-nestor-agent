@@ -48,14 +48,14 @@ export function WorkspacePanel({ sid, project, items, filesTick, tab, onTab, ope
     <aside className="relative hidden shrink-0 flex-col border-l border-line bg-panel xl:flex" style={{ width }} aria-label={t('Không gian làm việc')}>
       <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={() => { drag.current = false }} role="separator" aria-orientation="vertical" aria-label={t('Kéo để đổi độ rộng')}
         className="absolute left-0 top-0 z-10 h-full w-1.5 cursor-col-resize transition hover:bg-accent/40" />
-      <div className="flex h-14 shrink-0 items-center gap-1 border-b border-line px-2">
+      <div className="flex h-14 shrink-0 items-center gap-1 overflow-x-auto border-b border-line px-2">
         {TABS.filter((x) => project || x.id !== 'changes').map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => onTab(id)} aria-pressed={tab === id}
-            className={cn('flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition', tab === id ? 'bg-panel2 text-fg' : 'text-muted hover:text-fg')}>
-            <Icon className="size-4" />{t(label)}{counts[id] > 0 && <span className="rounded bg-bg px-1 text-[10px] text-muted">{counts[id]}</span>}
+          <button key={id} onClick={() => onTab(id)} aria-pressed={tab === id} title={t(label)} aria-label={t(label)}
+            className={cn('flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-sm font-medium transition', tab === id ? 'bg-panel2 text-fg' : 'text-muted hover:text-fg')}>
+            <Icon className="size-4" />{(tab === id || width >= 440) && t(label)}{counts[id] > 0 && <span className="rounded bg-bg px-1 text-[10px] text-muted">{counts[id]}</span>}
           </button>
         ))}
-        <button onClick={onClose} aria-label={t('Đóng panel')} className="ml-auto rounded p-1.5 text-muted hover:bg-panel2 hover:text-fg"><PanelRightClose className="size-4" /></button>
+        <button onClick={onClose} aria-label={t('Đóng panel')} className="ml-auto shrink-0 rounded p-1.5 text-muted hover:bg-panel2 hover:text-fg"><PanelRightClose className="size-4" /></button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === 'changes' && <ChangesTab sid={sid} filesTick={filesTick} />}

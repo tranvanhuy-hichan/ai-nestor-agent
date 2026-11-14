@@ -1,24 +1,36 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Bell, Blocks, Cable, FileSearch, Clock, Code2, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, Sun, type LucideIcon } from 'lucide-react'
+import { Bell, Blocks, Cable, FileSearch, Clock, Code2, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, Shuffle, Sun, type LucideIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { t, tk } from '@/lib/i18n.ts'
 import { AgentLogo, AgentOwl } from '@/components/ui/AgentMark'
 import { LangSwitcher } from './LangSwitcher'
 import { CODE_MODE } from '@/lib/features'
 import { cn } from '@/lib/utils'
+import { setUiMode, useUiMode } from '@/lib/uiMode'
 
 type NavItem = { to: string; label: string; icon: LucideIcon; hint: string }
 const TOP: NavItem[] = [
   { to: '/', label: tk('Trang chủ'), icon: House, hint: tk('Tổng quan và việc nên làm tiếp') },
   { to: '/chat', label: tk('Trò chuyện'), icon: MessageSquare, hint: tk('Nói chuyện và giao việc cho agent') },
 ]
+const SIMPLE: NavItem[] = [
+  { to: '/', label: tk('Trang chủ'), icon: House, hint: tk('Chọn trợ lý và giao việc nhanh') },
+  { to: '/chat', label: tk('Trợ lý'), icon: Sparkles, hint: tk('Trò chuyện và giao việc cho trợ lý') },
+  { to: '/xao-de', label: tk('Xáo đề thi'), icon: Shuffle, hint: tk('Tạo nhiều mã đề từ một đề gốc') },
+  { to: '/tasks', label: tk('Việc đã làm'), icon: ListTodo, hint: tk('Các việc trợ lý làm ngầm và kết quả') },
+  { to: '/automations', label: tk('Lịch tự động'), icon: Clock, hint: tk('Việc lặp lại theo giờ, theo ngày') },
+  { to: '/documents', label: tk('Tài liệu'), icon: FileSearch, hint: tk('Hỏi đáp trên văn bản, quy chế của bạn') },
+  { to: '/skills', label: tk('Kỹ năng của tôi'), icon: Puzzle, hint: tk('Những cách làm trợ lý đã học') },
+  { to: '/settings', label: tk('Cài đặt'), icon: Settings, hint: tk('Ngôn ngữ, Zalo, tài khoản AI') },
+]
 const GROUPS: { title: string; items: NavItem[] }[] = [
   { title: tk('Công việc'), items: [
     ...(CODE_MODE ? [{ to: '/code', label: tk('Lập trình'), icon: Code2, hint: tk('Mở một dự án và nhờ agent viết code') }] : []),
     { to: '/tasks', label: tk('Tác vụ'), icon: ListTodo, hint: tk('Việc dài agent làm ngầm') },
     { to: '/automations', label: tk('Tự động hóa'), icon: Clock, hint: tk('Việc lặp theo lịch') },
+    { to: '/xao-de', label: tk('Xáo đề thi'), icon: Shuffle, hint: tk('Tạo nhiều mã đề từ một đề gốc') },
     { to: '/notifications', label: tk('Hộp thư'), icon: Bell, hint: tk('Thông báo từ agent') },
   ] },
   { title: tk('Khả năng của agent'), items: [
@@ -88,6 +100,7 @@ function useTheme() {
 
 export function AppLayout() {
   const [light, setLight] = useTheme()
+  const simple = useUiMode() === 'simple'
   const location = useLocation()
   const [expanded, setExpanded] = useState(false)
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -129,8 +142,9 @@ export function AppLayout() {
 
       {/* Nav items */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2" aria-label={t('Điều hướng chính')}>
-        {TOP.map((i) => <NavRow key={i.to} item={i} unread={0} chatMode={chatMode} expanded={exp} />)}
-        {GROUPS.map((g) => (
+        {simple && SIMPLE.map((i) => <NavRow key={i.to} item={i} unread={0} chatMode={chatMode} expanded={exp} />)}
+        {!simple && TOP.map((i) => <NavRow key={i.to} item={i} unread={0} chatMode={chatMode} expanded={exp} />)}
+        {!simple && GROUPS.map((g) => (
           <div key={g.title} className="mt-3">
             {chatMode ? (
               <p className={cn('mb-1 overflow-hidden whitespace-nowrap px-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted/70 transition-opacity duration-200', exp ? 'opacity-100' : 'opacity-0')}>
@@ -153,6 +167,14 @@ export function AppLayout() {
           ? <div className={cn('overflow-hidden pb-1 transition-all duration-200', exp ? 'max-h-10 opacity-100' : 'max-h-0 opacity-0 pointer-events-none')}><LangSwitcher /></div>
           : <div className="hidden pb-1 md:block"><LangSwitcher /></div>
         }
+        <button onClick={() => setUiMode(simple ? 'advanced' : 'simple')} title={simple ? t('Chuyển sang giao diện dành cho lập trình viên') : t('Quay lại giao diện đơn giản')}
+          className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-sm font-medium text-accent transition-colors hover:bg-panel2">
+          <Wrench className="size-[18px] shrink-0" />
+          {chatMode
+            ? <span className={cn('whitespace-nowrap transition-opacity duration-200', exp ? 'opacity-100' : 'opacity-0')}>{simple ? t('Nâng cao') : t('Đơn giản')}</span>
+            : <span className="hidden md:block">{simple ? t('Nâng cao') : t('Đơn giản')}</span>
+          }
+        </button>
         {auth.data?.required && (
           <button onClick={logout} title={t('Đăng xuất')}
             className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-sm text-muted transition-colors hover:bg-panel2 hover:text-fg">

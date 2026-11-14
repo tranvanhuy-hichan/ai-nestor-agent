@@ -1,0 +1,106 @@
+[
+ {
+  "layout": "two_columns",
+  "left_width_pct": 40,
+  "left_lines": [
+   {
+    "role": "parent_org",
+    "text": "UBND THÀNH PHỐ ……"
+   },
+   {
+    "role": "issuing_org",
+    "text": "UBND PHƯỜNG ……"
+   },
+   {
+    "role": "document_number",
+    "text": "Số: ……/QĐ-UBND"
+   }
+  ],
+  "right_lines": [
+   {
+    "role": "national_name",
+    "text": "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM"
+   },
+   {
+    "role": "motto",
+    "text": "Độc lập - Tự do - Hạnh phúc"
+   },
+   {
+    "role": "place_date",
+    "text": "……, ngày …… tháng …… năm ……"
+   }
+  ]
+ },
+ {
+  "role": "document_type_title",
+  "text": "QUYẾT ĐỊNH"
+ },
+ {
+  "role": "summary",
+  "text": "Về việc ……………………………"
+ },
+ {
+  "role": "section_heading",
+  "text": "CHỦ TỊCH ỦY BAN NHÂN DÂN PHƯỜNG ……"
+ },
+ {
+  "role": "legal_basis",
+  "text": "Căn cứ Luật Tổ chức chính quyền địa phương (cần kiểm chứng số hiệu, ngày ban hành và các lần sửa đổi);"
+ },
+ {
+  "role": "legal_basis",
+  "text": "Căn cứ ……………………;"
+ },
+ {
+  "role": "body",
+  "text": "Theo đề nghị của …………………,"
+ },
+ {
+  "role": "quyet_dinh_colon",
+  "text": "QUYẾT ĐỊNH:"
+ },
+ {
+  "role": "article_heading",
+  "text": "Điều 1. ……………………"
+ },
+ {
+  "role": "article_heading",
+  "text": "Điều 2. ……………………"
+ },
+ {
+  "role": "article_heading",
+  "text": "Điều 3. Các đơn vị, cá nhân có liên quan chịu trách nhiệm thi hành Quyết định này./."
+ },
+ {
+  "layout": "two_columns",
+  "left_width_pct": 50,
+  "left_lines": [
+   {
+    "role": "recipients_label",
+    "text": "Nơi nhận:"
+   },
+   {
+    "role": "recipients_item",
+    "text": "- Như Điều 3;"
+   },
+   {
+    "role": "recipients_item",
+    "text": "- Lưu: VT, ……."
+   }
+  ],
+  "right_lines": [
+   {
+    "role": "signature_authority",
+    "text": "TM. ỦY BAN NHÂN DÂN"
+   },
+   {
+    "role": "signature_authority",
+    "text": "CHỦ TỊCH"
+   },
+   {
+    "role": "signature_name",
+    "text": "……………………"
+   }
+  ]
+ }
+]

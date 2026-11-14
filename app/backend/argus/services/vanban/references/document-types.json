@@ -1,0 +1,234 @@
+{
+  "_meta": {
+    "source": "Nghị định 30/2020/NĐ-CP, Phụ lục III (Bảng chữ viết tắt tên loại VB hành chính + Mẫu 1.1-1.10 trình bày văn bản hành chính)",
+    "note": "Cấu trúc đặc thù theo loại văn bản — thay thế cho việc lặp lại nội dung ở nhiều file SKILL.md riêng. Mỗi entry liệt kê ĐÚNG thứ tự khối bắt buộc (role trong formats.json) theo mẫu ND30 tương ứng. '?' = có khi cần, '+' = lặp lại nhiều lần, '*' = 0 hoặc nhiều."
+  },
+  "types": {
+    "NGHI_QUYET": {
+      "ten_day_du": "Nghị quyết (cá biệt)",
+      "viet_tat": "NQ",
+      "mau_nd30": "1.1",
+      "co_ten_loai": true,
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "place_date", "document_type_title", "summary",
+        "section_heading:THAM_QUYEN_BAN_HANH",
+        "legal_basis+",
+        "quyet_nghi_colon",
+        "body+",
+        "recipients_label", "recipients_item+",
+        "signature_authority", "signature_name"
+      ],
+      "ghi_chu": "QUAN TRỌNG: dùng role quyet_nghi_colon ('QUYẾT NGHỊ:') — KHÔNG dùng quyet_dinh_colon ('QUYẾT ĐỊNH:') vốn chỉ dành cho văn bản Quyết định. Nơi nhận dòng đầu 'Như Điều...;' nếu có điều khoản trách nhiệm thi hành."
+    },
+    "QUYET_DINH_TRUC_TIEP": {
+      "ten_day_du": "Quyết định (cá biệt) quy định trực tiếp",
+      "viet_tat": "QĐ",
+      "mau_nd30": "1.2",
+      "co_ten_loai": true,
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "place_date", "document_type_title", "summary",
+        "section_heading:THAM_QUYEN_BAN_HANH",
+        "legal_basis+",
+        "body:theo_de_nghi_cua?",
+        "quyet_dinh_colon",
+        "article_heading+", "clause*", "point*",
+        "recipients_label", "recipients_item+",
+        "signature_authority", "signature_name"
+      ],
+      "ghi_chu": "Thẩm quyền ban hành thuộc người đứng đầu ghi chức vụ người đứng đầu; thuộc tập thể ghi tên tập thể/cơ quan. Nội dung mỗi Điều thường chỉ 1 đoạn body; nếu Điều có chia Khoản/Điểm rõ ràng thì dùng clause (Khoản có tiêu đề) và point (Điểm a/b/c) xen giữa article_heading và Điều tiếp theo — Khoản không có tiêu đề riêng thì dùng body, không dùng clause."
+    },
+    "QUYET_DINH_GIAN_TIEP": {
+      "ten_day_du": "Quyết định (quy định gián tiếp — ban hành/phê duyệt kèm theo văn bản khác)",
+      "viet_tat": "QĐ",
+      "mau_nd30": "1.3",
+      "co_ten_loai": true,
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "place_date", "document_type_title", "summary:ban_hanh_phe_duyet",
+        "section_heading:THAM_QUYEN_BAN_HANH",
+        "legal_basis+",
+        "body:theo_de_nghi_cua?",
+        "quyet_dinh_colon",
+        "article_heading:dieu_1_ban_hanh_kem_theo",
+        "article_heading+",
+        "recipients_label", "recipients_item+",
+        "signature_authority", "signature_name"
+      ],
+      "ghi_chu": "Trích yếu (role summary) dùng đúng mẫu câu 'Ban hành (Phê duyệt) {tên văn bản/nội dung được ban hành}' — chọn đúng 1 từ 'Ban hành' hoặc 'Phê duyệt' theo bản chất quyết định (không giữ cả hai kèm ngoặc đơn như trong mẫu, đó chỉ là ký hiệu 2 lựa chọn của ND30). Điều 1 luôn bắt đầu 'Ban hành (Phê duyệt) kèm theo Quyết định này {tên văn bản kèm theo}' — cùng nguyên tắc chọn đúng 1 từ. Văn bản kèm theo dùng mẫu 'Mẫu văn bản (được ban hành, phê duyệt kèm theo quyết định)' riêng — có dòng chỉ dẫn '(Kèm theo Quyết định số .../QĐ- ... ngày ... tháng ... năm ... của ...)' dưới tên loại văn bản kèm theo (dùng role appendix_attachment_info)."
+    },
+    "VAN_BAN_CO_TEN_LOAI": {
+      "ten_day_du": "Văn bản có tên loại (Chỉ thị, Quy chế, Quy định, Thông cáo, Thông báo, Hướng dẫn, Chương trình, Kế hoạch, Phương án, Đề án, Dự án, Báo cáo, Tờ trình, Giấy ủy quyền, Phiếu gửi, Phiếu chuyển, Phiếu báo)",
+      "mau_nd30": "1.4",
+      "co_ten_loai": true,
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "place_date", "document_type_title", "summary",
+        "recipient?",
+        "legal_basis*",
+        "body+",
+        "recipients_label", "recipients_item+",
+        "signature_authority", "signature_name"
+      ],
+      "ghi_chu": "Mẫu dùng chung cho mọi loại văn bản có tên loại không thuộc Nghị quyết/Quyết định/Công văn/Công điện/Giấy mời/Giấy giới thiệu/Biên bản/Giấy nghỉ phép. Dùng cho TO_TRINH, BAO_CAO, KE_HOACH, DE_AN, DU_AN, CHUONG_TRINH, PHUONG_AN, THONG_BAO, HUONG_DAN, QUY_CHE, QUY_DINH, CHI_THI, THONG_CAO."
+    },
+    "TO_TRINH": {
+      "extends": "VAN_BAN_CO_TEN_LOAI",
+      "ten_day_du": "Tờ trình",
+      "viet_tat": "TTr",
+      "recipient_bat_buoc": true,
+      "ghi_chu": "Tờ trình LUÔN có 'Kính gửi' (recipient) — cơ quan/tổ chức cấp trên. Nơi nhận (9a) dùng vì đây là văn bản cấp dưới gửi cấp trên."
+    },
+    "BAO_CAO": {
+      "extends": "VAN_BAN_CO_TEN_LOAI",
+      "ten_day_du": "Báo cáo",
+      "viet_tat": "BC",
+      "recipient_bat_buoc": false,
+      "ghi_chu": "Báo cáo CÓ 'Kính gửi' khi gửi đích danh cấp trên (báo cáo cấp dưới gửi cấp trên); KHÔNG có nếu là báo cáo nội bộ/tổng hợp không gửi đích danh."
+    },
+    "BAO_CAO_CO_BANG": {
+      "extends": "VAN_BAN_CO_TEN_LOAI",
+      "ten_day_du": "Báo cáo/Danh mục/Bảng kèm số liệu (Mẫu QTDA quyết toán, kế hoạch lựa chọn nhà thầu...)",
+      "viet_tat": "BC",
+      "recipient_bat_buoc": false,
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "place_date", "document_type_title", "summary",
+        "recipient?",
+        "legal_basis*",
+        "body*",
+        "layout:table+",
+        "body*",
+        "recipients_label", "recipients_item+",
+        "signature_authority", "signature_name"
+      ],
+      "ghi_chu": "Dùng cho văn bản mà nội dung chính là 1 hoặc nhiều bảng số liệu (Mẫu 01/02/03-QTDA quyết toán vốn đầu tư, danh mục văn bản pháp lý, bảng đối chiếu vốn Kho bạc, chi tiết chi phí/tài sản/vật tư/công nợ, kế hoạch lựa chọn nhà thầu...) thay vì đoạn văn thuần túy. Mỗi bảng là 1 phần tử `paragraphs` riêng với `layout: \"table\"`, dùng `table_headers`/`table_rows` (bảng 1 tầng) hoặc `table_header_groups` (tiêu đề nhiều tầng có merge cột/hàng — xem hướng dẫn trong SKILL.md). Có thể có nhiều bảng liên tiếp (VD Mẫu 01/QTDA có 3 bảng: Nguồn vốn, Chi phí đầu tư, Tài sản hình thành) — mỗi bảng nên có 1 dòng `body` tiêu đề bảng (VD 'I. Nguồn vốn đầu tư') ngay phía trước. `body*` trước/sau bảng dùng cho đoạn dẫn nhập/kết luận nếu có — không bắt buộc."
+    },
+    "KE_HOACH": {"extends": "VAN_BAN_CO_TEN_LOAI", "ten_day_du": "Kế hoạch", "viet_tat": "KH"},
+    "DE_AN": {"extends": "VAN_BAN_CO_TEN_LOAI", "ten_day_du": "Đề án", "viet_tat": "ĐA"},
+    "DU_AN": {"extends": "VAN_BAN_CO_TEN_LOAI", "ten_day_du": "Dự án", "viet_tat": "DA"},
+    "CHUONG_TRINH": {"extends": "VAN_BAN_CO_TEN_LOAI", "ten_day_du": "Chương trình", "viet_tat": "CTr"},
+    "PHUONG_AN": {"extends": "VAN_BAN_CO_TEN_LOAI", "ten_day_du": "Phương án", "viet_tat": "PA"},
+    "THONG_BAO": {
+      "extends": "VAN_BAN_CO_TEN_LOAI",
+      "ten_day_du": "Thông báo",
+      "viet_tat": "TB",
+      "ghi_chu": "KHÔNG có phần Căn cứ (legal_basis) và KHÔNG có dòng 'QUYẾT ĐỊNH:'."
+    },
+    "HUONG_DAN": {"extends": "VAN_BAN_CO_TEN_LOAI", "ten_day_du": "Hướng dẫn", "viet_tat": "HD"},
+    "QUY_CHE": {"extends": "VAN_BAN_CO_TEN_LOAI", "ten_day_du": "Quy chế", "viet_tat": "QC"},
+    "QUY_DINH": {"extends": "VAN_BAN_CO_TEN_LOAI", "ten_day_du": "Quy định", "viet_tat": "QyĐ"},
+    "CHI_THI": {"extends": "VAN_BAN_CO_TEN_LOAI", "ten_day_du": "Chỉ thị", "viet_tat": "CT"},
+    "THONG_CAO": {"extends": "VAN_BAN_CO_TEN_LOAI", "ten_day_du": "Thông cáo", "viet_tat": "TC"},
+    "CONG_VAN": {
+      "ten_day_du": "Công văn",
+      "mau_nd30": "1.5",
+      "co_ten_loai": false,
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "summary_cong_van", "place_date",
+        "recipient",
+        "body+",
+        "recipients_label", "recipients_item+",
+        "signature_authority", "signature_name"
+      ],
+      "ghi_chu": "KHÔNG có document_type_title. Trích yếu 'V/v ...' không đậm, không đường kẻ dưới, đặt canh giữa dưới số ký hiệu. Ký hiệu: '{số}/{viết tắt cơ quan}-{viết tắt đơn vị soạn thảo}' (không có viết tắt tên loại). Nơi nhận dòng đầu 'Như trên;'. Có thể có thêm dòng địa chỉ/email/website/điện thoại/fax ở cuối trang đầu."
+    },
+    "CONG_DIEN": {
+      "ten_day_du": "Công điện",
+      "viet_tat": "CĐ",
+      "mau_nd30": "1.6",
+      "co_ten_loai": true,
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "place_date", "document_type_title", "summary",
+        "body:noi_nhan_dien",
+        "recipient_dien+",
+        "body+",
+        "recipients_label", "recipients_item+",
+        "signature_authority", "signature_name"
+      ],
+      "ghi_chu": "Có dòng mở đầu '{cơ quan/chức danh} điện:' rồi liệt kê nơi nhận điện (mỗi nơi 1 dòng gạch đầu dòng) trước khi vào nội dung điện."
+    },
+    "GIAY_MOI": {
+      "ten_day_du": "Giấy mời",
+      "viet_tat": "GM",
+      "mau_nd30": "1.7",
+      "co_ten_loai": true,
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "place_date", "document_type_title", "summary",
+        "body:tran_trong_kinh_moi",
+        "body:toi_du",
+        "body:chu_tri_thoi_gian_dia_diem",
+        "recipients_label", "recipients_item+",
+        "signature_authority", "signature_name"
+      ]
+    },
+    "GIAY_GIOI_THIEU": {
+      "ten_day_du": "Giấy giới thiệu",
+      "viet_tat": "GGT",
+      "mau_nd30": "1.8",
+      "co_ten_loai": true,
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "place_date", "document_type_title",
+        "body:tran_trong_gioi_thieu",
+        "body:ong_ba_chuc_vu_duoc_cu_den_ve_viec",
+        "body:de_nghi_tao_dieu_kien",
+        "body:gia_tri_den_ngay",
+        "recipients_label", "recipients_item+",
+        "signature_authority", "signature_name"
+      ]
+    },
+    "BIEN_BAN": {
+      "ten_day_du": "Biên bản",
+      "viet_tat": "BB",
+      "mau_nd30": "1.9",
+      "co_ten_loai": true,
+      "signature_layout": "side_by_side",
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "document_type_title", "summary",
+        "body:thoi_gian_bat_dau",
+        "body:dia_diem",
+        "body:thanh_phan_tham_du",
+        "body:chu_tri",
+        "body:thu_ky",
+        "body:noi_dung+",
+        "body:ket_thuc",
+        "signature_name_left:thu_ky",
+        "signature_name_right:chu_toa",
+        "recipients_label?", "recipients_item*"
+      ],
+      "ghi_chu": "Không có place_date riêng (thời gian nằm trong thân). Khối ký ĐẶC BIỆT: THƯ KÝ bên trái + CHỦ TỌA bên phải CÙNG 1 HÀNG (side_by_side), không phải xếp dọc như văn bản khác. Nơi nhận (nếu có) thường chỉ 'Lưu: VT, Hồ sơ.'."
+    },
+    "GIAY_NGHI_PHEP": {
+      "ten_day_du": "Giấy nghỉ phép",
+      "viet_tat": "GNP",
+      "mau_nd30": "1.10",
+      "co_ten_loai": true,
+      "structure": [
+        "national_name", "motto", "parent_org?", "issuing_org", "document_number",
+        "place_date", "document_type_title",
+        "body:xet_don_de_nghi",
+        "body:ong_ba_chuc_vu",
+        "body:thoi_gian_nghi",
+        "body:so_ngay_nghi",
+        "recipients_label", "recipients_item+",
+        "signature_authority", "signature_name",
+        "body:xac_nhan_dia_phuong?"
+      ]
+    }
+  },
+  "abbreviations": {
+    "NGHI_QUYET": "NQ", "QUYET_DINH": "QĐ", "CHI_THI": "CT", "QUY_CHE": "QC",
+    "QUY_DINH": "QyĐ", "THONG_CAO": "TC", "THONG_BAO": "TB", "HUONG_DAN": "HD",
+    "CHUONG_TRINH": "CTr", "KE_HOACH": "KH", "PHUONG_AN": "PA", "DE_AN": "ĐA",
+    "DU_AN": "DA", "BAO_CAO": "BC", "BIEN_BAN": "BB", "TO_TRINH": "TTr",
+    "HOP_DONG": "HĐ", "CONG_DIEN": "CĐ", "BAN_GHI_NHO": "BGN", "BAN_THOA_THUAN": "BTT",
+    "GIAY_UY_QUYEN": "GUQ", "GIAY_MOI": "GM", "GIAY_GIOI_THIEU": "GGT",
+    "GIAY_NGHI_PHEP": "GNP", "PHIEU_GUI": "PG", "PHIEU_CHUYEN": "PC", "PHIEU_BAO": "PB"
+  }
+}

@@ -40,6 +40,9 @@ const PRESETS: Record<string, ProviderCfg> = {
   'xAI (Grok)': openai('https://api.x.ai/v1', 'grok-4', 'XAI_API_KEY'),
   Groq: openai('https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile', 'GROQ_API_KEY'),
   Cerebras: openai('https://api.cerebras.ai/v1', 'llama-3.3-70b', 'CEREBRAS_API_KEY'),
+  Cohere: openai('https://api.cohere.ai/compatibility/v1', 'command-a-03-2025', 'COHERE_API_KEY'),
+  'Hugging Face': openai('https://router.huggingface.co/v1', 'meta-llama/Llama-3.3-70B-Instruct', 'HF_TOKEN'),
+  'Cloudflare Workers AI': openai('https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/ai/v1', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', 'CLOUDFLARE_API_KEY'),
   'Together AI': openai('https://api.together.xyz/v1', 'meta-llama/Llama-3.3-70B-Instruct-Turbo', 'TOGETHER_API_KEY'),
   'Fireworks AI': openai('https://api.fireworks.ai/inference/v1', 'accounts/fireworks/models/llama-v3p3-70b-instruct', 'FIREWORKS_API_KEY'),
   'Alibaba Qwen (DashScope)': openai('https://dashscope-intl.aliyuncs.com/compatible-mode/v1', 'qwen-plus', 'DASHSCOPE_API_KEY'),
@@ -62,6 +65,10 @@ const SERVICES: { preset: string; label: string; desc: string; group: 'local' | 
   { preset: 'DeepSeek', label: 'DeepSeek', desc: tk('Giá rẻ, mạnh về suy luận và code.'), group: 'cloud', brand: 'deepseek' },
   { preset: 'OpenRouter', label: 'OpenRouter', desc: tk('Một khóa dùng được hàng trăm model của nhiều hãng.'), group: 'cloud', brand: 'openrouter' },
   { preset: 'Groq', label: 'Groq', desc: tk('Trả lời cực nhanh.'), group: 'cloud', brand: 'groq' },
+  { preset: 'Cerebras', label: 'Cerebras', desc: tk('Tốc độ rất cao, có hạn mức miễn phí.'), group: 'cloud', brand: 'cerebras' },
+  { preset: 'Cloudflare Workers AI', label: 'Cloudflare Workers AI', desc: tk('Miễn phí 10K Neurons mỗi ngày. Thay ACCOUNT_ID trong địa chỉ bằng ID tài khoản Cloudflare của bạn.'), group: 'cloud', brand: 'cloudflare' },
+  { preset: 'Cohere', label: 'Cohere', desc: tk('Có gói dùng thử, mạnh về embedding và RAG.'), group: 'cloud', brand: 'cohere' },
+  { preset: 'Hugging Face', label: 'Hugging Face', desc: tk('Thử nhiều model mã nguồn mở qua một khóa.'), group: 'cloud', brand: 'huggingface' },
   { preset: CLAUDE_CLI, label: 'Claude Code', desc: tk('Dùng tài khoản Claude đã đăng nhập sẵn trong CLI, không cần API key.'), group: 'cli', brand: 'claude' },
   { preset: AGY_CLI, label: 'Antigravity', desc: tk('Dùng tài khoản Google đã đăng nhập trong Antigravity CLI (lệnh agy), không cần API key.'), group: 'cli', brand: 'antigravity' },
   { preset: CODEX_CLI, label: 'Codex', desc: tk('Dùng tài khoản ChatGPT/OpenAI đã đăng nhập trong Codex CLI, không cần API key.'), group: 'cli', brand: 'codex' },
@@ -69,7 +76,7 @@ const SERVICES: { preset: string; label: string; desc: string; group: 'local' | 
   { preset: CUSTOM, label: tk('Dịch vụ khác'), desc: tk('Bất kỳ dịch vụ nào tương thích OpenAI (nhập địa chỉ và khóa).'), group: 'cloud', brand: null },
 ]
 // Cac dich vu chi nam trong "Xem them": van co logo hang.
-const EXTRA_BRANDS: Record<string, Brand> = { 'vLLM / llama.cpp (local)': 'vllm', 'Mistral AI': 'mistral', 'xAI (Grok)': 'xai', Cerebras: 'cerebras', 'Together AI': 'together', 'Fireworks AI': 'fireworks', 'Alibaba Qwen (DashScope)': 'qwen' }
+const EXTRA_BRANDS: Record<string, Brand> = { 'vLLM / llama.cpp (local)': 'vllm', 'Mistral AI': 'mistral', 'xAI (Grok)': 'xai', 'Together AI': 'together', 'Fireworks AI': 'fireworks', 'Alibaba Qwen (DashScope)': 'qwen' }
 const OTHER_PRESETS = Object.keys(PRESETS).filter((k) => !SERVICES.some((s) => s.preset === k))
 
 const isLocal = (p: ProviderCfg) => /localhost|127\.0\.0\.1/.test(p.base_url)
@@ -90,6 +97,9 @@ const brandOf = (p: ProviderCfg, name: string = ''): Brand | null => {
   if (url.includes('deepseek.com') || model.includes('deepseek') || n.includes('deepseek')) return 'deepseek'
   if (url.includes('openrouter.ai') || n.includes('openrouter')) return 'openrouter'
   if (url.includes('groq.com') || n.includes('groq')) return 'groq'
+  if (url.includes('cohere.') || n.includes('cohere')) return 'cohere'
+  if (url.includes('huggingface.co') || n.includes('hugging')) return 'huggingface'
+  if (url.includes('cloudflare.com') || n.includes('cloudflare')) return 'cloudflare'
   if (url.includes('cerebras.ai') || n.includes('cerebras')) return 'cerebras'
   if (url.includes('mistral.ai') || model.includes('mistral') || n.includes('mistral')) return 'mistral'
   if (url.includes('together.xyz') || n.includes('together')) return 'together'

@@ -34,7 +34,7 @@ export interface AppConfig {
   default_provider: string
   fallback: string[]
   providers: Record<string, ProviderCfg>
-  agent: { workspace: string; max_steps: number; max_history: number; confirm_exec: boolean; tools_enabled: Record<string, boolean>; compact_chars: number; exec_sandbox: 'none' | 'docker'; sandbox_image: string; sandbox_network: boolean; suggest_habits: boolean }
+  agent: { workspace: string; max_steps: number; max_history: number; confirm_exec: boolean; tools_enabled: Record<string, boolean>; compact_chars: number; exec_sandbox: 'none' | 'docker'; sandbox_image: string; sandbox_network: boolean; suggest_habits: boolean; fast_provider: string }
   heartbeat: { enabled: boolean; interval_minutes: number; provider: string | null }
   auth: { has_password: boolean }
   skills: Record<string, SkillEntry>
@@ -60,7 +60,7 @@ export interface ToolInfo { name: string; description: string; risk: 'safe' | 'f
 export interface SecretsStatus { enabled: boolean; source: 'env' | 'keychain' | 'file' | 'none'; encrypted: number; plaintext: number; failed: string[] }
 export interface ConfigResponse { config: AppConfig; tools: ToolInfo[]; secrets?: SecretsStatus }
 
-export interface SessionInfo { id: string; title: string; updated: number; created: number; source: string; turns: number; project?: string; pinned?: number }
+export interface SessionInfo { id: string; title: string; updated: number; created: number; source: string; turns: number; project?: string; pinned?: number; assistant?: string }
 export interface ToolCall { id: string; name: string; args: Record<string, unknown> }
 export interface WireMessage { role: 'user' | 'assistant' | 'tool'; content: string; tool_calls?: ToolCall[]; tool_call_id?: string; attachments?: string[] }
 export interface FileEntry { path: string; dir: boolean; size: number; mtime: number }
@@ -117,7 +117,7 @@ export interface HabitDraft { kind: 'skill' | 'automation'; name: string; title:
 export interface HabitSuggestion { id: string; status: string; count: number; examples: string[]; draft: HabitDraft | null; created: number }
 
 export interface GitFile { path: string; status: 'new' | 'modified' | 'deleted' }
-export interface GitStatus { repo: boolean; branch: string; files: GitFile[] }
+export interface GitStatus { repo: boolean; branch: string; files: GitFile[]; upstream?: string; ahead?: number; protected?: boolean }
 export interface BrowseResult { path: string; parent: string | null; git: boolean; dirs: { name: string; path: string; git: boolean }[] }
 export interface RecentProject { path: string; name: string; ts: number; git?: boolean; branch?: string }
 

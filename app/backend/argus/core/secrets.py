@@ -91,6 +91,10 @@ def _fields(data: dict):
     tg = (data.get("channels") or {}).get("telegram")
     if tg:
         yield tg, "token", "channels.telegram.token"
+    zl = (data.get("channels") or {}).get("zalo")
+    if zl:
+        for k in ("app_secret", "access_token", "refresh_token", "webhook_secret"):
+            yield zl, k, f"channels.zalo.{k}"
     for name, m in (data.get("mcp_servers") or {}).items():
         for bucket in ("env", "headers"):
             for k in (m.get(bucket) or {}):

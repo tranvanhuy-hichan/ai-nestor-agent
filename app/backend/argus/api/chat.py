@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ..core import config as cfgmod
-from ..services import chat_runner, sessions, usage, workfiles
+from ..services import assistants, chat_runner, sessions, usage, workfiles
 
 router = APIRouter()
 
@@ -69,6 +69,21 @@ def rename_session(sid: str, body: Rename):
     return {"ok": True}
 
 
+class AssistantPick(BaseModel):
+    assistant: str = ""
+
+
+@router.put("/sessions/{sid}/assistant")
+def set_session_assistant(sid: str, body: AssistantPick):
+    """Chon hoac bo chon tro ly chuyen trach cua phien ('' = bo chon)."""
+    if not sessions.get(sid):
+        raise HTTPException(404, "không có phiên này")
+    if body.assistant and not assistants.get(body.assistant):
+        raise HTTPException(400, "không có trợ lý này")
+    sessions.set_assistant(sid, body.assistant)
+    return {"ok": True, "assistant": body.assistant}
+
+
 @router.post("/sessions/{sid}/pin")
 def pin_session(sid: str, body: PinBody):
     sessions.pin(sid, body.pinned)
@@ -82,30 +97,59 @@ def delete_session(sid: str):
     return {"ok": True}
 
 
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
+def _sse(ev: dict) -> str:
+    return ": ping\n\n" if ev["type"] == "ping" else f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+
+
 class ChatBody(BaseModel):
     text: str
     session: str | None = None
     provider: str | None = None
     attachments: list[str] = []
-    permission: Literal["default", "readonly", "guarded", "full"] = "default"
+    permission: Literal["default", "readonly", "guarded", "full", "plan"] = "default"
     effort: Literal["auto", "low", "medium", "high", "thinking"] = "auto"
     docs: bool = False  # "Hỏi từ tài liệu": chỉ trả lời dựa trên kho tài liệu, có nguồn
     temperature: float | None = None
     max_tokens: int | None = None
+    assistant: str | None = None  # id tro ly chuyen trach (services/assistants.py)
 
 
 @router.post("/chat")
 def chat(body: ChatBody):
+    stored = (sessions.get(body.session) or {}).get("assistant") if body.session else ""
+    eff = body.assistant if body.assistant is not None else stored  # khong gui thi dung tro ly da luu cua phien
     def gen():
         for ev in chat_runner.stream_chat(body.session, body.text, body.provider, attachments=body.attachments, permission=body.permission,
                                             effort=None if body.effort == "auto" else body.effort, docs=body.docs,
-                                            temperature=body.temperature, max_tokens=body.max_tokens):
-            if ev["type"] == "ping":
-                yield ": ping\n\n"
-            else:
-                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+                                            temperature=body.temperature, max_tokens=body.max_tokens, detach=True,
+                                            system_extra=assistants.prompt_for(eff), tool_allow=assistants.tool_allow(eff), assistant=body.assistant):
+            yield _sse(ev)
 
-    return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)
+
+
+@router.get("/sessions/{sid}/run")
+def run_state(sid: str):
+    """Phiên có đang chạy agent không (giao diện dùng để nối lại sau khi đổi trang)."""
+    return chat_runner.state(sid)
+
+
+@router.get("/sessions/{sid}/attach")
+def attach(sid: str, start: int = 0):
+    """Nối lại luồng sự kiện của lượt đang chạy, phát lại từ sự kiện thứ `start`."""
+    def gen():
+        for ev in chat_runner.attach(sid, max(0, start)):
+            yield _sse(ev)
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)
+
+
+@router.post("/sessions/{sid}/stop")
+def stop_run(sid: str):
+    return {"ok": chat_runner.stop(sid)}
 
 
 class Approval(BaseModel):
@@ -115,3 +159,27 @@ class Approval(BaseModel):
 @router.post("/approvals/{aid}")
 def approve(aid: str, body: Approval):
     return {"ok": chat_runner.resolve_approval(aid, body.ok)}
+
+
+class Answer(BaseModel):
+    answer: str
+
+
+@router.post("/questions/{qid}")
+def answer_question(qid: str, body: Answer):
+    return {"ok": chat_runner.answer_question(qid, body.answer)}
+
+
+@router.get("/sessions/{sid}/checkpoint")
+def checkpoint_state(sid: str):
+    from ..services import checkpoints
+    return {"files": checkpoints.last(sid)}
+
+
+@router.post("/sessions/{sid}/undo")
+def undo_last_turn(sid: str):
+    """Hoàn tác các file agent đã ghi/sửa trong lượt gần nhất (không gồm thay đổi do lệnh shell)."""
+    from ..services import checkpoints
+    if chat_runner.active(sid):
+        raise HTTPException(409, "agent đang chạy, hãy dừng rồi hoàn tác")
+    return {"restored": checkpoints.undo(sid)}
