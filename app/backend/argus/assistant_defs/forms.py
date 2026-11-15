@@ -226,7 +226,8 @@ _load_flows()
 
 
 def form_for(aid: str) -> dict:
-    return _as_flows(FORMS.get(aid) or DEFAULT_FORM)
+    from .experience import enhance
+    return enhance(aid, _as_flows(FORMS.get(aid) or DEFAULT_FORM))
 
 
 def validate_form(aid: str, form: dict) -> list[str]:

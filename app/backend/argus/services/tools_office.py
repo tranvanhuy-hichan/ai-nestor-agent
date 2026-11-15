@@ -85,23 +85,74 @@ def _looks_administrative(text: str) -> str:
     return ""
 
 
-@tool("create_docx", "Tạo file Word (.docx) thật từ nội dung Markdown đơn giản (#, ##, gạch đầu dòng, đánh số, bảng |a|b|, **đậm**). Dùng cho báo cáo, biên bản, hợp đồng. KHÔNG dùng cho văn bản hành chính của cơ quan nhà nước (công văn, tờ trình, quyết định, báo cáo gửi cấp trên, biên bản, kế hoạch, thông báo, giấy mời): loại đó phải dùng vanban_types rồi vanban_write_docx để đúng thể thức NĐ 30/2020.",
-      {"path": ("string", "đường dẫn file, vd bao-cao.docx"), "content": ("string", "nội dung dạng Markdown"), "title": ("string", "tiêu đề lớn đầu trang (tùy chọn)"),
+@tool("create_docx", "Dựng file Word (.docx) thật bằng blocks có cấu trúc native: tiêu đề, đoạn văn, danh sách, bảng. Ưu tiên blocks, không dùng Markdown cho yêu cầu mới. Dùng cho báo cáo, biên bản, hợp đồng. KHÔNG dùng cho văn bản hành chính của cơ quan nhà nước (công văn, tờ trình, quyết định, báo cáo gửi cấp trên, biên bản, kế hoạch, thông báo, giấy mời): loại đó phải dùng vanban_types rồi vanban_write_docx để đúng thể thức NĐ 30/2020.",
+      {"path": ("string", "đường dẫn file, vd bao-cao.docx"), "content": ("string", "Đầu vào Markdown cũ, chỉ để tương thích. Với yêu cầu mới dùng blocks."), "blocks": ("string", 'JSON mảng khối Word native: [{"type":"heading","text":"Mục","level":1},{"type":"paragraph","text":"Nội dung đầy đủ"},{"type":"bullets","items":["Ý 1","Ý 2"]},{"type":"table","rows":[["Cột A","Cột B"],["Dữ liệu","Giá trị"]]}]. Không dùng ký hiệu Markdown; paragraph có thể dùng runs:[{text,bold,italic}].'), "title": ("string", "tiêu đề lớn đầu trang (tùy chọn)"),
        "khong_phai_van_ban_hanh_chinh": ("boolean", "chỉ đặt true khi chắc chắn đây KHÔNG phải văn bản hành chính nhà nước")},
-      required=["path", "content"], risk="file")
-def create_docx(ctx, path, content, title="", khong_phai_van_ban_hanh_chinh=False):
+      required=["path"], risk="file")
+def create_docx(ctx, path, content="", title="", khong_phai_van_ban_hanh_chinh=False, blocks=""):
     from docx import Document
+    from .docx_blocks import compose, decorate, validate, text_of
+    native = _json(blocks, 'blocks') if blocks else None
+    if native is not None:
+        validate(native)
+        if content: raise ValueError('Chỉ dùng blocks hoặc content, không trộn hai nguồn nội dung.')
+        content_for_review = text_of(native)
+    else:
+        content_for_review = content
+        if not content.strip(): raise ValueError('Cần blocks chứa nội dung tài liệu.')
+        if ctx.session_id:
+            from . import sessions
+            if (sessions.get(ctx.session_id) or {}).get('assistant'):
+                raise ValueError('Yêu cầu mới phải dựng Word native bằng blocks (heading, paragraph, bullets, table), không chuyển Markdown. Giữ đầy đủ nội dung và gọi lại với blocks.')
     if not khong_phai_van_ban_hanh_chinh:
-        why = _looks_administrative(f"{title}\n{content}")
+        why = _looks_administrative(f"{title}\n{content_for_review}")
         if why:
             raise ValueError(f"Nội dung này giống văn bản hành chính ({why}) nên KHÔNG tạo bằng create_docx vì sẽ sai thể thức NĐ 30/2020. "
                              "Hãy gọi vanban_types(document_type_key=...) rồi vanban_write_docx để có quốc hiệu, tiêu ngữ, số ký hiệu, nơi nhận, chữ ký đúng chuẩn. "
                              "Nếu thật sự không phải văn bản hành chính nhà nước, gọi lại với khong_phai_van_ban_hanh_chinh=true.")
     p = _out(ctx, path, ".docx")
     doc = Document()
+    from docx.shared import Mm, Pt, RGBColor
+    section = doc.sections[0]
+    section.page_width, section.page_height = Mm(210), Mm(297)
+    section.top_margin = section.bottom_margin = Mm(20)
+    section.left_margin = section.right_margin = Mm(22)
+    from docx.oxml.ns import qn
+    for style_name in ['Normal', 'Title', 'Heading 1', 'Heading 2', 'Heading 3', 'List Bullet', 'List Number']:
+        fonts = doc.styles[style_name].element.get_or_add_rPr().get_or_add_rFonts()
+        for key in list(fonts.attrib):
+            if 'theme' in key.lower(): del fonts.attrib[key]
+        for script in ('ascii', 'hAnsi', 'eastAsia', 'cs'):
+            fonts.set(qn('w:' + script), 'Arial')
+    normal = doc.styles['Normal']
+    normal.font.name, normal.font.size = 'Arial', Pt(11)
+    normal.paragraph_format.line_spacing = 1.15
+    normal.paragraph_format.space_after = Pt(6)
+    for level, size in [(1,16),(2,14),(3,12)]:
+        heading = doc.styles[f'Heading {level}']
+        heading.font.name, heading.font.size = 'Arial', Pt(size)
+        heading.font.color.rgb = RGBColor.from_string('17365D')
+        heading.paragraph_format.keep_with_next = True
     if title:
-        doc.add_heading(title, 0)
-    _fill_docx(doc, content)
+        cover = doc.add_heading(title, 0)
+        cover.paragraph_format.space_after = Pt(14)
+        for run in cover.runs:
+            run.font.name = 'Arial'
+            run.font.size = Pt(24)
+            run.font.color.rgb = RGBColor.from_string('17365D')
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        borders = OxmlElement('w:pBdr')
+        bottom = OxmlElement('w:bottom')
+        for key, value in [('val','single'),('sz','12'),('color','17365D'),('space','8')]:
+            bottom.set(qn('w:' + key), value)
+        borders.append(bottom)
+        cover._p.get_or_add_pPr().append(borders)
+    if native is not None:
+        compose(doc, native)
+    else:
+        _fill_docx(doc, content)
+    decorate(doc)
     doc.save(p)
     return f"Đã tạo {p.name} ({p.stat().st_size} byte) tại {p}."
 
@@ -124,8 +175,20 @@ def create_xlsx(ctx, path, sheets):
         ws = wb.create_sheet(str(name)[:31] or "Sheet")
         for row in rows:
             ws.append(row if isinstance(row, list) else [row])
+        from openpyxl.styles import PatternFill, Alignment
+        ws.freeze_panes = 'A2'
+        if ws.max_row > 1:
+            ws.auto_filter.ref = ws.dimensions
         for c in ws[1]:
-            c.font = Font(bold=True)
+            c.font = Font(bold=True, color='FFFFFF')
+            c.fill = PatternFill('solid', fgColor='17365D')
+            c.alignment = Alignment(vertical='center', wrap_text=True)
+        ws.row_dimensions[1].height = 30
+        ws.print_title_rows = '1:1'
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.orientation = 'landscape' if ws.max_column > 6 else 'portrait'
+        ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
         for col in range(1, ws.max_column + 1):
             width = max((len(str(c.value)) for c in ws[get_column_letter(col)] if c.value is not None and not str(c.value).startswith("=")), default=8)
             ws.column_dimensions[get_column_letter(col)].width = min(max(width + 2, 8), 60)

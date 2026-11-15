@@ -19,6 +19,7 @@ import { CODE_MODE } from '@/lib/features'
 import { useLang } from '@/lib/i18n.ts'
 import { useUiMode } from '@/lib/uiMode'
 import { FeatureHub } from '@/features/feature/FeatureHub'
+import { LiveTranslatePage } from '@/features/translate/LiveTranslatePage'
 import { FeaturePage } from '@/features/feature/FeaturePage'
 import { SimpleHome } from '@/features/simple/SimpleHome'
 import { SimpleSettings } from '@/features/simple/SimpleSettings'
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="chat" element={<ChatPage />} />
         <Route path="xao-de" element={<Navigate to="/f/ra-de-cham-bai?tab=exam-shuffle" replace />} />
         <Route path="f" element={<FeatureHub />} />
+        <Route path="f/youtube-translate" element={<LiveTranslatePage />} />
         <Route path="f/:id" element={<FeaturePage />} />
         <Route path="activity" element={adv(<ActivityPage />)} />
         <Route path="dashboard" element={<Navigate to="/activity" replace />} />

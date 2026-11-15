@@ -388,6 +388,12 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
 
     limit = max_steps or cfg.agent.max_steps
     empty_retries = 0
+    from .deliverable_quality import snapshot, changed_issues
+    from ..assistant_defs.experience import CONTRACTS
+    quality_enabled = sess.get('assistant') in CONTRACTS
+    quality_before = snapshot(workdir) if quality_enabled else {}
+    quality_retries = 0
+    allow_blank = any(s in user_text.casefold() for s in ('mẫu trống', 'bảng trống', 'khung trống', 'phiếu trống'))
     for step in range(limit):
         if cancel and cancel.is_set():
             return
@@ -420,6 +426,16 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
                     emit({"type": "error", "message": f"{name}: {e}"})
                     return
                 emit(ui_event("notice", "{name} lỗi ({error}), chuyển sang provider dự phòng", name=name, error=str(e)[:200]))
+        if quality_enabled and not result['tool_calls']:
+            quality_issues = changed_issues(workdir, quality_before, allow_blank)
+            if quality_issues:
+                if quality_retries >= 2:
+                    emit({'type':'error','message':'File đã tạo nhưng chưa đạt kiểm tra chất lượng; chưa thể bàn giao hoàn tất. ' + str(quality_issues)})
+                    return
+                quality_retries += 1
+                messages.append({'role':'user','content':'[system] Kiểm tra file thực tế chưa đạt: ' + str(quality_issues) + '. Hãy sửa nội dung đầy đủ theo yêu cầu, không chèn chữ cho đủ số từ, mở kiểm tra lại file trước bàn giao. Nếu thiếu dữ liệu, hỏi người dùng hoặc báo chưa hoàn thành.'})
+                emit(ui_event('notice', 'File chưa đạt kiểm tra chất lượng, trợ lý đang hoàn thiện lại.'))
+                continue
         if not result["content"].strip() and not result["tool_calls"] and empty_retries < 2:
             # model tra ve rong (hay gap sau khi nhan ket qua tool): nhac no viet cau tra loi thay vi dung im lang
             empty_retries += 1

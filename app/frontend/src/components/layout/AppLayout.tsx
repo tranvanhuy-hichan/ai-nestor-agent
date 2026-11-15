@@ -32,7 +32,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     ...(CODE_MODE ? [{ to: '/code', label: tk('Lập trình'), icon: Code2, hint: tk('Mở một dự án và nhờ agent viết code') }] : []),
     { to: '/tasks', label: tk('Tác vụ'), icon: ListTodo, hint: tk('Việc dài agent làm ngầm') },
     { to: '/automations', label: tk('Tự động hóa'), icon: Clock, hint: tk('Việc lặp theo lịch') },
-    { to: '/f', label: tk('Chức năng'), icon: LayoutGrid, hint: tk('Mỗi trợ lý chuyên trách một trang riêng') },
+    { to: '/f', label: tk('Công cụ'), icon: LayoutGrid, hint: tk('Mỗi trợ lý chuyên trách một trang riêng') },
     { to: '/notifications', label: tk('Hộp thư'), icon: Bell, hint: tk('Thông báo từ agent') },
   ] },
   { title: tk('Khả năng của agent'), items: [
@@ -112,7 +112,7 @@ function FeatureNav({ chatMode, expanded }: { chatMode: boolean; expanded: boole
   const show = chatMode ? expanded : true
   return (
     <div className="mt-2 border-t border-line pt-2">
-      <NavRow item={{ to: '/f', label: tk('Chức năng'), icon: LayoutGrid, hint: tk('Mỗi trợ lý chuyên trách một trang riêng') }} unread={0} chatMode={chatMode} expanded={expanded} />
+      <NavRow item={{ to: '/f', label: tk('Công cụ'), icon: LayoutGrid, hint: tk('Mỗi trợ lý chuyên trách một trang riêng') }} unread={0} chatMode={chatMode} expanded={expanded} />
       {show && groups.map((g) => {
         const isOpen = open.includes(g) || g === activeGroup
         return (
@@ -140,7 +140,7 @@ export function AppLayout() {
   const auth = useQuery({ queryKey: ['auth-status'], queryFn: () => api.get<{ required: boolean }>('/api/auth/status') })
   const logout = () => { void api.post('/api/auth/logout').then(() => window.dispatchEvent(new Event('auth-required'))) }
 
-  const isChat = location.pathname.startsWith('/chat')
+  const isChat = location.pathname.startsWith('/chat') || location.pathname.startsWith('/f/')
   const unread = count.data?.unread ?? 0
 
   const onEnter = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current); setExpanded(true) }

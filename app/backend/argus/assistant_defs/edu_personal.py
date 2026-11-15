@@ -5,7 +5,7 @@ bundled_skills/), tools (allowlist hoac None = tat ca), done_criteria (tieu chi 
 deliverables (loai san pham giao cho nguoi dung).
 """
 
-_CORE = ["ask_user", "plan_set", "plan_update", "read", "write", "list_dir", "read_document", "kb_search", "memory_search", "remember", "skills_read"]
+_CORE = ["review_deliverable", "ask_user", "plan_set", "plan_update", "read", "write", "list_dir", "read_document", "kb_search", "memory_search", "remember", "skills_read"]
 _FILES = ["create_docx", "create_xlsx", "create_pptx"]
 _WEB = ["web_search", "web_fetch"]
 _CALC = ["run_script"]

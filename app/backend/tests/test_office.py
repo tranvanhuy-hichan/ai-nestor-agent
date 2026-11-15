@@ -98,3 +98,22 @@ def test_ask_user_form_and_single(tmp_path):
     assert ok and len(seen["form"]) == 2 and seen["form"][1]["multi"] and "Có số hiệu chưa?: Có" in out and "Word, Excel" in out, out
     out, ok = tools.call(c, "ask_user", {"question": "Chọn?", "options": ["A", "B"]})
     assert ok and "A" in out and seen["form"] is None
+
+
+def test_structured_docx_uses_word_elements_not_markdown(tmp_path):
+    from docx import Document
+    blocks=[{'type':'heading','level':1,'text':'Trách nhiệm chính'}, {'type':'paragraph','runs':[{'text':'Làm việc với ','bold':False},{'text':'React','bold':True}]}, {'type':'bullets','items':['Xây dựng giao diện','Tích hợp API']}, {'type':'table','rows':[['Hạng mục','Nội dung'],['Lương','10–15 triệu gross']]}]
+    out,ok=tools.call(ctx(tmp_path),'create_docx',{'path':'native.docx','title':'Mô tả công việc','blocks':json.dumps(blocks,ensure_ascii=False)})
+    assert ok,out
+    d=Document(tmp_path/'native.docx')
+    assert any(p.style.name=='Heading 1' and p.text=='Trách nhiệm chính' for p in d.paragraphs)
+    assert any(p.style.name=='List Bullet' for p in d.paragraphs)
+    assert d.tables[0].cell(1,1).text=='10–15 triệu gross'
+    assert 'tblHeader' in d.tables[0].rows[0]._tr.xml
+    assert 'PAGE' in d.sections[0].footer._element.xml
+    assert not any(p.text.startswith('#') for p in d.paragraphs)
+
+
+def test_structured_docx_rejects_ragged_tables_before_writing(tmp_path):
+    out,ok=tools.call(ctx(tmp_path),'create_docx',{'path':'bad.docx','blocks':json.dumps([{'type':'table','rows':[['A','B'],['1']]}])})
+    assert not ok and not (tmp_path/'bad.docx').exists()

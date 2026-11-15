@@ -3,7 +3,7 @@
 Schema: id, name, icon (lucide kebab), group, description, prompt, starters, skills, tools (None = tat ca), done_criteria, deliverables.
 """
 
-_READ = ["read", "list_dir", "glob", "grep", "read_document", "kb_search", "memory_search", "skills_read", "view_image", "ask_user", "plan_set", "plan_update", "plan_show", "remember", "notify"]
+_READ = ["review_deliverable", "read", "list_dir", "glob", "grep", "read_document", "kb_search", "memory_search", "skills_read", "view_image", "ask_user", "plan_set", "plan_update", "plan_show", "remember", "notify"]
 _OFFICE = ["create_docx", "create_xlsx", "create_pptx"]
 _VANBAN = ["vanban_types", "vanban_write_docx", "review_vn_document"]
 _SCRIPT = ["run_script", "save_script_as_skill", "write", "edit"]
@@ -158,7 +158,7 @@ _EXTRA_TOOLS = {
     "dau-tu-cong": ["compare_documents", "convert_to_pdf", "excel_audit", "excel_merge_reports"],
     "phap-che": ["compare_documents", "convert_to_pdf"],
     "thu-ky": ["vanban_types", "vanban_write_docx"],
-    "ke-toan": ["compare_documents", "convert_to_pdf", "excel_audit", "excel_merge_reports"],
+    "ke-toan": ["reconcile_records", "compare_documents", "convert_to_pdf", "excel_audit", "excel_merge_reports"],
     "nhan-su": ["convert_to_pdf", "docx_fill_template", "excel_audit"],
     "kinh-doanh-marketing": ["convert_to_pdf"],
     "quan-ly-du-an": ["compare_documents", "excel_audit", "excel_merge_reports"],

@@ -1,7 +1,7 @@
 import { useUiMode } from '@/lib/uiMode'
 import { useState } from 'react'
 import { AgentMark } from '../../components/ui/AgentMark'
-import { Brain, Cable, Circle, CircleCheck, HelpCircle, Undo2, Check, ChevronRight, ExternalLink, Eye, FileText, Globe, Info, Paperclip, Pencil, RefreshCw, ShieldAlert, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
+import { Brain, Cable, CircleCheck, HelpCircle, Undo2, Check, ChevronRight, ExternalLink, Eye, FileText, Globe, Info, Paperclip, Pencil, RefreshCw, ShieldAlert, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { BrandIcon, detectBrand } from '@/components/ui/BrandIcon'
 import { Button } from '@/components/ui/Button'
@@ -207,11 +207,11 @@ function QuestionCard({ item, onAnswer }: { item: Extract<Item, { kind: 'questio
 function SingleQuestion({ item, onAnswer }: { item: Extract<Item, { kind: 'question' }>; onAnswer: (qid: string, text: string) => void }) {
   const [text, setText] = useState('')
   return (
-    <div className="fade-in ml-10 rounded-lg border border-accent/40 bg-accent/5 p-3.5">
+    <div className="fade-in ml-10 rounded-xl border border-line bg-panel p-4">
       <div className="flex items-start gap-2 text-sm font-medium"><HelpCircle className="mt-0.5 size-4 shrink-0 text-accent" />{item.question}</div>
       {item.answer === null ? (
         <div className="mt-2.5 space-y-2">
-          {item.options.length > 0 && <div className="flex flex-wrap gap-2">{item.options.map((o) => <Button key={o} size="sm" variant="primary" onClick={() => onAnswer(item.qid, o)}>{o}</Button>)}</div>}
+          {item.options.length > 0 && <div className="grid gap-2 sm:grid-cols-2">{item.options.map((o) => <Button key={o} className="h-auto justify-start whitespace-normal py-3 text-left leading-relaxed" size="sm" onClick={() => onAnswer(item.qid, o)}>{o}</Button>)}</div>}
           <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (text.trim()) onAnswer(item.qid, text.trim()) }}>
             <input value={text} onChange={(e) => setText(e.target.value)} placeholder={t('Hoặc gõ câu trả lời khác…')} className="min-w-0 flex-1 rounded-md border border-line bg-bg px-2.5 py-1.5 text-sm outline-none focus:border-accent" />
             <Button size="sm" type="submit" disabled={!text.trim()}>{t('Gửi')}</Button>
@@ -231,45 +231,53 @@ function QuestionForm({ item, form, onAnswer }: { item: Extract<Item, { kind: 'q
   const done = form.map((_, i) => value(i) !== '')
   const all = done.every(Boolean)
   const toggle = (i: number, o: string) => setPicked((p) => p.map((v, j) => (j !== i ? v : form[i].multi ? (v.includes(o) ? v.filter((x) => x !== o) : [...v, o]) : v.includes(o) ? [] : [o])))
-  const next = (i: number) => { const n = done.findIndex((d, j) => !d && j !== i); if (n >= 0) setTab(n); else if (i < form.length - 1) setTab(i + 1) }
   if (item.answer !== null) {
     let vals: string[] = []
     try { vals = JSON.parse(item.answer) } catch { /* trả lời dạng chữ thường */ }
     return (
-      <div className="fade-in ml-10 rounded-lg border border-accent/40 bg-accent/5 p-3.5">
+      <div className="fade-in ml-10 rounded-xl border border-line bg-panel p-4">
         <p className="flex items-center gap-2 text-sm font-medium"><HelpCircle className="size-4 text-accent" />{t('Bạn đã trả lời')}</p>
         <ul className="mt-2 space-y-1 text-sm">{form.map((q, i) => <li key={i}><span className="text-muted">{q.question}:</span> <span className="text-fg">{vals[i] || item.answer}</span></li>)}</ul>
       </div>
     )
   }
   const q = form[tab]
+  const count = done.filter(Boolean).length
   return (
-    <div className="fade-in ml-10 rounded-lg border border-accent/40 bg-accent/5 p-3.5">
-      <div className="flex items-center gap-2 text-sm font-medium"><HelpCircle className="size-4 shrink-0 text-accent" />{t('Cần thêm vài thông tin')} <span className="text-xs font-normal text-muted">({done.filter(Boolean).length}/{form.length})</span></div>
-      <div className="mt-2.5 flex flex-wrap gap-1.5" role="tablist">
-        {form.map((f, i) => (
-          <button key={i} role="tab" aria-selected={tab === i} onClick={() => setTab(i)} title={f.question}
-            className={cn('flex max-w-[11rem] items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition', tab === i ? 'border-accent bg-accent/15 text-fg' : 'border-line text-muted hover:border-accent/60')}>
-            {done[i] ? <CircleCheck className="size-3.5 shrink-0 text-ok" /> : <Circle className="size-3.5 shrink-0" />}<span className="truncate">{i + 1}. {f.question}</span>
-          </button>
-        ))}
+    <div className="fade-in ml-10 overflow-hidden rounded-xl border border-line bg-panel shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+        <div className="flex items-center gap-2 text-sm font-semibold"><HelpCircle className="size-4 shrink-0 text-accent" />{t('Cần thêm vài thông tin')}</div>
+        <span className="text-xs tabular-nums text-muted">{t('Bạn đã trả lời')} {count}/{form.length}</span>
       </div>
-      <div className="mt-3 space-y-2.5" role="tabpanel">
-        <p className="text-sm">{q.question}{q.multi && <span className="ml-1.5 text-xs text-muted">{t('(chọn được nhiều)')}</span>}</p>
-        {q.options.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {q.options.map((o) => <button key={o} onClick={() => { toggle(tab, o); if (!q.multi) setTimeout(() => next(tab), 120) }} aria-pressed={picked[tab].includes(o)}
-              className={cn('rounded-lg border px-3 py-1.5 text-sm transition', picked[tab].includes(o) ? 'border-accent bg-accent text-accent-fg' : 'border-line bg-bg hover:border-accent/60')}>{o}</button>)}
-          </div>
-        )}
-        <input value={typed[tab]} onChange={(e) => setTyped((p) => p.map((v, j) => (j === tab ? e.target.value : v)))} onKeyDown={(e) => { if (e.key === 'Enter' && typed[tab].trim()) next(tab) }}
-          placeholder={q.options.length ? t('Hoặc gõ câu trả lời khác…') : t('Gõ câu trả lời…')} className="w-full rounded-md border border-line bg-bg px-2.5 py-1.5 text-sm outline-none focus:border-accent" />
+      <div className="px-4 py-4 sm:px-5">
+        <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label={t('Cần thêm vài thông tin')}>
+          {form.map((f, i) => (
+            <button key={i} role="tab" id={`${item.key}-tab-${i}`} aria-controls={`${item.key}-panel`} aria-selected={tab === i} onClick={() => setTab(i)} title={f.question}
+              className={cn('flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50', tab === i ? 'border-accent/50 bg-accent/10 text-accent' : 'border-line text-muted hover:bg-panel2 hover:text-fg')}>
+              {done[i] ? <CircleCheck className="size-3.5 shrink-0 text-ok" /> : <span aria-hidden className="grid size-4 place-items-center rounded-full bg-fg/5 text-[10px]">{i + 1}</span>}
+              {t('Câu {n}', { n: i + 1 })}
+            </button>
+          ))}
+        </div>
+        <div id={`${item.key}-panel`} aria-labelledby={`${item.key}-tab-${tab}`} role="tabpanel" className="space-y-4">
+          <div><p className="text-sm font-medium leading-relaxed sm:text-base">{q.question}</p>{q.multi && <p className="mt-1 text-xs text-muted">{t('(chọn được nhiều)')}</p>}</div>
+          {q.options.length > 0 && <div className="grid gap-2 sm:grid-cols-2">
+            {q.options.map((o) => <button key={o} onClick={() => { const selecting = !picked[tab].includes(o); toggle(tab, o); if (selecting && !q.multi && tab < form.length - 1) setTab(tab + 1) }} aria-pressed={picked[tab].includes(o)}
+              className={cn('flex items-start gap-3 rounded-lg border px-3 py-3 text-left text-sm leading-relaxed transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50', picked[tab].includes(o) ? 'border-accent/60 bg-accent/10' : 'border-line bg-bg/50 hover:border-accent/40 hover:bg-panel2')}>
+              <span className={cn('mt-0.5 grid size-4 shrink-0 place-items-center border', q.multi ? 'rounded' : 'rounded-full', picked[tab].includes(o) ? 'border-accent bg-accent text-accent-fg' : 'border-muted/50')}>{picked[tab].includes(o) && <Check className="size-3" />}</span><span className="min-w-0 break-words">{o}</span>
+            </button>)}
+          </div>}
+          <label className="block"><span className="mb-2 block text-xs font-medium text-muted">{q.options.length ? t('Hoặc gõ câu trả lời khác…') : t('Gõ câu trả lời…')}</span>
+            <textarea rows={2} value={typed[tab]} onChange={(e) => setTyped((p) => p.map((v, j) => (j === tab ? e.target.value : v)))}
+              className="min-h-20 w-full resize-y rounded-lg border border-line bg-bg/50 px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/10" />
+          </label>
+        </div>
       </div>
-      <div className="mt-3 flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-bg/30 px-4 py-3">
         <Button size="sm" disabled={tab === 0} onClick={() => setTab(tab - 1)}>{t('Câu trước')}</Button>
         <div className="flex gap-2">
-          {tab < form.length - 1 && <Button size="sm" onClick={() => setTab(tab + 1)}>{t('Câu sau')}</Button>}
-          <Button size="sm" variant="primary" disabled={!all} onClick={() => onAnswer(item.qid, JSON.stringify(form.map((_, i) => value(i))))}>{t('Gửi tất cả')}</Button>
+          {tab < form.length - 1 && <Button size="sm" onClick={() => setTab(tab + 1)}>{t('Câu sau')}<ChevronRight className="size-3.5" /></Button>}
+          <Button size="sm" variant="primary" disabled={!all} onClick={() => onAnswer(item.qid, JSON.stringify(form.map((_, i) => value(i))))}>{t('Gửi tất cả')}<Check className="size-3.5" /></Button>
         </div>
       </div>
     </div>

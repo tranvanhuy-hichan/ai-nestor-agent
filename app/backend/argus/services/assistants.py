@@ -252,6 +252,14 @@ def quality_gate(a: dict) -> str:
     return ("## CỔNG CHẤT LƯỢNG (bắt buộc trước khi kết thúc)\n"
             "Chỉ hỏi lại người dùng (ask_user) khi thiếu thông tin thiết yếu không tự suy ra được; còn lại hãy làm luôn và ghi rõ giả định. Cần hỏi từ 2 câu trở lên thì gọi ask_user MỘT lần với tham số questions (mỗi câu kèm options để bấm chọn), không gọi nhiều lần liên tiếp.\n"
             f"Trước khi trả lời cuối, tự kiểm tra từng tiêu chí, sửa nếu chưa đạt rồi mới kết thúc:\n{crit}\n{files}\n"
+            "WORD NATIVE: khi dùng create_docx phải truyền blocks có cấu trúc heading/paragraph/bullets/table; không truyền nội dung Markdown để chuyển đổi. Tài liệu dùng Word style, bảng có tiêu đề lặp và số trang. Mẫu có sẵn dùng docx_fill_template; văn bản hành chính vẫn dùng vanban_write_docx. "
+            "CHẤT LƯỢNG FILE: trước khi xuất, lập cấu trúc theo đúng loại sản phẩm và kiểm kê mọi yêu cầu/tài liệu đầu vào. Viết đầy đủ từng mục, không giao vài dòng, tiêu đề hoặc khung thay cho sản phẩm hoàn chỉnh. "
+            "Báo cáo phân tích cần có bối cảnh/mục tiêu, dữ liệu và nguồn, cách phân tích, kết quả kèm lập luận, hạn chế/giả định và kiến nghị hoặc bước xử lý cụ thể khi phù hợp; không chỉ liệt kê ý chung chung. "
+            "Văn bản ngắn như giấy mời, thư hoặc thông báo phải đủ dữ kiện cần thiết theo nghiệp vụ, không kéo dài vô nghĩa. Dàn ý và mẫu trống chỉ được dùng khi người dùng yêu cầu đúng loại đó. "
+            "Excel phải có đủ bản ghi, cột và đơn vị, công thức ở nơi cần tính, tổng kiểm soát, sai lệch và hướng dẫn cập nhật theo mục đích; không giao workbook chỉ có tiêu đề hoặc số mẫu giả. "
+            "PDF phải giữ đủ nội dung của bản nguồn, chữ tiếng Việt đọc được, ngắt trang hợp lý; kiểm lại PDF thực tế sau chuyển đổi. "
+            "Gọi review_deliverable cho từng Word/Excel/PDF, truyền required_sections theo cấu trúc đã chốt và min_words phù hợp; sửa và kiểm lại lỗi. Số từ không thay cho chiều sâu phân tích hay độ chính xác số liệu. "
+            "Không bịa nguồn, căn cứ, số liệu để làm tài liệu dài hơn. Thiếu dữ kiện phải hỏi gộp hoặc chỉ rõ bản nháp chưa hoàn thành.\n"
             "Nếu đã lập kế hoạch (plan_set), gọi plan_update(done) cho MỌI bước còn lại, kể cả bước báo cáo cuối, TRƯỚC khi viết câu trả lời cuối.\n"
             "Kết thúc bằng một danh sách kiểm ngắn, mỗi tiêu chí một dòng bắt đầu bằng ✓ (đạt) hoặc ✗ (chưa đạt, nêu lý do), rồi liệt kê các file đã tạo.")
 
