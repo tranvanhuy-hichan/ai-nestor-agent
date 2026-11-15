@@ -33,6 +33,20 @@ Mọi đường dẫn có tiền tố `/api`. Lỗi nghiệp vụ trả `400 {"d
 `create_docx`, `create_xlsx`, `create_pptx`, `vanban_write_docx`, `review_vn_document(path)`, `run_script(name, code, timeout?)` (cần phê duyệt `exec`), `save_script_as_skill(name, description, script_path)`, `team_run`, `team_note_write`, `team_note_read`.
 
 
+## Chức năng: mỗi trợ lý một trang riêng
+
+Mỗi trợ lý là một trang trên thanh bên (mục **Chức năng**, route `/f` và `/f/<id>`). Form của từng trợ lý khai báo trong `argus/assistant_defs/forms.py`
+(`FORMS[id]`), `GET /api/assistants` trả thêm trường `form`:
+
+`{intro, flows: [{id, label, desc, steps: [{id, label, goal, task, fields[], review[], produces[], submit, optional}]}], panels: []}`
+
+- Mỗi `flow` là một quy trình nghiệp vụ (một tình huống), gồm các `step` bám mục "Quy trình" của skill. Hiện có 83 quy trình, 280 bước cho 37 chức năng; quy trình chính của mỗi chức năng từ 3 bước trở lên. Nội dung viết trong `assistant_defs/flows_{gov,biz,teacher,student,uni,personal}.py` (ghi đè `FORMS` trong `forms.py`); form kiểu cũ `tasks` vẫn đọc được (mỗi tác vụ thành quy trình một bước).
+- Giao diện chạy từng bước trong CÙNG MỘT phiên (`FlowRunner`): điền form của bước, trợ lý làm đúng bước đó (có hỏi lại, duyệt quyền), hiện file tạo ra và danh sách `review` để người dùng tích; bấm "Duyệt, sang bước tiếp" hoặc "Yêu cầu sửa" (trợ lý làm lại bước đó). Tiến độ lưu trong trình duyệt (`wf:<trợ lý>:<quy trình>`), mở lại trang thì tiếp tục phiên đang làm. Bước `optional` có nút bỏ qua.
+- `produces` (`docx|xlsx|pptx`) khai báo file bước tạo ra; test kiểm tra allowlist tool của trợ lý có tool tạo loại file đó.
+- `panels` là công cụ riêng gắn vào trang. Hiện có `exam-shuffle`: tab **Xáo đề thành nhiều mã** của "Ra đề và chấm bài" (`POST /api/exam/shuffle`). Trang `/xao-de` cũ chuyển hướng về tab này.
+- Trợ lý không có form riêng (kể cả trợ lý tự tạo) dùng form chung: một ô yêu cầu và ô đính kèm. `validate_form` kiểm tra khai báo; test `test_every_assistant_has_business_workflow` bắt buộc mọi trợ lý dựng sẵn có quy trình hợp lệ.
+- `prompt_for` luôn nối khối "Cách nhận yêu cầu": thông tin đã điền là chắc chắn, không hỏi lại, chỉ hỏi phần thật sự thiếu.
+
 ## Trợ lý "thật": kỹ năng, cổng chất lượng, allowlist, lưu theo phiên
 
 Định nghĩa trợ lý dựng sẵn nằm ở `argus/assistant_defs/gov_biz.py` và `edu_personal.py` (mỗi file có `DEFS`), skill đi kèm ở `argus/bundled_skills/<slug>/SKILL.md`.

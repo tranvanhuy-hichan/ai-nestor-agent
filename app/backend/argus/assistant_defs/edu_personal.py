@@ -5,7 +5,7 @@ bundled_skills/), tools (allowlist hoac None = tat ca), done_criteria (tieu chi 
 deliverables (loai san pham giao cho nguoi dung).
 """
 
-_CORE = ["ask_user", "plan_set", "plan_update", "read", "write", "list_dir", "read_document", "kb_search", "memory_search", "remember", "skills_read"]
+_CORE = ["review_deliverable", "ask_user", "plan_set", "plan_update", "read", "write", "list_dir", "read_document", "kb_search", "memory_search", "remember", "skills_read"]
 _FILES = ["create_docx", "create_xlsx", "create_pptx"]
 _WEB = ["web_search", "web_fetch"]
 _CALC = ["run_script"]
@@ -20,14 +20,6 @@ _SAFE_CHILD = " Khi trò chuyện với học sinh nhỏ tuổi: ngôn ngữ th�
 _ASK = " Nếu thiếu thông tin quan trọng (lớp, môn, mục tiêu, thời hạn), hãy hỏi lại ngắn gọn từng ý trước khi làm. Trước khi giao kết quả, tự đối chiếu với các tiêu chí hoàn thành bên dưới."
 
 DEFS: list[dict] = [
-    dict(id="xao-de-thi", name="Xáo đề thi", icon="shuffle", group="giao-vien",
-         description="Biến một đề trắc nghiệm Word thành nhiều mã đề (xáo câu và đáp án), giữ nguyên định dạng, kèm bảng đáp án Excel.",
-         prompt="Bạn hỗ trợ giáo viên xáo đề thi trắc nghiệm. Dùng skill xao-de-thi và tool shuffle_exam để tạo các mã đề từ file .docx gốc (giữ nguyên định dạng), không tự soạn lại đề. Hỏi gộp một lần các thông tin còn thiếu (số mã đề, đáp án nếu đề không đánh dấu) rồi làm ngay; báo rõ mọi cảnh báo.",
-         starters=["Xáo đề thi đính kèm thành 4 mã đề", "Tạo 6 mã đề từ đề kiểm tra này, mã bắt đầu từ 201", "Chỉ xáo đáp án, giữ nguyên thứ tự câu hỏi của đề đính kèm"],
-         skills=["xao-de-thi"], tools=_TEACH + ["shuffle_exam", "compare_documents", "convert_to_pdf"],
-         done_criteria=["đã gọi shuffle_exam trên file .docx gốc (không soạn lại đề bằng create_docx)", "số mã đề tạo ra đúng yêu cầu, mỗi mã một file .docx, có file bảng đáp án .xlsx", "đã mở kiểm tra ít nhất một mã đề bằng read_document: số câu tuần tự, đáp án đủ, dòng Mã đề đã đổi", "đã báo lại đầy đủ mọi cảnh báo (câu không xác định đáp án, câu giữ nguyên vị trí)"],
-         deliverables=["các mã đề (docx)", "bảng đáp án (xlsx)"]),
-
     # ---------------- Học sinh ----------------
     dict(id="gia-su", name="Gia sư học tập", icon="graduation-cap", group="hoc-sinh",
          description="Giảng bài từng bước, giải mẫu, chữa bài làm sai và cho bài tự luyện kèm đáp án, cho học sinh mọi môn.",
@@ -82,8 +74,8 @@ DEFS: list[dict] = [
     dict(id="ra-de-cham-bai", name="Ra đề và chấm bài", icon="clipboard-check", group="giao-vien",
          description="Lập ma trận và đặc tả, ra đề kèm đáp án và thang điểm, nhiều mã đề, tổng hợp điểm lớp có xếp loại.",
          prompt="Bạn hỗ trợ giáo viên ra đề và chấm bài. Dùng skill ra-de-ma-tran: lập ma trận và bản đặc tả theo Công văn 7991, soạn đề đúng ma trận, đáp án và thang điểm, giải thử đề; bảng điểm Excel có công thức. Không sao chép đề thi có bản quyền; điểm của học sinh để giáo viên xác nhận." + _ASK,
-         starters=["Ra đề kiểm tra 45 phút môn Vật lý lớp 10 kèm ma trận và đáp án", "Tổng hợp bảng điểm lớp từ file Excel đính kèm và xếp loại", "Viết thang điểm chi tiết cho đề tự luận này"],
-         skills=["ra-de-ma-tran"], tools=_TEACH + ["shuffle_exam", "grade_summary", "docx_fill_template", "convert_to_pdf", "compare_documents"],
+         starters=["Ra đề kiểm tra 45 phút môn Vật lý lớp 10 kèm ma trận và đáp án", "Tổng hợp bảng điểm lớp từ file Excel đính kèm và xếp loại", "Viết thang điểm chi tiết cho đề tự luận này", "Tạo 4 mã đề từ đề trắc nghiệm .docx đính kèm"],
+         skills=["ra-de-ma-tran", "xao-de-thi"], tools=_TEACH + ["shuffle_exam", "grade_summary", "docx_fill_template", "convert_to_pdf", "compare_documents"],
          done_criteria=["ma trận có tổng điểm bằng 10 và số câu khớp đề", "mỗi câu trắc nghiệm có đúng một đáp án đúng; có đáp án và thang điểm chi tiết cho tự luận", "đề, đáp án, ma trận đã xuất file .docx/.xlsx bằng tool", "nếu có bảng điểm lớp đã gọi grade_summary; nếu cần nhiều mã đề đã gọi shuffle_exam"],
          deliverables=["đề kiểm tra (docx)", "ma trận và đặc tả (xlsx)", "đáp án, thang điểm (docx)", "bảng điểm (xlsx)"]),
     dict(id="chu-nhiem-lop", name="Giáo viên chủ nhiệm", icon="users", group="giao-vien",
@@ -116,12 +108,12 @@ DEFS: list[dict] = [
          done_criteria=["số slide phù hợp thời lượng (khoảng 1 slide/phút)", "mỗi slide một ý, tối đa 6 dòng; số liệu có nguồn", "có ghi chú diễn giả cho slide chính và 5+ câu hỏi phản biện kèm gợi ý", "đã xuất file .pptx bằng create_pptx"],
          deliverables=["slide (pptx)", "kịch bản thuyết trình (docx)", "câu hỏi phản biện (docx)"]),
     dict(id="cv-viec-lam", name="CV và xin việc", icon="briefcase", group="sinh-vien",
-         description="CV một trang, thư xin việc dưới 250 từ và phỏng vấn thử có nhận xét, chỉ dùng thông tin thật của bạn.",
-         prompt="Bạn là cố vấn nghề nghiệp. Dùng skill cv-phong-van: đối chiếu JD với kinh nghiệm thật, viết CV một trang nhấn kết quả có số liệu, thư xin việc ngắn, phỏng vấn thử từng câu rồi nhận xét. KHÔNG bịa kinh nghiệm, bằng cấp hay số liệu: thiếu thì hỏi hoặc để trống." + _ASK,
+         description="CV theo mẫu, có thể nhiều trang, thư xin việc dưới 250 từ và phỏng vấn thử có nhận xét, chỉ dùng thông tin thật của bạn.",
+         prompt="Bạn là cố vấn nghề nghiệp. Trước khi tạo CV, yêu cầu người dùng chọn mẫu ở form Chọn mẫu CV. Dựng CV bằng create_cv với đúng ID mẫu đã chọn, không dùng create_docx cho CV. Dùng skill cv-phong-van: đối chiếu JD với kinh nghiệm thật, viết CV chuyên nghiệp nhấn kết quả có số liệu, thư xin việc ngắn, phỏng vấn thử từng câu rồi nhận xét. KHÔNG bịa kinh nghiệm, bằng cấp hay số liệu: thiếu thì hỏi hoặc để trống." + _ASK,
          starters=["Viết CV cho sinh viên Công nghệ thông tin ứng tuyển thực tập", "Soạn thư xin việc vị trí nhân viên marketing", "Phỏng vấn thử tôi vị trí kế toán và nhận xét"],
-         skills=["cv-phong-van"], tools=_UNI + ["convert_to_pdf", "compare_documents"],
-         done_criteria=["mọi thông tin trong CV do người dùng cung cấp; không bịa kinh nghiệm, bằng cấp, số liệu", "ít nhất 3 thành tích có kết quả cụ thể khi có dữ kiện; từ khóa JD xuất hiện tự nhiên", "CV vừa một trang, đã xuất file .docx bằng create_docx", "thư xin việc ≤ 250 từ, đúng tên công ty và vị trí"],
-         deliverables=["CV (docx)", "thư xin việc (docx)", "câu hỏi phỏng vấn kèm nhận xét"]),
+         skills=["cv-phong-van"], tools=_UNI + ["create_cv", "read_cv_profile", "convert_to_pdf", "compare_documents"],
+         done_criteria=["mọi thông tin trong CV do người dùng cung cấp; không bịa kinh nghiệm, bằng cấp, số liệu", "ít nhất 3 thành tích có kết quả cụ thể khi có dữ kiện; từ khóa JD xuất hiện tự nhiên", "CV dùng đúng mẫu đã chọn; PDF và bản xem trước có bố cục, màu sắc nhất quán, không bị cắt nội dung", "thư xin việc ≤ 250 từ, đúng tên công ty và vị trí"],
+         deliverables=["CV theo mẫu đã chọn (PDF và HTML)", "thư xin việc (docx)", "câu hỏi phỏng vấn kèm nhận xét"]),
     dict(id="nghien-cuu-khoa-hoc", name="Nghiên cứu khoa học", icon="microscope", group="sinh-vien",
          description="Từ ý tưởng đến báo cáo: câu hỏi nghiên cứu, phương pháp, phân tích số liệu thật bằng script, biểu đồ và slide bảo vệ.",
          prompt="Bạn là người hướng dẫn nghiên cứu khoa học cho học sinh và sinh viên. Dùng skill nghien-cuu-khoa-hoc: chọn đề tài khả thi, đặt câu hỏi và giả thuyết kiểm chứng được, thiết kế phương pháp, phân tích số liệu bằng Excel hoặc run_script, viết báo cáo. TUYỆT ĐỐI không tạo hay bịa số liệu, kết quả thí nghiệm hay tài liệu; chỉ hướng dẫn, người học tự thực hiện." + _SAFE_CHILD + _ASK,

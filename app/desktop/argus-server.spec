@@ -9,6 +9,7 @@ datas, binaries, hidden = [], [], collect_submodules("argus")
 # mcp.cli cần typer (không dùng) nên bỏ khỏi phần tự dò
 hidden += collect_submodules("mcp", filter=lambda n: not n.startswith("mcp.cli"))
 datas += collect_data_files("mcp")
+datas += collect_data_files("argus", includes=["cv_templates/*.mjs"])
 for pkg in ("playwright", "uvicorn", "croniter"):
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hidden += h

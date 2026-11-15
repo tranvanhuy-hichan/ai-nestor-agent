@@ -1,7 +1,8 @@
+import { coreFeatures } from '@/lib/featureCatalog'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRight, ArrowUp, Bell, BookOpen, CalendarClock, Download, FileSpreadsheet, FileText, History, MessageSquare, Presentation, Shuffle, File as FileIcon, type LucideIcon } from 'lucide-react'
+import { ArrowRight, ArrowUp, Bell, BookOpen, CalendarClock, Download, FileSpreadsheet, FileText, History, MessageSquare, Presentation, LayoutGrid, File as FileIcon, type LucideIcon } from 'lucide-react'
 import { AgentLogoStacked } from '@/components/ui/AgentMark'
 import { assistantIcon } from '@/lib/assistantIcons'
 import { Loading, Page } from '@/components/ui/misc'
@@ -16,7 +17,7 @@ const OFFICE = /\.(docx|xlsx|pptx|pdf)$/i
 const fileIcon = (n: string) => (/\.xlsx$/i.test(n) ? FileSpreadsheet : /\.pptx$/i.test(n) ? Presentation : /\.(docx|pdf)$/i.test(n) ? FileText : FileIcon)
 
 const QUICK: { to: string; icon: LucideIcon; label: string; hl?: boolean }[] = [
-  { to: '/xao-de', icon: Shuffle, label: tk('Xáo đề thi'), hl: true },
+  { to: '/f', icon: LayoutGrid, label: tk('Tất cả chức năng'), hl: true },
   { to: '/tasks', icon: History, label: tk('Việc đã làm') },
   { to: '/automations', icon: CalendarClock, label: tk('Lịch tự động') },
   { to: '/documents', icon: BookOpen, label: tk('Tài liệu') },
@@ -78,12 +79,12 @@ export function SimpleHome() {
   const [showAll, setShowAll] = useState(false)
     if (!cfg.data) return <Loading />
 
-  const list = assistants.data ?? FALLBACK_ASSISTANTS
+  const list = coreFeatures(assistants.data ?? FALLBACK_ASSISTANTS)
   const groups = [...GROUP_ORDER, ...new Set(list.map((a) => a.group).filter((g) => !GROUP_ORDER.includes(g)))]
   const featured = list.filter((a) => FEATURED.includes(a.id))
   const shown = group ? list.filter((a) => a.group === group) : showAll ? list : featured.length >= 4 ? featured : list.slice(0, 10)
   const go = (prompt: string) => nav('/chat', { state: { prompt } })
-  const open = (a: Assistant) => nav('/chat', { state: { assistant: a.id } })
+  const open = (a: Assistant) => nav(`/f/${a.id}`)
   const hr = new Date().getHours()
   const greet = hr < 11 ? t('Chào buổi sáng') : hr < 18 ? t('Chào buổi chiều') : t('Chào buổi tối')
 
@@ -118,7 +119,7 @@ export function SimpleHome() {
 
         <section className="rounded-xl border border-line bg-panel px-4 py-3">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <h2 className="mr-2 text-[13px] font-semibold uppercase tracking-wide text-muted">{t('Trợ lý chuyên trách: bấm để bắt đầu')}</h2>
+            <h2 className="mr-2 text-[13px] font-semibold uppercase tracking-wide text-muted">{t('Chức năng: bấm để bắt đầu')}</h2>
             {['', ...groups.filter((g) => list.some((a) => a.group === g))].map((g) => (
               <button key={g || 'all'} onClick={() => setGroup(g)} className={cn('rounded-full px-3 py-1 text-xs transition', group === g ? 'bg-accent text-accent-fg' : 'border border-line text-muted hover:border-accent/60 hover:text-fg')}>{g ? t(g) : t('Tất cả')}</button>
             ))}

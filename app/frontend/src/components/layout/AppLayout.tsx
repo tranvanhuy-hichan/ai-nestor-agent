@@ -1,7 +1,8 @@
+import { coreFeatures } from '@/lib/featureCatalog'
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Bell, Blocks, Cable, FileSearch, Clock, Code2, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, Shuffle, Sun, type LucideIcon } from 'lucide-react'
+import { Bell, Blocks, Cable, FileSearch, Clock, Code2, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, LayoutGrid, ChevronDown, Sun, type LucideIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { t, tk } from '@/lib/i18n.ts'
 import { AgentLogo, AgentOwl } from '@/components/ui/AgentMark'
@@ -9,6 +10,8 @@ import { LangSwitcher } from './LangSwitcher'
 import { CODE_MODE } from '@/lib/features'
 import { cn } from '@/lib/utils'
 import { setUiMode, useUiMode } from '@/lib/uiMode'
+import { assistantIcon } from '@/lib/assistantIcons'
+import { FALLBACK_ASSISTANTS, GROUP_ORDER, useAssistants } from '@/lib/assistants'
 
 type NavItem = { to: string; label: string; icon: LucideIcon; hint: string }
 const TOP: NavItem[] = [
@@ -18,7 +21,6 @@ const TOP: NavItem[] = [
 const SIMPLE: NavItem[] = [
   { to: '/', label: tk('Trang chủ'), icon: House, hint: tk('Chọn trợ lý và giao việc nhanh') },
   { to: '/chat', label: tk('Trợ lý'), icon: Sparkles, hint: tk('Trò chuyện và giao việc cho trợ lý') },
-  { to: '/xao-de', label: tk('Xáo đề thi'), icon: Shuffle, hint: tk('Tạo nhiều mã đề từ một đề gốc') },
   { to: '/tasks', label: tk('Việc đã làm'), icon: ListTodo, hint: tk('Các việc trợ lý làm ngầm và kết quả') },
   { to: '/automations', label: tk('Lịch tự động'), icon: Clock, hint: tk('Việc lặp lại theo giờ, theo ngày') },
   { to: '/documents', label: tk('Tài liệu'), icon: FileSearch, hint: tk('Hỏi đáp trên văn bản, quy chế của bạn') },
@@ -30,7 +32,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     ...(CODE_MODE ? [{ to: '/code', label: tk('Lập trình'), icon: Code2, hint: tk('Mở một dự án và nhờ agent viết code') }] : []),
     { to: '/tasks', label: tk('Tác vụ'), icon: ListTodo, hint: tk('Việc dài agent làm ngầm') },
     { to: '/automations', label: tk('Tự động hóa'), icon: Clock, hint: tk('Việc lặp theo lịch') },
-    { to: '/xao-de', label: tk('Xáo đề thi'), icon: Shuffle, hint: tk('Tạo nhiều mã đề từ một đề gốc') },
+    { to: '/f', label: tk('Công cụ'), icon: LayoutGrid, hint: tk('Mỗi trợ lý chuyên trách một trang riêng') },
     { to: '/notifications', label: tk('Hộp thư'), icon: Bell, hint: tk('Thông báo từ agent') },
   ] },
   { title: tk('Khả năng của agent'), items: [
@@ -57,7 +59,7 @@ function NavRow({ item: { to, label, icon: Icon, hint }, unread, chatMode, expan
 }) {
   if (chatMode) {
     return (
-      <NavLink to={to} end={to === '/'} title={`${t(label)} — ${t(hint)}`}
+      <NavLink to={to} end={to === '/' || to === '/f'} title={`${t(label)} — ${t(hint)}`}
         className={({ isActive }) => cn(
           'flex h-9 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors',
           isActive ? 'bg-accent/12 text-accent' : 'text-muted hover:bg-panel2 hover:text-fg',
@@ -75,7 +77,7 @@ function NavRow({ item: { to, label, icon: Icon, hint }, unread, chatMode, expan
     )
   }
   return (
-    <NavLink to={to} end={to === '/'} title={`${t(label)} — ${t(hint)}`}
+    <NavLink to={to} end={to === '/' || to === '/f'} title={`${t(label)} — ${t(hint)}`}
       className={({ isActive }) => cn(
         'flex h-9 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors',
         isActive ? 'bg-accent/12 text-accent' : 'text-muted hover:bg-panel2 hover:text-fg',
@@ -98,6 +100,36 @@ function useTheme() {
   return [light, setLight] as const
 }
 
+/** Mục "Chức năng" của chế độ Đơn giản: mỗi trợ lý một dòng, gom theo nhóm, nhóm đang mở nhớ lại trong trình duyệt. */
+function FeatureNav({ chatMode, expanded }: { chatMode: boolean; expanded: boolean }) {
+  const list = coreFeatures(useAssistants().data ?? FALLBACK_ASSISTANTS)
+  const { pathname } = useLocation()
+  const activeId = pathname.startsWith('/f/') ? pathname.split('/')[2] : ''
+  const activeGroup = list.find((a) => a.id === activeId)?.group
+  const [open, setOpen] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('nav-groups') || '[]') } catch { return [] } })
+  const toggle = (g: string) => setOpen((p) => { const n = p.includes(g) ? p.filter((x) => x !== g) : [...p, g]; try { localStorage.setItem('nav-groups', JSON.stringify(n)) } catch { /* private mode */ } return n })
+  const groups = [...GROUP_ORDER, ...new Set(list.map((a) => a.group).filter((g) => !GROUP_ORDER.includes(g)))].filter((g) => list.some((a) => a.group === g))
+  const show = chatMode ? expanded : true
+  return (
+    <div className="mt-2 border-t border-line pt-2">
+      <NavRow item={{ to: '/f', label: tk('Công cụ'), icon: LayoutGrid, hint: tk('Mỗi trợ lý chuyên trách một trang riêng') }} unread={0} chatMode={chatMode} expanded={expanded} />
+      {show && groups.map((g) => {
+        const isOpen = open.includes(g) || g === activeGroup
+        return (
+          <div key={g}>
+            <button onClick={() => toggle(g)} aria-expanded={isOpen} className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted/80 transition-colors hover:bg-panel2 hover:text-fg">
+              <ChevronDown className={cn('size-3.5 shrink-0 transition-transform', !isOpen && '-rotate-90')} /><span className={cn(!chatMode && 'hidden md:block')}>{t(g)}</span>
+            </button>
+            {isOpen && list.filter((a) => a.group === g).map((a) => (
+              <NavRow key={a.id} item={{ to: `/f/${a.id}`, label: a.name, icon: assistantIcon(a.icon), hint: a.description }} unread={0} chatMode={chatMode} expanded={expanded} />
+            ))}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function AppLayout() {
   const [light, setLight] = useTheme()
   const simple = useUiMode() === 'simple'
@@ -108,7 +140,7 @@ export function AppLayout() {
   const auth = useQuery({ queryKey: ['auth-status'], queryFn: () => api.get<{ required: boolean }>('/api/auth/status') })
   const logout = () => { void api.post('/api/auth/logout').then(() => window.dispatchEvent(new Event('auth-required'))) }
 
-  const isChat = location.pathname.startsWith('/chat')
+  const isChat = location.pathname.startsWith('/chat') || location.pathname.startsWith('/f/')
   const unread = count.data?.unread ?? 0
 
   const onEnter = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current); setExpanded(true) }
@@ -142,7 +174,9 @@ export function AppLayout() {
 
       {/* Nav items */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2" aria-label={t('Điều hướng chính')}>
-        {simple && SIMPLE.map((i) => <NavRow key={i.to} item={i} unread={0} chatMode={chatMode} expanded={exp} />)}
+        {simple && SIMPLE.slice(0, 2).map((i) => <NavRow key={i.to} item={i} unread={0} chatMode={chatMode} expanded={exp} />)}
+        {simple && <FeatureNav chatMode={chatMode} expanded={exp} />}
+        {simple && <div className="mt-2 space-y-0.5 border-t border-line pt-2">{SIMPLE.slice(2).map((i) => <NavRow key={i.to} item={i} unread={0} chatMode={chatMode} expanded={exp} />)}</div>}
         {!simple && TOP.map((i) => <NavRow key={i.to} item={i} unread={0} chatMode={chatMode} expanded={exp} />)}
         {!simple && GROUPS.map((g) => (
           <div key={g.title} className="mt-3">

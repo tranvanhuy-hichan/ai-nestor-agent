@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Download, FileArchive, FileText, KeyRound, Minus, Plus, Shuffle, TriangleAlert, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { Page, PageHeader } from '@/components/ui/misc'
 import { t } from '@/lib/i18n.ts'
 import { cn } from '@/lib/utils'
 
@@ -38,7 +37,7 @@ function FileRow({ f, icon: Icon, hl }: { f: OutFile; icon: typeof FileText; hl?
   )
 }
 
-export function ExamShufflePage() {
+export function ExamShufflePanel() {
   const input = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [over, setOver] = useState(false)
@@ -61,9 +60,9 @@ export function ExamShufflePage() {
   const r = run.data
 
   return (
-    <Page>
-      <PageHeader title={t('Xáo đề thi')} subtitle={t('Tải một đề gốc lên, nhận lại nhiều mã đề đã xáo trộn câu hỏi và thứ tự đáp án, giữ nguyên định dạng của đề gốc.')} />
-      <div className="space-y-4 pb-10">
+    <div>
+      <p className="mb-4 text-sm text-muted">{t('Tải một đề gốc lên, nhận lại nhiều mã đề đã xáo trộn câu hỏi và thứ tự đáp án, giữ nguyên định dạng của đề gốc.')}</p>
+      <div className="space-y-4">
         <div role="button" tabIndex={0} aria-label={t('Chọn file đề thi')}
           onClick={() => input.current?.click()} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') input.current?.click() }}
           onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)}
@@ -145,6 +144,6 @@ export function ExamShufflePage() {
           </section>
         )}
       </div>
-    </Page>
+    </div>
   )
 }

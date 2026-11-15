@@ -71,7 +71,7 @@ def _fill_docx(doc, content: str) -> None:
         i += 1
 
 
-_ADMIN_TITLE = re.compile(r"^\s*#*\s*\**\s*(BÁO CÁO|TỜ TRÌNH|CÔNG VĂN|QUYẾT ĐỊNH|BIÊN BẢN|KẾ HOẠCH|THÔNG BÁO|GIẤY MỜI|NGHỊ QUYẾT|CÔNG ĐIỆN|GIẤY GIỚI THIỆU|CHỈ THỊ|KẾT LUẬN|QUY CHẾ|QUY ĐỊNH|HƯỚNG DẪN|ĐỀ ÁN|PHƯƠNG ÁN)\b", re.M)
+_ADMIN_TITLE = re.compile(r"^\s*#*\s*\**\s*(BÁO CÁO|TỜ TRÌNH|CÔNG VĂN|QUYẾT ĐỊNH|BIÊN BẢN|KẾ HOẠCH|THÔNG BÁO|GIẤY MỜI|NGHỊ QUYẾT|CÔNG ĐIỆN|GIẤY GIỚI THIỆU|CHỈ THỊ|KẾT LUẬN|QUY CHẾ|QUY ĐỊNH|HƯỚNG DẪN|ĐỀ ÁN|PHƯƠNG ÁN)\b", re.M | re.I)
 _ADMIN_HINT = re.compile(r"(Kính gửi|UBND|Ủy ban nhân dân|Cộng hòa xã hội|Chủ đầu tư|cơ quan ban hành|Nơi nhận|Căn cứ (Luật|Nghị định|Thông tư|Quyết định))", re.I)
 
 
@@ -85,23 +85,74 @@ def _looks_administrative(text: str) -> str:
     return ""
 
 
-@tool("create_docx", "Tạo file Word (.docx) thật từ nội dung Markdown đơn giản (#, ##, gạch đầu dòng, đánh số, bảng |a|b|, **đậm**). Dùng cho báo cáo, biên bản, hợp đồng. KHÔNG dùng cho văn bản hành chính của cơ quan nhà nước (công văn, tờ trình, quyết định, báo cáo gửi cấp trên, biên bản, kế hoạch, thông báo, giấy mời): loại đó phải dùng vanban_types rồi vanban_write_docx để đúng thể thức NĐ 30/2020.",
-      {"path": ("string", "đường dẫn file, vd bao-cao.docx"), "content": ("string", "nội dung dạng Markdown"), "title": ("string", "tiêu đề lớn đầu trang (tùy chọn)"),
+@tool("create_docx", "Dựng file Word (.docx) thật bằng blocks có cấu trúc native: tiêu đề, đoạn văn, danh sách, bảng. Ưu tiên blocks, không dùng Markdown cho yêu cầu mới. Dùng cho báo cáo, biên bản, hợp đồng. KHÔNG dùng cho văn bản hành chính của cơ quan nhà nước (công văn, tờ trình, quyết định, báo cáo gửi cấp trên, biên bản, kế hoạch, thông báo, giấy mời): loại đó phải dùng vanban_types rồi vanban_write_docx để đúng thể thức NĐ 30/2020.",
+      {"path": ("string", "đường dẫn file, vd bao-cao.docx"), "content": ("string", "Đầu vào Markdown cũ, chỉ để tương thích. Với yêu cầu mới dùng blocks."), "blocks": ("string", 'JSON mảng khối Word native: [{"type":"heading","text":"Mục","level":1},{"type":"paragraph","text":"Nội dung đầy đủ"},{"type":"bullets","items":["Ý 1","Ý 2"]},{"type":"table","rows":[["Cột A","Cột B"],["Dữ liệu","Giá trị"]]}]. Không dùng ký hiệu Markdown; paragraph có thể dùng runs:[{text,bold,italic}].'), "title": ("string", "tiêu đề lớn đầu trang (tùy chọn)"),
        "khong_phai_van_ban_hanh_chinh": ("boolean", "chỉ đặt true khi chắc chắn đây KHÔNG phải văn bản hành chính nhà nước")},
-      required=["path", "content"], risk="file")
-def create_docx(ctx, path, content, title="", khong_phai_van_ban_hanh_chinh=False):
+      required=["path"], risk="file")
+def create_docx(ctx, path, content="", title="", khong_phai_van_ban_hanh_chinh=False, blocks=""):
     from docx import Document
+    from .docx_blocks import compose, decorate, validate, text_of
+    native = _json(blocks, 'blocks') if blocks else None
+    if native is not None:
+        validate(native)
+        if content: raise ValueError('Chỉ dùng blocks hoặc content, không trộn hai nguồn nội dung.')
+        content_for_review = text_of(native)
+    else:
+        content_for_review = content
+        if not content.strip(): raise ValueError('Cần blocks chứa nội dung tài liệu.')
+        if ctx.session_id:
+            from . import sessions
+            if (sessions.get(ctx.session_id) or {}).get('assistant'):
+                raise ValueError('Yêu cầu mới phải dựng Word native bằng blocks (heading, paragraph, bullets, table), không chuyển Markdown. Giữ đầy đủ nội dung và gọi lại với blocks.')
     if not khong_phai_van_ban_hanh_chinh:
-        why = _looks_administrative(f"{title}\n{content}")
+        why = _looks_administrative(f"{title}\n{content_for_review}")
         if why:
             raise ValueError(f"Nội dung này giống văn bản hành chính ({why}) nên KHÔNG tạo bằng create_docx vì sẽ sai thể thức NĐ 30/2020. "
                              "Hãy gọi vanban_types(document_type_key=...) rồi vanban_write_docx để có quốc hiệu, tiêu ngữ, số ký hiệu, nơi nhận, chữ ký đúng chuẩn. "
                              "Nếu thật sự không phải văn bản hành chính nhà nước, gọi lại với khong_phai_van_ban_hanh_chinh=true.")
     p = _out(ctx, path, ".docx")
     doc = Document()
+    from docx.shared import Mm, Pt, RGBColor
+    section = doc.sections[0]
+    section.page_width, section.page_height = Mm(210), Mm(297)
+    section.top_margin = section.bottom_margin = Mm(20)
+    section.left_margin = section.right_margin = Mm(22)
+    from docx.oxml.ns import qn
+    for style_name in ['Normal', 'Title', 'Heading 1', 'Heading 2', 'Heading 3', 'List Bullet', 'List Number']:
+        fonts = doc.styles[style_name].element.get_or_add_rPr().get_or_add_rFonts()
+        for key in list(fonts.attrib):
+            if 'theme' in key.lower(): del fonts.attrib[key]
+        for script in ('ascii', 'hAnsi', 'eastAsia', 'cs'):
+            fonts.set(qn('w:' + script), 'Arial')
+    normal = doc.styles['Normal']
+    normal.font.name, normal.font.size = 'Arial', Pt(11)
+    normal.paragraph_format.line_spacing = 1.15
+    normal.paragraph_format.space_after = Pt(6)
+    for level, size in [(1,16),(2,14),(3,12)]:
+        heading = doc.styles[f'Heading {level}']
+        heading.font.name, heading.font.size = 'Arial', Pt(size)
+        heading.font.color.rgb = RGBColor.from_string('17365D')
+        heading.paragraph_format.keep_with_next = True
     if title:
-        doc.add_heading(title, 0)
-    _fill_docx(doc, content)
+        cover = doc.add_heading(title, 0)
+        cover.paragraph_format.space_after = Pt(14)
+        for run in cover.runs:
+            run.font.name = 'Arial'
+            run.font.size = Pt(24)
+            run.font.color.rgb = RGBColor.from_string('17365D')
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        borders = OxmlElement('w:pBdr')
+        bottom = OxmlElement('w:bottom')
+        for key, value in [('val','single'),('sz','12'),('color','17365D'),('space','8')]:
+            bottom.set(qn('w:' + key), value)
+        borders.append(bottom)
+        cover._p.get_or_add_pPr().append(borders)
+    if native is not None:
+        compose(doc, native)
+    else:
+        _fill_docx(doc, content)
+    decorate(doc)
     doc.save(p)
     return f"Đã tạo {p.name} ({p.stat().st_size} byte) tại {p}."
 
@@ -124,8 +175,20 @@ def create_xlsx(ctx, path, sheets):
         ws = wb.create_sheet(str(name)[:31] or "Sheet")
         for row in rows:
             ws.append(row if isinstance(row, list) else [row])
+        from openpyxl.styles import PatternFill, Alignment
+        ws.freeze_panes = 'A2'
+        if ws.max_row > 1:
+            ws.auto_filter.ref = ws.dimensions
         for c in ws[1]:
-            c.font = Font(bold=True)
+            c.font = Font(bold=True, color='FFFFFF')
+            c.fill = PatternFill('solid', fgColor='17365D')
+            c.alignment = Alignment(vertical='center', wrap_text=True)
+        ws.row_dimensions[1].height = 30
+        ws.print_title_rows = '1:1'
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.orientation = 'landscape' if ws.max_column > 6 else 'portrait'
+        ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
         for col in range(1, ws.max_column + 1):
             width = max((len(str(c.value)) for c in ws[get_column_letter(col)] if c.value is not None and not str(c.value).startswith("=")), default=8)
             ws.column_dimensions[get_column_letter(col)].width = min(max(width + 2, 8), 60)
@@ -252,16 +315,92 @@ def vanban_types(ctx, document_type_key=""):
     return json.dumps({"types": brief, "roles": info["roles"]}, ensure_ascii=False) + "\nGọi lại vanban_types(document_type_key=...) để xem cấu trúc chi tiết.\n\n" + VANBAN_RULES
 
 
+_HEAD_LEFT = ("parent_org", "issuing_org", "document_number")
+_HEAD_RIGHT = ("national_name", "motto", "place_date")
+_FOOT_LEFT = ("recipients_label", "recipients_item")
+_FOOT_RIGHT = ("signature_authority", "signature_name")
+
+
+def _is_plain(it) -> bool:
+    return isinstance(it, dict) and (it.get("layout") or "paragraph") == "paragraph" and bool(it.get("role"))
+
+
+def _two_col_has(paras, roles) -> bool:
+    for it in paras:
+        if isinstance(it, dict) and it.get("layout") == "two_columns":
+            for side in ("left_lines", "right_lines"):
+                if any(isinstance(l, dict) and l.get("role") in roles for l in it.get(side) or []):
+                    return True
+    return False
+
+
+def _normalize_layout(paras, key: str):
+    """Model hay xep quoc hieu, co quan, so, ngay thang va noi nhan/chu ky thanh cac doan doc: ghep lai thanh khoi hai cot dung the thuc NĐ 30
+    (co quan + so + trich yeu cong van ben trai; quoc hieu, tieu ngu, dia danh ngay thang ben phai; noi nhan ben trai, chu ky ben phai). Tra ve (paras moi, ghi chu)."""
+    if not isinstance(paras, list):
+        return paras, []
+    out, notes = list(paras), []
+    left_h = _HEAD_LEFT + (("summary_cong_van",) if key == "CONG_VAN" else ())
+    blocks = [("đầu văn bản (cơ quan/số bên trái, quốc hiệu/ngày tháng bên phải)", left_h, _HEAD_RIGHT, 40)]
+    if key != "BIEN_BAN":
+        blocks.append(("nơi nhận (trái) và chữ ký (phải)", _FOOT_LEFT, _FOOT_RIGHT, 50))
+    for label, lroles, rroles, pct in blocks:
+        allr = set(lroles) | set(rroles)
+        if _two_col_has(out, allr):
+            continue
+        idx = [i for i, it in enumerate(out) if _is_plain(it) and it.get("role") in allr]
+        left = [out[i] for i in idx if out[i]["role"] in lroles]
+        right = [out[i] for i in idx if out[i]["role"] in rroles]
+        if not left or not right:
+            continue
+        first = idx[0]
+        merged = {"layout": "two_columns", "left_width_pct": pct, "left_lines": [{"role": x["role"], "text": x.get("text", "")} for x in left], "right_lines": [{"role": x["role"], "text": x.get("text", "")} for x in right]}
+        drop = set(idx)
+        out = [merged if i == first else it for i, it in enumerate(out) if i == first or i not in drop]
+        notes.append(label)
+    return out, notes
+
+
+_DEPTH_MIN = {**{k: 450 for k in ("TO_TRINH", "BAO_CAO", "BAO_CAO_CO_BANG", "KE_HOACH", "DE_AN", "DU_AN", "CHUONG_TRINH", "PHUONG_AN", "HUONG_DAN", "NGHI_QUYET", "QUY_CHE", "QUY_DINH", "CHI_THI", "THONG_CAO")},
+              **{k: 170 for k in ("CONG_VAN", "THONG_BAO", "QUYET_DINH_TRUC_TIEP", "QUYET_DINH_GIAN_TIEP", "VAN_BAN_CO_TEN_LOAI")}}
+
+
+def _check_depth(paras, key: str) -> None:
+    """Chan ban chi co khung: van ban hanh chinh thuc chat phai du dai noi dung. Gioi han tu theo loai."""
+    need = _DEPTH_MIN.get(key)
+    if not need:
+        return
+    words = 0
+    placeholders = 0
+    for it in paras if isinstance(paras, list) else []:
+        if not isinstance(it, dict):
+            continue
+        texts = [it.get("text")] if it.get("layout", "paragraph") == "paragraph" else []
+        texts += [c for row in it.get("table_rows") or [] for c in (row if isinstance(row, list) else [row])]
+        for t in texts:
+            if t:
+                words += len(str(t).split())
+                placeholders += str(t).count("cần xác nhận")
+    if words < need:
+        raise ValueError(f"Nội dung mới có khoảng {words} từ, quá ngắn cho loại {key} (cần tối thiểu khoảng {need} từ). Đây mới là cái khung, CHƯA đạt. "
+                         "Hãy viết lại ĐẦY ĐỦ từng phần thành câu và đoạn có lập luận (sự cần thiết với số liệu thực tế, căn cứ pháp lý đã tra cứu, nội dung/quy mô/giải pháp cụ thể, tổ chức thực hiện, kiến nghị rõ ràng), dùng thông tin đã tra bằng web_search/web_fetch, rồi gọi lại vanban_write_docx. "
+                         "Không dùng vài gạch đầu dòng ngắn cho phần nội dung chính.")
+    if placeholders > 6:
+        raise ValueError(f"Có {placeholders} chỗ ghi '(dự kiến, cần xác nhận)': quá nhiều, văn bản như chưa viết. Chỉ gắn ghi chú đó cho tối đa vài con số then chốt; những chỗ khác hãy viết nội dung cụ thể hoặc câu định tính dựa trên thông tin đã tra cứu.")
+
+
 @tool("vanban_write_docx", "BƯỚC 2: tạo file .docx văn bản hành chính ĐÚNG thể thức NĐ 30/2020 từ danh sách đoạn có role tường minh. Role không hợp lệ bị từ chối. 'paragraphs' là JSON mảng [{\"role\":\"national_name\",\"text\":\"...\"}, {\"layout\":\"two_columns\",\"left_lines\":[...],\"right_lines\":[...]}, ...]. Đọc quy tắc từ vanban_types trước.",
       {"path": ("string", "đường dẫn file đầu ra, vd to-trinh.docx"), "document_type_key": ("string", "vd TO_TRINH, CONG_VAN, QUYET_DINH_TRUC_TIEP, BIEN_BAN"),
-       "paragraphs": ("string", "JSON mảng các đoạn/khối"), "orientation": ("string", "portrait (mặc định) hoặc landscape cho cả văn bản")},
+       "paragraphs": ("string", "JSON mảng các đoạn/khối"), "orientation": ("string", "portrait (mặc định) hoặc landscape cho cả văn bản"),
+       "ngan_theo_yeu_cau": ("boolean", "chỉ đặt true khi người dùng yêu cầu rõ một văn bản rất ngắn; mặc định false và hệ thống từ chối bản chỉ có khung")},
       required=["path", "document_type_key", "paragraphs"], risk="file")
-def vanban_write_docx(ctx, path, document_type_key, paragraphs, orientation=None):
+def vanban_write_docx(ctx, path, document_type_key, paragraphs, orientation=None, ngan_theo_yeu_cau=False):
     w = _vanban()
     paras = _json(paragraphs, "paragraphs")
+    key = document_type_key.strip().upper()
+    paras, merged_notes = _normalize_layout(paras, key)
     _check_paragraphs(paras)
     p = _out(ctx, path, ".docx")
-    key = document_type_key.strip().upper()
     spec = (w._list_document_types()["types"]).get(key)
     if not spec:
         raise ValueError(f"document_type_key '{document_type_key}' không hợp lệ. Gọi vanban_types để xem danh sách.")
@@ -272,10 +411,18 @@ def vanban_write_docx(ctx, path, document_type_key, paragraphs, orientation=None
         raise ValueError(f"Writer từ chối: {e}") from e
     except (AttributeError, KeyError, TypeError) as e:
         raise ValueError(f"Cấu trúc paragraphs chưa đúng ({type(e).__name__}: {e}). {_LINE_HELP}") from e
+    if not ngan_theo_yeu_cau:
+        try:
+            _check_depth(paras, key)
+        except ValueError:
+            p.unlink(missing_ok=True)
+            raise
     have = {a.get("role") for a in res.get("applied") or [] if isinstance(a, dict)}
     missing = [r for r in _required_roles(spec.get("structure") or []) if r not in have]
     summary = " | ".join(f"{a.get('role')}" for a in (res.get("applied") or [])[:60] if isinstance(a, dict))
     out = f"Đã tạo {res['file_name']} ({res['file_size']} byte) tại {res['file_path']} (loại {key}, khổ A4).\nCác role đã áp: {summary}"
+    if merged_notes:
+        out += "\nĐã tự ghép thành khối hai cột đúng thể thức: " + "; ".join(merged_notes) + ". Lần sau dùng layout two_columns như mẫu trong templates/."
     if missing:
         out += f"\nCẢNH BÁO: thiếu role bắt buộc theo Mẫu NĐ 30: {', '.join(missing)}. Bổ sung (hoặc để '……') rồi gọi lại tối đa 1 lần."
     return out

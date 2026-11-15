@@ -46,6 +46,15 @@ Ví dụ: 'Số: …/QĐ' thiếu ký hiệu đơn vị = Bắt buộc; 'Huyện
 - Nhiều file: trình bày bảng tóm tắt (file | số lỗi bắt buộc | nên sửa | cần xác nhận) rồi mới đến chi tiết.
 - Chỉ rà được nội dung (PDF/ảnh): nói thẳng không rà được định dạng.
 
+## Mẫu báo cáo rà soát
+"Đã rà công văn 1 trang. Kết quả: 1 lỗi nghiêm trọng, 2 lỗi cần sửa, 1 gợi ý.
+| # | Vị trí | Lỗi | Mức | Đề xuất |
+|---|--------|-----|-----|---------|
+| 1 | Đầu trang, dòng 3 | Thiếu tiêu ngữ "Độc lập - Tự do - Hạnh phúc" | Nghiêm trọng | Thêm dưới quốc hiệu, in thường, gạch chân |
+| 2 | Số ký hiệu | Viết "Số: 12/CV" thiếu chữ viết tắt cơ quan | Cần sửa | "Số: 12/CV-UBND" |
+| 3 | Nơi nhận | Thiếu mục "Lưu: VT" | Cần sửa | Thêm dòng cuối danh sách nơi nhận |
+Điểm cần kiểm chứng: thẩm quyền ký TM./KT. theo quy chế của cơ quan bạn."
+
 ## Checklist tự kiểm
 - [ ] Đã chạy review_vn_document với từng file .docx và trích kết quả nguyên văn.
 - [ ] Mỗi lỗi có vị trí cụ thể và đề xuất sửa.

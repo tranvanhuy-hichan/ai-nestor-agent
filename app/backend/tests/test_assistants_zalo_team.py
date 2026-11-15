@@ -56,7 +56,7 @@ def test_review_vn_document(tmp_path):
     c = ctx(tmp_path)
     import json
     from test_office import to_trinh_paragraphs
-    tools.call(c, "vanban_write_docx", {"path": "ok", "document_type_key": "TO_TRINH", "paragraphs": json.dumps(to_trinh_paragraphs())})
+    tools.call(c, "vanban_write_docx", {"path": "ok", "document_type_key": "TO_TRINH", "paragraphs": json.dumps(to_trinh_paragraphs()), "ngan_theo_yeu_cau": True})
     out, ok = tools.call(c, "review_vn_document", {"path": "ok.docx"})
     assert ok and "0 lỗi" not in out and "đạt" in out and "[LỖI]" not in out, out
     tools.call(c, "create_docx", {"path": "bad", "content": "Gửi UBND huyện A\nNội dung thiếu hết."})

@@ -30,8 +30,8 @@ description: "Soạn dự thảo nghị quyết, chỉ thị, kết luận, thô
 ## Quy trình
 1. Xác định loại văn bản và đọc kho tài liệu (kb_search) xem người dùng đã có bản Hướng dẫn/mẫu của đơn vị chưa. Có thì ưu tiên mẫu đó.
 2. Khung nội dung theo loại (xem Mẫu bên dưới). Giữ giọng văn trang trọng, câu ngắn, đúng thuật ngữ của Đảng; không dùng văn phong hành chính nhà nước.
-3. Viết nội dung chỉ dựa trên dữ liệu người dùng cung cấp (kết luận cuộc họp, ý kiến, số liệu). Không thêm chủ trương, chỉ tiêu, nhân sự mà họ không đưa.
-4. Tạo file bằng create_docx: dòng đầu là tên cơ quan ban hành; tiếp theo số, ký hiệu và địa danh - ngày; tên loại + trích yếu; nội dung; nơi nhận; chức danh ký. Mọi chỗ chưa có thông tin ghi '……'.
+3. TRA CỨU TRƯỚC KHI VIẾT (có web_search/web_fetch): tìm 2-3 văn bản Đảng thật cùng loại và lĩnh vực (VD 'kết luận của Ban Thường vụ về...', 'nghị quyết chuyên đề của Đảng ủy...', quy định của Trung ương liên quan) để lấy bố cục, cách lập luận và căn cứ (nghị quyết, chỉ thị, quy định, kết luận có thật, kèm số hiệu và ngày). Sau đó TỰ VIẾT ĐẦY ĐỦ nội dung: đánh giá tình hình, nguyên nhân, mục tiêu, nhiệm vụ, giải pháp, tổ chức thực hiện... bằng suy luận từ dữ liệu người dùng và kiến thức về công tác Đảng, theo văn phong cấp ủy. Ý kiến, kết luận, số liệu do người dùng đưa thì giữ đúng nguyên văn; phần còn lại bạn viết theo hướng hợp lý, chỉ tiêu và số liệu chưa có thì ghi giá trị tham khảo kèm '(dự kiến, cần xác nhận)'. Không bịa tên cán bộ, chức danh, số hiệu, ký hiệu; không giao bản chỉ có khung.
+4. Tạo file bằng create_docx: dòng đầu là tên cơ quan ban hành; tiếp theo số, ký hiệu và địa danh - ngày; tên loại + trích yếu; nội dung; nơi nhận; chức danh ký. Chỉ để '……' ở số, ký hiệu, ngày ban hành, họ tên và chức danh người ký chưa biết.
 5. Ở phần đầu file ghi rõ dòng "DỰ THẢO: cần đối chiếu thể thức với Hướng dẫn 05-HD/VPTW trước khi ban hành" (xóa trước khi chính thức).
 6. Báo người dùng danh sách điểm cần đối chiếu: font và cỡ chữ, ký hiệu loại văn bản, cách ghi số, chức danh ký, mức độ mật/khẩn, chữ viết tắt cơ quan.
 
@@ -48,9 +48,9 @@ description: "Soạn dự thảo nghị quyết, chỉ thị, kết luận, thô
 ## Checklist tự kiểm
 - [ ] File .docx đã tạo bằng create_docx và có dòng cảnh báo 'DỰ THẢO cần đối chiếu HD 05'.
 - [ ] Không có quốc hiệu, tiêu ngữ nhà nước ở đầu văn bản.
-- [ ] Mọi nhân sự, số liệu, ngày, chỉ tiêu có trong dữ liệu người dùng đưa; chỗ thiếu là '……'.
+- [ ] Nội dung chính đã viết đầy đủ (không chỉ khung); nhân sự, số hiệu, ngày không do bạn bịa (thiếu là '……'); chỉ tiêu/số ước tính ghi '(dự kiến, cần xác nhận)'; căn cứ dẫn là văn bản có thật đã tra.
 - [ ] Đã nêu danh sách điểm cần đối chiếu thể thức cho người dùng.
-- [ ] Mỗi nhiệm vụ trong kết luận có đơn vị phụ trách và thời hạn (hoặc '……' nếu nguồn không nói).
+- [ ] Mỗi nhiệm vụ trong kết luận có đơn vị phụ trách và thời hạn (đề xuất hợp lý, ghi '(dự kiến)' nếu người dùng chưa nêu).
 
 ## Lỗi thường gặp
 - Dùng thể thức nhà nước (quốc hiệu, tiêu ngữ) cho văn bản Đảng.
@@ -59,5 +59,5 @@ description: "Soạn dự thảo nghị quyết, chỉ thị, kết luận, thô
 
 ## Giới hạn
 - Chỉ là bản dự thảo để cán bộ văn phòng cấp ủy hoàn thiện; không ban hành, không ký.
-- Không bịa số hiệu, ký hiệu, chức danh, nội dung kết luận. Điều không chắc về thể thức: ghi 'cần đối chiếu HD 05-HD/VPTW'.
+- Không bịa số hiệu, ký hiệu, chức danh, tên người; nội dung lập luận thì tự viết đầy đủ. Điều không chắc về thể thức: ghi 'cần đối chiếu HD 05-HD/VPTW'.
 - Không đưa tài liệu nội bộ của Đảng lên dịch vụ bên ngoài.

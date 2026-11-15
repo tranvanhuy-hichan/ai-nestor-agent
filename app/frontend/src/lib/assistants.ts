@@ -2,7 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { tk } from '@/lib/i18n.ts'
 
-export interface Assistant { id: string; name: string; icon: string; group: string; description: string; starters: string[] }
+export type FormField = { key: string; label: string; type: 'text' | 'textarea' | 'select' | 'number' | 'file' | 'cv-template' | 'cv-profile'; required?: boolean; placeholder?: string; hint?: string; options?: string[]; accept?: string; multiple?: boolean }
+export type FormStep = { id: string; label: string; goal: string; task: string; fields: FormField[]; review: string[]; produces: string[]; submit?: string; optional?: boolean }
+export type FormFlow = { id: string; label: string; desc: string; steps: FormStep[] }
+export type FeatureForm = { experience?: { title: string; checks: string[]; handoff: string }; intro?: string; flows: FormFlow[]; panels?: string[] }
+export interface Assistant { builtin?: boolean; id: string; name: string; icon: string; group: string; description: string; starters: string[]; form?: FeatureForm; done_criteria?: string[]; deliverables?: string[] }
 
 export const GROUP_GOV = tk('Cơ quan nhà nước')
 export const GROUP_BIZ = tk('Doanh nghiệp')
@@ -13,7 +17,7 @@ export const GROUP_PERSONAL = tk('Cá nhân')
 /** Thứ tự và tên hiển thị của các nhóm trợ lý (slug do máy chủ trả về -> tên). */
 export const GROUPS: Record<string, string> = { 'co-quan': GROUP_GOV, 'doanh-nghiep': GROUP_BIZ, 'giao-vien': GROUP_TEACHER, 'hoc-sinh': GROUP_STUDENT, 'sinh-vien': GROUP_UNI, 'ca-nhan': GROUP_PERSONAL }
 /** Trợ lý hiện sẵn ở trang chủ và màn hình chat trống; các trợ lý còn lại nằm sau nút 'Xem tất cả'. */
-export const FEATURED = ['van-thu-nd30', 'bien-ban-hop', 'tong-hop-bao-cao', 'thu-ky', 'ke-toan', 'xao-de-thi', 'giao-an', 'ra-de-cham-bai', 'gia-su', 'viet-bai-nghien-cuu', 'tro-ly-ca-nhan']
+export const FEATURED = ['van-thu-nd30', 'bien-ban-hop', 'tong-hop-bao-cao', 'ra-soat-the-thuc', 'ke-toan', 'giao-an', 'ra-de-cham-bai', 'gia-su', 'viet-bai-nghien-cuu', 'slide-thuyet-trinh']
 export const GROUP_ORDER = Object.values(GROUPS)
 
 /** Danh sách dự phòng khi máy chủ chưa trả về /api/assistants. Chuỗi được dịch lúc hiển thị bằng t(). */

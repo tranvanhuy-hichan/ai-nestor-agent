@@ -9,6 +9,9 @@ description: Tạo nhiều mã đề từ một đề trắc nghiệm .docx: xá
 - Dùng: giáo viên có đề trắc nghiệm Word (.docx) và cần nhiều mã đề khác nhau, kèm bảng đáp án từng mã.
 - Không dùng: đề chỉ có tự luận; file PDF/.doc/ảnh chụp (nhờ lưu lại thành .docx; ảnh scan phải gõ lại); đề chưa soạn (dùng `ra-de-ma-tran`).
 
+## Cách nhận yêu cầu
+Trong trang chức năng "Ra đề và chấm bài", giáo viên có thể xáo đề ngay ở tab "Xáo đề thành nhiều mã" (tải file, nhận file zip, không qua trò chuyện). Khi giáo viên nhờ trong trò chuyện thì làm theo các bước dưới đây; nếu đề vừa soạn ở bước trước thì dùng thẳng file đó, không hỏi lại đường dẫn.
+
 ## Hỏi lại (gom MỘT lần bằng ask_user với `questions`)
 1. File đề gốc ở đâu (đã tải lên hay đường dẫn trong thư mục làm việc)? 2. Số mã đề (mặc định 4, tối đa 20) và mã bắt đầu (mặc định 101). 3. Xáo cả thứ tự câu hay chỉ xáo đáp án (mặc định xáo cả hai, trong từng phần). 4. Đề gốc có đánh dấu đáp án đúng (gạch chân, chữ đỏ, tô nền, in đậm) không? Nếu không, xin bảng đáp án dạng "1A 2C 3B …" cho tham số `dap_an`.
 

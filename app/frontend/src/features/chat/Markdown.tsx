@@ -6,6 +6,8 @@ import { Modal } from '@/components/ui/Modal'
 import { ErrorNote, Loading } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import { t, useLang } from '@/lib/i18n.ts'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 
 function Code({ code, lang }: { code: string; lang: string }) {
   const [copied, setCopied] = useState(false)
@@ -58,9 +60,18 @@ function SourceChip({ id, name, loc }: { id: string; name: string; loc: string }
   )
 }
 
+/** Only KaTeX-generated markup is inserted; model HTML remains escaped by React. */
+function MathFormula({ source, display }: { source: string; display: boolean }) {
+  const html = katex.renderToString(source, { displayMode: display, throwOnError: false, strict: 'ignore', trust: false, maxSize: 20, maxExpand: 1000, output: 'htmlAndMathml' })
+  return <span className={display ? 'math-display' : 'math-inline'} dangerouslySetInnerHTML={{ __html: html }} />
+}
+
 function inline(text: string): ReactNode[] {
-  const re = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\[\[src:[^\]\n]+\]\]|\[\^?\d+\]|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|(?<![*\w])\*[^*\s][^*\n]*?\*(?![*\w]))/g
+  const re = /(`[^`\n]+`|(?<!\\)\$\$[^\n]*?\$\$|\\\[[^\n]*?\\\]|\\\([^\n]*?\\\)|(?<![\\$])\$(?![\s$])(?:\\.|[^$\n\\])+?\$(?![\d$])|\*\*[^*\n]+\*\*|\[\[src:[^\]\n]+\]\]|\[\^?\d+\]|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|(?<![*\w])\*[^*\s][^*\n]*?\*(?![*\w]))/g
   return text.split(re).map((part, i) => {
+    if (part.startsWith('$$') && part.endsWith('$$') && part.length > 4) return <MathFormula key={i} source={part.slice(2, -2)} display />
+    if ((part.startsWith('\\[') && part.endsWith('\\]')) || (part.startsWith('\\(') && part.endsWith('\\)'))) return <MathFormula key={i} source={part.slice(2, -2)} display={part.startsWith('\\[')} />
+    if (part.startsWith('$') && part.endsWith('$') && part.length > 2) return <MathFormula key={i} source={part.slice(1, -1)} display={false} />
     const src = /^\[\[src:([^|\]]+)\|([^|\]]+)\|([^\]]+)\]\]$/.exec(part)
     if (src) return <SourceChip key={i} id={src[1].trim()} name={src[2].trim()} loc={src[3].trim()} />
     const cite = /^\[\^?(\d+)\]$/.exec(part)
@@ -75,9 +86,9 @@ function inline(text: string): ReactNode[] {
         </span>
       )
     }
-    if (/^\*[^*\s][^*\n]*\*$/.test(part)) return <em key={i}>{part.slice(1, -1)}</em>
+    if (/^\*[^*\s][^*\n]*\*$/.test(part)) return <em key={i}>{inline(part.slice(1, -1))}</em>
     if (part.startsWith('`') && part.endsWith('`') && part.length > 2) return <code key={i} className="rounded bg-panel2 px-1 py-0.5 font-mono text-[12.5px]">{part.slice(1, -1)}</code>
-    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) return <strong key={i}>{part.slice(2, -2)}</strong>
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) return <strong key={i}>{inline(part.slice(2, -2))}</strong>
     const link = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(part)
     if (link) return <a key={i} href={link[2]} target="_blank" rel="noreferrer noopener" className="text-info underline underline-offset-2">{link[1]}</a>
     return <Fragment key={i}>{part}</Fragment>
@@ -100,14 +111,14 @@ function Table({ head, rows, aligns }: { head: string[]; rows: string[][]; align
   )
 }
 
-/** Renderer markdown toi gian (code, in dam, link, danh sach) - khong dung innerHTML nen an toan voi noi dung do model sinh ra. */
+/** Markdown with local math rendering; raw model HTML is never interpreted. */
 export function Markdown({ text }: { text: string }) {
   const blocks = text.split(/```(\w*)\n?([\s\S]*?)(?:```|$)/g)
   const out: ReactNode[] = []
   for (let i = 0; i < blocks.length; i += 3) {
     const prose = blocks[i]
     if (prose.trim()) {
-      const lines = prose.replace(/^\n+|\n+$/g, '').split('\n')
+      const lines = prose.replace(/(`[^`\n]+`)|(?<!\\)(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\])/g, (match, code: string | undefined) => code ? match : match.replace(/\n/g, ' ')).replace(/^\n+|\n+$/g, '').split('\n')
       let list: string[] = []
       const flush = (key: string) => {
         if (list.length) out.push(<ul key={key} className="my-1.5 list-disc space-y-0.5 pl-5">{list.map((l, j) => <li key={j}>{inline(l)}</li>)}</ul>)

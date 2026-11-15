@@ -121,7 +121,7 @@ def test_van_thu_creates_nd30_docx(llm):
         if n == 0:
             return {"calls": [call("vanban_types", document_type_key="TO_TRINH")]}
         if n == 1:
-            return {"calls": [call("vanban_write_docx", path="to-trinh", document_type_key="TO_TRINH", paragraphs=json.dumps(to_trinh_paragraphs()))]}
+            return {"calls": [call("vanban_write_docx", path="to-trinh", document_type_key="TO_TRINH", paragraphs=json.dumps(to_trinh_paragraphs()), ngan_theo_yeu_cau=True)]}
         if n == 2:
             return {"calls": [call("review_vn_document", path="to-trinh.docx")]}
         return {"content": "1. ✓ đúng thể thức\nFile: to-trinh.docx"}
@@ -279,3 +279,91 @@ def test_workspace_skill_overrides_bundled(tmp_env):
     skillmod.create(cfg, n, "ban cua workspace", "NOI DUNG RIENG CUA WORKSPACE " * 5)
     s = skillmod.discover(cfg)[n]
     assert not s.bundled and "RIENG CUA WORKSPACE" in s.body
+
+
+# ---- form chuc nang (moi tro ly mot trang rieng) ----
+from argus.assistant_defs import forms as formsmod  # noqa: E402
+
+
+@pytest.mark.parametrize("d", assistants.BUILTIN, ids=lambda d: d["id"])
+def test_every_assistant_has_business_workflow(d):
+    """Moi chuc nang co quy trinh nghiep vu that: >=1 quy trinh co tu 3 buoc, moi buoc co muc tieu va tieu chi duyet."""
+    form = d.get("form")
+    assert form and form["flows"], f"{d['id']}: thieu quy trinh"
+    errs = formsmod.validate_form(d["id"], form)
+    assert not errs, errs
+    assert max(len(fl["steps"]) for fl in form["flows"]) >= 3, f"{d['id']}: can it nhat mot quy trinh tu 3 buoc"
+    for fl in form["flows"]:
+        for st in fl["steps"]:
+            assert len(st["review"]) >= 2, f"{d['id']}/{fl['id']}/{st['id']}: can >=2 tieu chi duyet"
+            assert len(st["task"]) >= 40, f"{d['id']}/{fl['id']}/{st['id']}: task qua so sai"
+
+
+@pytest.mark.parametrize("d", assistants.BUILTIN, ids=lambda d: d["id"])
+def test_workflow_mentions_only_real_tools_and_files(d):
+    """Buoc co san pham file thi tro ly phai co tool tao file tuong ung."""
+    allow = assistants.tool_allow(d["id"])
+    if allow is None:
+        return
+    need = {"docx": ("create_docx", "vanban_write_docx", "docx_fill_template", "shuffle_exam"), "xlsx": ("create_xlsx", "grade_summary", "shuffle_exam", "run_script"), "pptx": ("create_pptx",), "pdf": ("create_cv", "convert_to_pdf"), "html": ("create_cv",)}
+    for fl in d["form"]["flows"]:
+        for st in fl["steps"]:
+            for kind in st["produces"]:
+                assert kind in need, f"{d['id']}/{st['id']}: produces '{kind}' khong hop le (docx|xlsx|pptx|pdf|html)"
+                assert any(t in allow for t in need[kind]), f"{d['id']}/{st['id']}: tao .{kind} nhung allowlist khong co tool"
+
+
+def test_forms_reference_only_existing_assistants():
+    ids = {a["id"] for a in assistants.BUILTIN}
+    assert set(formsmod.FORMS) <= ids, set(formsmod.FORMS) - ids
+
+
+def test_exam_shuffle_lives_inside_exam_feature():
+    ids = {a["id"] for a in assistants.BUILTIN}
+    assert "xao-de-thi" not in ids  # khong con chuc nang rieng
+    a = assistants.get("ra-de-cham-bai")
+    assert "exam-shuffle" in a["form"]["panels"]
+    assert "xao-de-thi" in a["skills"] and "shuffle_exam" in a["tools"]
+
+
+def test_list_all_adds_default_form_to_custom_assistant(tmp_env):
+    assistants.save("tu-tao", {"name": "Tự tạo", "prompt": "p"}, True)
+    got = assistants.get("tu-tao")
+    assert got["form"]["flows"], got
+
+
+def test_vanban_write_docx_rejects_skeleton_but_accepts_full_draft(tmp_path):
+    from argus.services import tools_office as T
+    short = [{"role": "body", "text": "Nâng cấp quốc lộ để đảm bảo an toàn giao thông."}]
+    with pytest.raises(ValueError, match="quá ngắn"):
+        T._check_depth(short, "TO_TRINH")
+    full = [{"role": "body", "text": " ".join(["Nội dung chi tiết có lập luận và số liệu cụ thể."] * 70)}]
+    T._check_depth(full, "TO_TRINH")  # khong nem loi
+    T._check_depth(short, "GIAY_MOI")  # loai ngan: khong kiem
+    many = full + [{"role": "body", "text": "Tổng mức 100 tỷ (dự kiến, cần xác nhận)."}] * 8
+    with pytest.raises(ValueError, match="cần xác nhận"):
+        T._check_depth(many, "TO_TRINH")
+
+
+def test_van_thu_cannot_use_create_docx():
+    assert "create_docx" not in assistants.tool_allow("van-thu-nd30") and "vanban_write_docx" in assistants.tool_allow("van-thu-nd30")
+
+
+def test_create_docx_blocks_titlecase_admin_documents(tmp_path):
+    from argus.services import tools_office as T
+    assert T._looks_administrative("Tờ trình đề nghị phê duyệt chủ trương\nKính gửi: Bộ Giao thông Vận tải")
+
+
+def test_vanban_normalizes_header_and_footer_into_two_columns():
+    from argus.services import tools_office as T
+    flat = [{"role": r, "text": r} for r in ("national_name", "motto", "issuing_org", "document_number", "place_date")]
+    flat += [{"role": "document_type_title", "text": "TỜ TRÌNH"}, {"role": "body", "text": "Nội dung"},
+             {"role": "recipients_label", "text": "Nơi nhận:"}, {"role": "recipients_item", "text": "- Như trên;"},
+             {"role": "signature_authority", "text": "TM."}, {"role": "signature_name", "text": "…"}]
+    out, notes = T._normalize_layout(flat, "TO_TRINH")
+    assert len(notes) == 2 and out[0]["layout"] == "two_columns" and out[-1]["layout"] == "two_columns"
+    assert [l["role"] for l in out[0]["left_lines"]] == ["issuing_org", "document_number"]
+    assert [l["role"] for l in out[0]["right_lines"]] == ["national_name", "motto", "place_date"]
+    assert [l["role"] for l in out[-1]["right_lines"]] == ["signature_authority", "signature_name"]
+    again, n2 = T._normalize_layout(out, "TO_TRINH")
+    assert n2 == [] and again == out  # da dung thi khong dong cham

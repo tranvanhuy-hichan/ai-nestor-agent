@@ -91,3 +91,24 @@ button:disabled { cursor: not-allowed; }
 .logo-on-light { display: none; }
 .light .logo-on-dark { display: none; }
 .light .logo-on-light { display: block; }
+
+/* Workflow activity: indeterminate, respects the user's motion preference. */
+@keyframes workflow-rotate { to { transform: rotate(360deg); } }
+@keyframes workflow-breathe { 50% { transform: translateY(-3px); box-shadow: 0 6px 28px color-mix(in srgb, var(--accent) 18%, transparent); } }
+@keyframes workflow-dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+@keyframes workflow-shimmer { to { background-position: -200% 0; } }
+.workflow-orbit { animation: workflow-rotate 5s linear infinite; }
+.workflow-orbit-reverse { animation: workflow-rotate 7s linear infinite reverse; }
+.workflow-spinner { animation: workflow-rotate 1.2s linear infinite; }
+.workflow-breathe { animation: workflow-breathe 3s ease-in-out infinite; }
+.workflow-dot { animation: workflow-dot 1.4s ease-in-out infinite; }
+.workflow-shimmer { background: linear-gradient(100deg, color-mix(in srgb, var(--fg) 5%, transparent) 25%, color-mix(in srgb, var(--accent) 15%, transparent) 50%, color-mix(in srgb, var(--fg) 5%, transparent) 75%); background-size: 200% 100%; animation: workflow-shimmer 2.5s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .workflow-orbit, .workflow-orbit-reverse, .workflow-spinner, .workflow-breathe, .workflow-dot, .workflow-shimmer { animation: none; }
+}
+
+/* Long equations scroll within the message instead of widening the page. */
+.math-display { display: block; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: .25rem 0; }
+.math-display .katex-display { margin: .65em 0; }
+.math-inline { overflow-wrap: normal; }
+.math-inline .katex { font-size: 1.08em; }

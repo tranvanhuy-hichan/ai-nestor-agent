@@ -17,7 +17,18 @@ description: "Soạn công văn, tờ trình, báo cáo, quyết định, thông
 3. Nơi nhận (Kính gửi), nội dung/trích yếu, căn cứ pháp lý cần dẫn, số liệu đi kèm.
 4. Người ký, chức danh, ký trực tiếp hay TM./KT./TL./TUQ.; địa danh và ngày ban hành; số và ký hiệu (chưa có thì để ……).
 5. Có file mẫu hoặc văn bản cũ của cơ quan không (đọc bằng read_document).
-Câu nào người dùng đã nêu thì KHÔNG hỏi lại. Thông tin còn lại không thiết yếu: để '……', ghi giả định.
+Câu nào người dùng đã nêu thì KHÔNG hỏi lại. Số/ký hiệu, ngày ban hành, người ký chưa biết thì để '……' và đi tiếp; KHÔNG hỏi thêm về nội dung, tự viết (xem mục 'Viết nội dung đầy đủ').
+
+## Viết nội dung đầy đủ (bắt buộc, không giao khung rỗng)
+Người dùng chỉ đưa một câu như 'soạn tờ trình đề nghị xây dựng quốc lộ 14E' vẫn phải nhận được văn bản hoàn chỉnh, đọc là dùng được. Bạn tự suy luận và tự viết toàn bộ phần lập luận.
+1. TRA CỨU TRƯỚC KHI VIẾT (có web_search/web_fetch): tìm 2-3 văn bản thật cùng loại và cùng lĩnh vực (VD 'tờ trình đề nghị chủ trương đầu tư dự án đường giao thông', 'căn cứ Luật Đầu tư công 2024', 'quy hoạch mạng lưới đường bộ') để lấy bố cục, cách lập luận, và căn cứ pháp lý đang có hiệu lực. Mở trang chứa văn bản bằng web_fetch khi cần đọc kỹ. Chỉ dẫn căn cứ bạn đã thấy tận mắt kèm số hiệu và ngày ban hành; không chắc thì ghi 'cần kiểm chứng'.
+2. Bộ khung nội dung theo loại (viết thành câu, đoạn đầy đủ, không để tiêu đề trơ):
+   - Tờ trình: (1) Sự cần thiết/căn cứ pháp lý và thực tiễn; (2) Mục tiêu, phạm vi, quy mô, địa điểm, hình thức đầu tư/giải pháp; (3) Sơ bộ tổng mức, nguồn lực, tiến độ (số ước tính ghi '(dự kiến, cần xác nhận)'); (4) Hiệu quả và rủi ro; (5) Kiến nghị cụ thể mong cấp trên quyết định, kèm hồ sơ đính kèm.
+   - Công văn: căn cứ/lý do, nội dung đề nghị hoặc trả lời có hạn và đầu mối, trách nhiệm thực hiện.
+   - Báo cáo: tình hình và số liệu, kết quả, tồn tại và nguyên nhân, phương hướng, kiến nghị. Quyết định: căn cứ, điều khoản nội dung, hiệu lực, trách nhiệm thi hành. Kế hoạch: mục đích yêu cầu, nội dung, phân công, thời gian, kinh phí. Thông báo/giấy mời: thời gian, địa điểm, thành phần, nội dung, chuẩn bị.
+3. Số liệu cụ thể chưa được cung cấp (chiều dài tuyến, tổng mức đầu tư...): nếu tra cứu hoặc suy ra được thì điền số tham khảo kèm '(dự kiến, cần xác nhận)'; nếu hoàn toàn không có cơ sở thì viết câu định tính ('khoảng … km') chứ không bỏ cả đoạn.
+4. Chỉ '……' ở: số/ký hiệu, ngày ban hành, họ tên người ký (và địa danh nếu thật sự không biết). Không lấy tên người dùng làm người ký nếu họ chưa nói.
+5. Độ dài: tờ trình/báo cáo thường 2-4 trang nội dung; công văn 1-2 trang. Bản chỉ có tiêu đề và vài dấu '……' là chưa đạt.
 
 ## Công cụ
 | Việc | Công cụ |
@@ -30,16 +41,22 @@ Câu nào người dùng đã nêu thì KHÔNG hỏi lại. Thông tin còn lạ
 | Xuất PDF khi người dùng cần | convert_to_pdf(path) |
 | Văn bản dài, nhiều phần | plan_set rồi làm lần lượt |
 | Tìm căn cứ trong kho tài liệu của người dùng | kb_search |
+| Tìm văn bản mẫu và căn cứ pháp lý trên internet | web_search, web_fetch |
 
 ## Quy trình từng bước
 1. vanban_types để chọn document_type_key; rồi vanban_types(document_type_key=...) lấy structure. Không tự bịa key hay role.
 2. Có mẫu/văn bản cũ: read_document để lấy cấu trúc mục, văn phong, nội dung cố định (tên cơ quan in sẵn, câu khung) và chép NGUYÊN VĂN phần cố định; bỏ qua mọi thông tin định dạng của mẫu (font, cỡ, canh lề chỉ do writer quyết định).
 3. Lập dàn ý đúng thứ tự structure. Mẫu có thể có thêm mục phụ nhưng không được thiếu role bắt buộc; role bắt buộc chưa có nội dung vẫn tạo với '……'.
-4. Viết nội dung từ dữ liệu thật. Số văn bản, ngày ký, người ký, số tiền, căn cứ pháp lý: thiếu thì '……', không bịa.
+4. Tra cứu mẫu và căn cứ (web_search/web_fetch), rồi viết ĐẦY ĐỦ nội dung theo mục 'Viết nội dung đầy đủ'. Chỉ số văn bản, ngày ký, người ký để '……'; số tiền ước tính ghi '(dự kiến, cần xác nhận)'; căn cứ pháp lý chỉ dẫn văn bản có thật đã tra.
 5. Dựng paragraphs theo mẫu trong templates/ (xem bên dưới) rồi thay nội dung. Mỗi dòng trong left_lines/right_lines là OBJECT {"role","text"}, không phải chuỗi.
 6. vanban_write_docx đúng một lần. Có CẢNH BÁO thiếu role hoặc lỗi cấu trúc thì sửa đúng chỗ, gọi lại tối đa một lần.
 7. review_vn_document; còn [LỖI] thì sửa nội dung và tạo lại (không sửa tay file).
 8. Báo người dùng: đường dẫn file, các chỗ '……' cần điền, điểm cần kiểm chứng (căn cứ pháp lý, số liệu), việc họ cần quyết định (ký thay, số hiệu).
+
+## BỐ CỤC ĐẦU VÀ CUỐI VĂN BẢN (bắt buộc dùng two_columns)
+- Đầu văn bản là MỘT khối layout two_columns: BÊN TRÁI = cơ quan chủ quản (parent_org), cơ quan ban hành (issuing_org), số ký hiệu (document_number) [công văn thêm trích yếu summary_cong_van]; BÊN PHẢI = quốc hiệu (national_name), tiêu ngữ (motto), địa danh - ngày tháng (place_date). KHÔNG xếp các dòng này thành các đoạn dọc ở giữa trang.
+- Cuối văn bản là MỘT khối two_columns: BÊN TRÁI = Nơi nhận, BÊN PHẢI = quyền hạn ký, chức vụ, họ tên.
+- Cứ sao chép khối đầu và khối cuối từ templates/, chỉ đổi chữ. Công cụ vanban_write_docx tự ghép lại nếu bạn lỡ để rời, nhưng đừng dựa vào đó.
 
 ## Mẫu đầu ra
 Thư mục templates/ có sẵn paragraphs JSON hợp lệ (đã kiểm tra bằng writer) để sao chép và thay chữ:
@@ -67,7 +84,8 @@ Ví dụ nhập - xuất: "Soạn công văn đôn đốc các phòng nộp báo
 - [ ] Mỗi role một dòng một text; tên cơ quan không bị tự tách dòng; quốc hiệu nằm trọn một dòng.
 - [ ] Nơi nhận và chữ ký nằm cạnh nhau (two_columns), kể cả một người ký.
 - [ ] Mục La Mã là section_heading (đậm); từng văn bản pháp luật dẫn chiếu là legal_basis.
-- [ ] Không số hiệu, ngày, tên người, số tiền, điều luật nào do bạn tự nghĩ; chỗ thiếu là '……'.
+- [ ] Phần nội dung chính đã viết đầy đủ (không chỉ khung); '……' chỉ ở số/ký hiệu, ngày ký, người ký.
+- [ ] Mọi văn bản pháp luật dẫn chiếu là có thật (đã tra), đúng số hiệu; số ước tính ghi '(dự kiến, cần xác nhận)'; không bịa tên người.
 - [ ] Địa danh/cấp hành chính theo mô hình hai cấp; không còn tên huyện/quận cũ ngoài ý muốn.
 - [ ] Đã liệt kê cho người dùng các chỗ '……' và điểm cần kiểm chứng.
 
