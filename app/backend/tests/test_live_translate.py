@@ -163,7 +163,7 @@ def test_transcribe_returns_source_only(upstream):
     calls, responses = upstream
     responses.append(httpx.Response(200, json={"text": " Hello there "}))
     result = live.transcribe(live.TranscribeBody(audio=body().audio, mime="audio/webm", transcriber="groq"))
-    assert result == {"text": "Hello there"} and len(calls) == 1
+    assert result["text"] == "Hello there" and len(calls) == 1
 
 
 def test_stream_emits_deltas_and_done(monkeypatch):
@@ -193,3 +193,18 @@ def test_stream_emits_deltas_and_done(monkeypatch):
 
     events = asyncio.run(collect())
     assert [e.get("delta") for e in events[:2]] == ["Xin ", "chào"] and events[-1] == {"done": True}
+
+
+def test_transcribe_drops_hallucinated_segments(upstream):
+    _, responses = upstream
+    responses.append(httpx.Response(200, json={"language": "vi", "text": "x", "segments": [
+        {"text": " Chào mừng các bạn", "no_speech_prob": .9, "avg_logprob": -.2, "compression_ratio": 1},
+        {"text": " real speech", "no_speech_prob": .1, "avg_logprob": -.3, "compression_ratio": 1.2}]}))
+    result = live.transcribe(live.TranscribeBody(audio=body().audio, mime="audio/webm", transcriber="groq"))
+    assert result["text"] == "real speech"
+
+
+def test_refine_prompt_translates_whole_sentence():
+    body = live.StreamBody(text="Before we begin, I want to say hi.", target="vi", translator="groq", refine=True)
+    assert "COMPLETE sentence" in live._stream_prompt(body)
+    assert "FRAGMENT" in live._stream_prompt(live.StreamBody(text="x", target="vi", translator="groq"))

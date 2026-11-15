@@ -10,6 +10,7 @@ export function useLiveTranslation(voice: string) {
   const [starting, setStarting] = useState(false)
   const [pending, setPending] = useState(0)
   const [captions, setCaptions] = useState<Caption[]>([])
+  const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
   const [voiceError, setVoiceError] = useState('')
   const [voiceReady, setVoiceReady] = useState(false)
@@ -139,7 +140,7 @@ export function useLiveTranslation(voice: string) {
         let out = ''
         try {
           const response = await fetch('/api/live-translate/stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.current.signal,
-            body: JSON.stringify({ text, target: lang, translator: settings.translator, previous_source: prevSource, previous_translation: prevTranslation }) })
+            body: JSON.stringify({ text, target: lang, translator: settings.translator, previous_source: prevSource, previous_translation: prevTranslation, refine: true }) })
           if (!response.ok || !response.body) throw new Error('stream')
           const reader = response.body.getReader(), decoder = new TextDecoder()
           let buffer = ''
@@ -155,6 +156,7 @@ export function useLiveTranslation(voice: string) {
               if (event.delta && generation === epoch.current) { out += event.delta; history.translation[lang] = out; patch(id, lang, out) }
             }
           }
+          if (!out.trim() && generation === epoch.current) { out = text; patch(id, lang, out) } // model returned nothing: keep the source visible
           const lang0 = voiceRef.current
           if (lang0 === lang && out.trim() && !voiceFailed.current && generation === epoch.current) {
             const parts = speechSegments(out)
@@ -162,8 +164,31 @@ export function useLiveTranslation(voice: string) {
             else { spoken.current.push(...parts.map((t) => ({ text: t, lang }))); primeSpeech(); void readNext() }
           }
         } catch (e) {
-          if (generation === epoch.current && !(e instanceof DOMException && e.name === 'AbortError')) patch(id, lang, out || '⚠ Chưa dịch được đoạn này')
+          if (generation === epoch.current && !(e instanceof DOMException && e.name === 'AbortError')) patch(id, lang, out || '⚠ Chưa dịch được câu này')
         } finally { translating--; if (generation === epoch.current) sync() }
+        return out
+      }
+      const buffer = { text: '', start: 0, end: 0, language: '' }
+      let idleTimer = 0, chain: Promise<unknown> = Promise.resolve()
+      const flushSentence = () => {
+        clearTimeout(idleTimer)
+        if (!buffer.text || generation !== epoch.current) return
+        const { text, start, end, language } = buffer
+        buffer.text = ''; setDraft('')
+        const id = nextId++
+        translating++; sync()
+        // Strictly sequential: the next sentence waits for this one to finish.
+        chain = chain.then(async () => {
+          if (generation !== epoch.current) return
+          const prevSource = history.source, prevTr = { ...history.translation }
+          history.source = text
+          setCaptions((p) => [...p, { id, start, end, text, translations: Object.fromEntries(settings.targets.map((t) => [t, ''])) }])
+          await Promise.all(settings.targets.map((lang) => {
+            const base = lang.toLowerCase().split('-')[0]
+            if (language && (language === base || language.startsWith(base))) { patch(id, lang, text); return null }
+            return streamTranslation(id, lang, text, prevSource, prevTr[lang] ?? '')
+          }))
+        }).finally(() => { translating--; if (generation === epoch.current) sync() })
       }
       const drain = async () => {
         if (processing) return
@@ -179,21 +204,25 @@ export function useLiveTranslation(voice: string) {
             if (generation !== epoch.current) break
             const text = String(result.text || '').trim()
             if (!text) continue
-            const id = nextId++
-            const prevSource = history.source, prevTr = { ...history.translation }
-            history.source = text
+            const norm = (v: string) => v.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+            if (norm(text) === norm(buffer.text.split(' ').slice(-12).join(' ')) || norm(text) === norm(history.source)) continue // repeated hallucination
+            if (!buffer.text) buffer.start = item.start
+            buffer.text = `${buffer.text} ${text}`.trim(); buffer.end = item.end; buffer.language = String(result.language || '').toLowerCase()
             previous = `${previous} ${text}`.trim().slice(-400)
-            setCaptions((p) => [...p, { id, start: item.start, end: item.end, text, translations: Object.fromEntries(settings.targets.map((t) => [t, ''])) }])
-            for (const lang of settings.targets) void streamTranslation(id, lang, text, prevSource, prevTr[lang] ?? '')
+            setDraft(buffer.text)
+            clearTimeout(idleTimer)
+            // A sentence is translated only when complete, so meaning is whole and order is preserved.
+            if (/[.!?。？！…]["'”’)\]]*$/.test(text) || buffer.text.length > 260) flushSentence()
+            else idleTimer = window.setTimeout(flushSentence, 2500)
           }
         } catch (e) {
           if (generation === epoch.current && !(e instanceof DOMException && e.name === 'AbortError')) { setError(e instanceof Error ? e.message : 'Không dịch được âm thanh.'); stop(); dispose(); setPending(0) }
         } finally {
           processing = false
-          if (generation === epoch.current) { sync(); if (queue.length) void drain() }
+          if (generation === epoch.current) { sync(); if (queue.length) void drain(); else if (!live.current) flushSentence() }
         }
       }
-      live.current = true; setCaptions([]); setRunning(true)
+      live.current = true; setCaptions([]); setDraft(''); setRunning(true)
       let recorder: MediaRecorder | null = null
       const record = () => {
         if (!live.current || generation !== epoch.current) return
@@ -219,9 +248,9 @@ export function useLiveTranslation(voice: string) {
         const now = performance.now(), audible = Math.sqrt(samples.reduce((n, v) => n + v * v, 0) / samples.length) > .008
         sound ||= audible; if (audible) lastSound = now
         setLevel(audible)
-        // Realtime: cut at a tiny breath after ~1s, or at 2.5s at the latest.
+        // Realtime: cut at a short breath after ~1.5s, or at 3.5s at the latest.
         const duration = (now - origin) / 1000 - segmentStart
-        if (recorder?.state === 'recording' && (duration >= 2.5 || (duration >= 1 && sound && now - lastSound >= 250))) recorder.stop()
+        if (recorder?.state === 'recording' && (duration >= 3.5 || (duration >= 1.5 && sound && now - lastSound >= 300))) recorder.stop()
       }, 100)
       capture.current = () => { clearInterval(meter); if (generation === epoch.current) setPending((p) => Math.max(1, p)); if (recorder?.state === 'recording') recorder.stop(); stream.getTracks().forEach((t) => t.stop()); void context.close() }
       stream.getVideoTracks()[0]?.addEventListener('capturehandlechange', () => {
@@ -234,5 +263,5 @@ export function useLiveTranslation(voice: string) {
       if (generation === epoch.current) { capture.current?.(); capture.current = null; setError(e instanceof DOMException && e.name === 'NotAllowedError' ? 'Bạn chưa cho phép chia sẻ tab. Bấm bắt đầu để thử lại.' : e instanceof Error ? e.message : 'Không mở được âm thanh.') }
     } finally { if (generation === epoch.current) setStarting(false) }
   }
-  return { running, starting, pending, captions, error, voiceError, voiceReady, prepareVoice, level, start, stop, stopVoice }
+  return { running, starting, pending, captions, draft, error, voiceError, voiceReady, prepareVoice, level, start, stop, stopVoice }
 }
