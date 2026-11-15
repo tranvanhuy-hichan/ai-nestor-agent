@@ -97,31 +97,31 @@ export const SAMPLE_CV: CvData = {
   interests: 'Mã nguồn mở\nCờ vua\nChạy bộ',
 };
 
-const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
-const arr = <T,>(v: unknown, max: number, f: (x: Record<string, unknown>) => T): T[] =>
-  Array.isArray(v) ? v.slice(0, max).filter((x) => x && typeof x === 'object').map((x) => f(x as Record<string, unknown>)) : [];
+const str = (v: unknown) => (typeof v === 'string' ? v : '');
+const arr = <T,>(v: unknown, f: (x: Record<string, unknown>) => T): T[] =>
+  Array.isArray(v) ? v.filter((x) => x && typeof x === 'object').map((x) => f(x as Record<string, unknown>)) : [];
 
-/** Any stored / imported JSON -> a complete CvData (bad fields dropped, text capped). */
+/** Any stored / imported JSON -> a complete CvData (invalid shapes ignored, complete text and all valid entries retained). */
 export function normalizeCv(raw: unknown): CvData {
   const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const photo = typeof r.photo === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(r.photo) && r.photo.length < 400_000 ? r.photo : '';
   return {
-    name: str(r.name, 80), title: str(r.title, 100), email: str(r.email, 100), phone: str(r.phone, 30), address: str(r.address, 140), website: str(r.website, 140),
-    photo, summary: str(r.summary, 1200),
-    experience: arr(r.experience, 12, (x) => ({ id: str(x.id, 20) || cvId(), role: str(x.role, 100), company: str(x.company, 100), from: str(x.from, 20), to: str(x.to, 20), desc: str(x.desc, 1200) })),
-    education: arr(r.education, 8, (x) => ({ id: str(x.id, 20) || cvId(), school: str(x.school, 120), degree: str(x.degree, 120), from: str(x.from, 20), to: str(x.to, 20), desc: str(x.desc, 600), links: arr(x.links, 5, (l) => ({ id: str(l.id, 20) || cvId(), label: str(l.label, 30), url: safeUrl(l.url) })).filter((l) => l.url) })),
-    skills: arr(r.skills, 20, (x) => ({ id: str(x.id, 20) || cvId(), name: str(x.name, 60), level: Math.min(5, Math.max(1, Math.round(Number(x.level)) || 3)) })),
-    languages: arr(r.languages, 8, (x) => ({ id: str(x.id, 20) || cvId(), name: str(x.name, 40), level: str(x.level, 40) })),
-    projects: arr(r.projects, 8, (x) => ({ id: str(x.id, 20) || cvId(), name: str(x.name, 100), desc: str(x.desc, 600), links: arr(x.links, 5, (l) => ({ id: str(l.id, 20) || cvId(), label: str(l.label, 30), url: safeUrl(l.url) })).filter((l) => l.url) })),
-    awards: str(r.awards, 800),
-    highlights: arr(r.highlights, 4, (x) => ({ id: str(x.id, 20) || cvId(), value: str(x.value, 12), label: str(x.label, 40) })),
-    interests: str(r.interests, 300),
+    name: str(r.name), title: str(r.title), email: str(r.email), phone: str(r.phone), address: str(r.address), website: str(r.website),
+    photo, summary: str(r.summary),
+    experience: arr(r.experience, (x) => ({ id: str(x.id) || cvId(), role: str(x.role), company: str(x.company), from: str(x.from), to: str(x.to), desc: str(x.desc) })),
+    education: arr(r.education, (x) => ({ id: str(x.id) || cvId(), school: str(x.school), degree: str(x.degree), from: str(x.from), to: str(x.to), desc: str(x.desc), links: arr(x.links, (l) => ({ id: str(l.id) || cvId(), label: str(l.label), url: safeUrl(l.url) })).filter((l) => l.url) })),
+    skills: arr(r.skills, (x) => ({ id: str(x.id) || cvId(), name: str(x.name), level: Math.min(5, Math.max(1, Math.round(Number(x.level)) || 3)) })),
+    languages: arr(r.languages, (x) => ({ id: str(x.id) || cvId(), name: str(x.name), level: str(x.level) })),
+    projects: arr(r.projects, (x) => ({ id: str(x.id) || cvId(), name: str(x.name), desc: str(x.desc), links: arr(x.links, (l) => ({ id: str(l.id) || cvId(), label: str(l.label), url: safeUrl(l.url) })).filter((l) => l.url) })),
+    awards: str(r.awards),
+    highlights: arr(r.highlights, (x) => ({ id: str(x.id) || cvId(), value: str(x.value), label: str(x.label) })),
+    interests: str(r.interests),
   };
 }
 
 /** Only http(s) links are kept; a bare domain such as github.com/x gets https:// in front. Anything else becomes ''. */
 export function safeUrl(v: unknown): string {
-  let u = typeof v === 'string' ? v.trim().slice(0, 300) : '';
+  let u = typeof v === 'string' ? v.trim() : '';
   if (!u || /\s/.test(u)) return '';
   if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = /^[\w-]+(\.[\w-]+)+([/?#:]|$)/.test(u) ? `https://${u}` : '';
   return /^https?:\/\/[^/]+\.[^/]+/i.test(u) ? u : '';

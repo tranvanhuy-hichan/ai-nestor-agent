@@ -7,9 +7,24 @@ from pathlib import Path
 
 from .tools import tool, _resolve
 from .tools_office import _out, _json
+from .cv_content import profile_from_messages, preserve_profile
 
 
-@tool("create_cv", "Tạo CV đẹp từ mẫu mystore đã được người dùng chọn. Xuất PDF A4 và HTML cùng bố cục, kèm JSON để sửa lại. KHÔNG tự chọn mẫu và KHÔNG dùng dữ liệu mẫu. data là JSON: name,title,email,phone,address,website,summary, experience:[{role,company,from,to,desc}], education:[{school,degree,from,to,desc}], skills:[{name}], languages:[{name,level}], projects:[{name,desc}], awards (chuỗi mỗi dòng một mục), highlights:[{value,label}], interests (chuỗi mỗi dòng một mục), photo_path (đường dẫn ảnh chân dung đã tải lên nếu có). Tất cả mục không có thông tin để trống; không bịa thành tích. lang=vi hoặc en.",
+@tool("read_cv_profile", "Đọc form CV gốc trong cùng phiên để biên tập đầy đủ, lấy đúng ID mỗi mục khi create_cv báo thiếu. Không đọc dữ liệu CV do AI tạo. Có thể chọn section như projects, experience, skills, summary để đọc riêng.",
+      {"section": ("string", "Tên mục cần đọc, để trống đọc toàn bộ form gốc")}, required=[])
+def read_cv_profile(ctx, section=""):
+    if not ctx.session_id:
+        raise ValueError("Không có phiên CV để đọc form gốc.")
+    from . import sessions
+    profile = profile_from_messages(sessions.messages(ctx.session_id))
+    if not profile:
+        raise ValueError("Chưa có form CV gốc trong phiên này.")
+    if section:
+        return json.dumps({"template": profile['template'], "section": section, "data": profile['data'].get(section), "skipped_sections": profile['skipped_sections']}, ensure_ascii=False)
+    return json.dumps(profile, ensure_ascii=False)
+
+
+@tool("create_cv", "Tạo CV đẹp từ mẫu mystore đã được người dùng chọn. Xuất PDF A4 và HTML cùng bố cục, kèm JSON để sửa lại. KHÔNG tự chọn mẫu và KHÔNG dùng dữ liệu mẫu. Giữ đầy đủ mọi mục, chi tiết và ID trong form; không tự tóm tắt hoặc bỏ dự án. data là JSON: name,title,email,phone,address,website,summary, experience:[{role,company,from,to,desc}], education:[{school,degree,from,to,desc}], skills:[{name}], languages:[{name,level}], projects:[{name,desc}], awards (chuỗi mỗi dòng một mục), highlights:[{value,label}], interests (chuỗi mỗi dòng một mục), photo_path (đường dẫn ảnh chân dung đã tải lên nếu có). Tất cả mục không có thông tin để trống; không bịa thành tích. lang=vi hoặc en.",
       {"path": ("string", "Tên file PDF, vd cv-nguyen-van-a.pdf"), "template": ("string", "ID mẫu người dùng đã chọn trong form; phải dùng đúng ID"), "data": ("string", "JSON hồ sơ thật với cấu trúc mô tả ở trên"), "lang": ("string", "vi hoặc en"), "skipped_sections": ("string", "JSON mảng các mục người dùng chọn bỏ qua, ví dụ [\"experience\",\"awards\"]") },
       required=["path", "template", "data"], risk="file")
 def create_cv(ctx, path, template, data, lang="vi", skipped_sections="[]"):
@@ -17,6 +32,15 @@ def create_cv(ctx, path, template, data, lang="vi", skipped_sections="[]"):
     if not isinstance(payload, dict) or not str(payload.get("name") or "").strip():
         raise ValueError("Cần họ tên thật trong data.name; hỏi người dùng nếu chưa có.")
     payload = dict(payload)
+    restored = []
+    if ctx.session_id:
+        from . import sessions
+        original = profile_from_messages(sessions.messages(ctx.session_id))
+        if original:
+            if original['template'] != template:
+                raise ValueError("Phải dùng đúng mẫu trong form gần nhất: " + original['template'])
+            payload, restored = preserve_profile(original, payload)
+            skipped_sections = original['skipped_sections']
     skipped = _json(skipped_sections, "Mục bỏ qua")
     allowed_sections = {"summary", "experience", "education", "skills", "languages", "projects", "awards", "highlights", "interests"}
     if not isinstance(skipped, list) or any(not isinstance(k, str) or k not in allowed_sections for k in skipped):
@@ -37,7 +61,7 @@ def create_cv(ctx, path, template, data, lang="vi", skipped_sections="[]"):
     pdf = _out(ctx, path, ".pdf")
     html = _out(ctx, str(pdf.with_suffix(".html")), ".html")
     source = _out(ctx, str(pdf.with_suffix(".json")), ".json")
-    request = {"template": template, "data": payload, "lang": lang, "skipped_sections": skipped}
+    request = {"template": template, "data": payload, "lang": lang, "skipped_sections": skipped, "restored_fields": restored}
     result = subprocess.run([node, str(renderer)], input=json.dumps(request, ensure_ascii=False), capture_output=True, text=True, timeout=45)
     if result.returncode:
         raise ValueError("Không dựng được mẫu CV: " + result.stderr[-1200:])
@@ -56,10 +80,13 @@ def create_cv(ctx, path, template, data, lang="vi", skipped_sections="[]"):
             page.route("**/*", lambda route: route.abort())
             page.set_content(result.stdout, wait_until="load")
             page.evaluate("document.fonts.ready")
-            # Keep readable type. Report overflow rather than clipping or shrinking away content.
-            height = page.locator('.cv-document').evaluate('(el) => el.scrollHeight')
+            # Let Chromium paginate the full document at readable type size.
             page.pdf(path=str(pdf), format="A4", print_background=True, prefer_css_page_size=True)
         finally:
             browser.close()
-    pages_note = " Nội dung dài hơn một trang; rút gọn nội dung và chạy lại nếu cần CV một trang." if height > 1125 else ""
-    return f"Đã tạo CV theo mẫu {template}:\nPDF: {pdf}\nHTML xem/in: {html}\nDữ liệu để sửa: {source}" + pages_note
+    from pypdf import PdfReader
+    pages = len(PdfReader(pdf).pages)
+    coverage = "\nĐối chiếu form: " + ", ".join(f"{k}: {len(payload[k])} mục" for k in sorted(allowed_sections) if isinstance(payload.get(k), list))
+    if restored:
+        coverage += "\nĐã giữ lại nội dung gốc bị bản biên tập bỏ hoặc rút ngắn: " + ", ".join(restored)
+    return f"Đã tạo CV theo mẫu {template}:\nPDF: {pdf}\nHTML xem/in: {html}\nDữ liệu để sửa: {source}\nSố trang: {pages}" + coverage

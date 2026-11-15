@@ -134,7 +134,9 @@ export function FlowRunner({ a, flow, provider = null, navigation }: { a: Assist
 
   const advance = (skipped = false) => {
     update({ idx: st.idx + 1, done: skipped ? st.done : [...st.done, step.id] })
-    setValues(draftValues(k, st.idx + 1, flow.steps[st.idx + 1]?.fields ?? [])); setFiles({}); setFix(''); setTicks([])
+    const next = draftValues(k, st.idx + 1, flow.steps[st.idx + 1]?.fields ?? [])
+    if (a.id === 'cv-viec-lam' && values.mau_cv && flow.steps[st.idx + 1]?.fields.some((f) => f.key === 'mau_cv')) next.mau_cv = values.mau_cv
+    setValues(next); setFiles({}); setFix(''); setTicks([])
   }
   const redo = () => {
     try { for (let i = 0; i < total; i++) localStorage.removeItem(`${k}:draft:${i}`) } catch { /* storage unavailable */ }

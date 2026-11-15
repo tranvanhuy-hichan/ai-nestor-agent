@@ -22222,74 +22222,74 @@ var emptyCv = () => ({
 	interests: ""
 });
 "" + encodeURIComponent("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 200 200\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#cbd5e1\"/><stop offset=\"1\" stop-color=\"#94a3b8\"/></linearGradient></defs><rect width=\"200\" height=\"200\" fill=\"url(#g)\"/><circle cx=\"100\" cy=\"78\" r=\"36\" fill=\"#f8fafc\"/><path d=\"M30 200c0-44 30-72 70-72s70 28 70 72z\" fill=\"#f8fafc\"/></svg>");
-var str = (v, max) => typeof v === "string" ? v.slice(0, max) : "";
-var arr = (v, max, f) => Array.isArray(v) ? v.slice(0, max).filter((x) => x && typeof x === "object").map((x) => f(x)) : [];
-/** Any stored / imported JSON -> a complete CvData (bad fields dropped, text capped). */
+var str = (v) => typeof v === "string" ? v : "";
+var arr = (v, f) => Array.isArray(v) ? v.filter((x) => x && typeof x === "object").map((x) => f(x)) : [];
+/** Any stored / imported JSON -> a complete CvData (invalid shapes ignored, complete text and all valid entries retained). */
 function normalizeCv(raw) {
 	const r = raw && typeof raw === "object" ? raw : {};
 	const photo = typeof r.photo === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(r.photo) && r.photo.length < 4e5 ? r.photo : "";
 	return {
-		name: str(r.name, 80),
-		title: str(r.title, 100),
-		email: str(r.email, 100),
-		phone: str(r.phone, 30),
-		address: str(r.address, 140),
-		website: str(r.website, 140),
+		name: str(r.name),
+		title: str(r.title),
+		email: str(r.email),
+		phone: str(r.phone),
+		address: str(r.address),
+		website: str(r.website),
 		photo,
-		summary: str(r.summary, 1200),
-		experience: arr(r.experience, 12, (x) => ({
-			id: str(x.id, 20) || cvId(),
-			role: str(x.role, 100),
-			company: str(x.company, 100),
-			from: str(x.from, 20),
-			to: str(x.to, 20),
-			desc: str(x.desc, 1200)
+		summary: str(r.summary),
+		experience: arr(r.experience, (x) => ({
+			id: str(x.id) || cvId(),
+			role: str(x.role),
+			company: str(x.company),
+			from: str(x.from),
+			to: str(x.to),
+			desc: str(x.desc)
 		})),
-		education: arr(r.education, 8, (x) => ({
-			id: str(x.id, 20) || cvId(),
-			school: str(x.school, 120),
-			degree: str(x.degree, 120),
-			from: str(x.from, 20),
-			to: str(x.to, 20),
-			desc: str(x.desc, 600),
-			links: arr(x.links, 5, (l) => ({
-				id: str(l.id, 20) || cvId(),
-				label: str(l.label, 30),
+		education: arr(r.education, (x) => ({
+			id: str(x.id) || cvId(),
+			school: str(x.school),
+			degree: str(x.degree),
+			from: str(x.from),
+			to: str(x.to),
+			desc: str(x.desc),
+			links: arr(x.links, (l) => ({
+				id: str(l.id) || cvId(),
+				label: str(l.label),
 				url: safeUrl(l.url)
 			})).filter((l) => l.url)
 		})),
-		skills: arr(r.skills, 20, (x) => ({
-			id: str(x.id, 20) || cvId(),
-			name: str(x.name, 60),
+		skills: arr(r.skills, (x) => ({
+			id: str(x.id) || cvId(),
+			name: str(x.name),
 			level: Math.min(5, Math.max(1, Math.round(Number(x.level)) || 3))
 		})),
-		languages: arr(r.languages, 8, (x) => ({
-			id: str(x.id, 20) || cvId(),
-			name: str(x.name, 40),
-			level: str(x.level, 40)
+		languages: arr(r.languages, (x) => ({
+			id: str(x.id) || cvId(),
+			name: str(x.name),
+			level: str(x.level)
 		})),
-		projects: arr(r.projects, 8, (x) => ({
-			id: str(x.id, 20) || cvId(),
-			name: str(x.name, 100),
-			desc: str(x.desc, 600),
-			links: arr(x.links, 5, (l) => ({
-				id: str(l.id, 20) || cvId(),
-				label: str(l.label, 30),
+		projects: arr(r.projects, (x) => ({
+			id: str(x.id) || cvId(),
+			name: str(x.name),
+			desc: str(x.desc),
+			links: arr(x.links, (l) => ({
+				id: str(l.id) || cvId(),
+				label: str(l.label),
 				url: safeUrl(l.url)
 			})).filter((l) => l.url)
 		})),
-		awards: str(r.awards, 800),
-		highlights: arr(r.highlights, 4, (x) => ({
-			id: str(x.id, 20) || cvId(),
-			value: str(x.value, 12),
-			label: str(x.label, 40)
+		awards: str(r.awards),
+		highlights: arr(r.highlights, (x) => ({
+			id: str(x.id) || cvId(),
+			value: str(x.value),
+			label: str(x.label)
 		})),
-		interests: str(r.interests, 300)
+		interests: str(r.interests)
 	};
 }
 /** Only http(s) links are kept; a bare domain such as github.com/x gets https:// in front. Anything else becomes ''. */
 function safeUrl(v) {
-	let u = typeof v === "string" ? v.trim().slice(0, 300) : "";
+	let u = typeof v === "string" ? v.trim() : "";
 	if (!u || /\s/.test(u)) return "";
 	if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = /^[\w-]+(\.[\w-]+)+([/?#:]|$)/.test(u) ? `https://${u}` : "";
 	return /^https?:\/\/[^/]+\.[^/]+/i.test(u) ? u : "";
@@ -24421,7 +24421,7 @@ function Bold({ data: d, accent, showPhoto }) {
 	});
 }
 // src/components/cv/templates/c.tsx
-var initials$1 = (n) => n.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() || "").join("");
+var initials = (n) => n.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() || "").join("");
 var Dates = ({ a, b }) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 	style: {
 		color: "#6b7280",
@@ -25564,7 +25564,7 @@ function Monogram({ data: d, accent, showPhoto }) {
 							letterSpacing: "0.1em",
 							color: accent
 						},
-						children: initials$1(d.name)
+						children: initials(d.name)
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 						style: {
@@ -27323,7 +27323,6 @@ var MORE_TEMPLATES = [
 * portfolio with a tall photo, clinical boxes, formal grid, diagonal header, and a student layout that leads with education.
 * Each factory takes a small variant object so one layout can serve several industries.
 */
-var initials = (n) => n.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() || "").join("");
 var D$1 = ({ a, b }) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 	style: {
 		color: "#6b7280",
@@ -27977,12 +27976,12 @@ var portfolio = (v = {}) => function Portfolio({ data: d, accent, showPhoto }) {
 				display: "flex",
 				flexDirection: "column"
 			},
-			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			children: [showPhoto && d.photo ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				style: {
 					position: "relative",
 					flex: "none"
 				},
-				children: [showPhoto && d.photo ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Photo, {
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Photo, {
 					src: d.photo,
 					size: 22.6,
 					radius: "0",
@@ -27990,17 +27989,6 @@ var portfolio = (v = {}) => function Portfolio({ data: d, accent, showPhoto }) {
 						width: "100%",
 						height: "21em"
 					}
-				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					style: {
-						height: "16em",
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "center",
-						fontSize: "4.5em",
-						fontWeight: 800,
-						background: "rgba(0,0,0,.18)"
-					},
-					children: initials(d.name)
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					style: {
 						position: "absolute",
@@ -28014,7 +28002,6 @@ var portfolio = (v = {}) => function Portfolio({ data: d, accent, showPhoto }) {
 						style: {
 							fontSize: "2em",
 							fontWeight: 800,
-							margin: 0,
 							lineHeight: 1.1
 						},
 						children: d.name
@@ -28025,6 +28012,27 @@ var portfolio = (v = {}) => function Portfolio({ data: d, accent, showPhoto }) {
 						},
 						children: d.title
 					})]
+				})]
+			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", {
+				style: {
+					padding: "2.6em 1.4em 1.5em",
+					borderBottom: "1px solid rgba(255,255,255,.15)"
+				},
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					style: {
+						fontSize: "2em",
+						fontWeight: 800,
+						lineHeight: 1.15,
+						overflowWrap: "anywhere"
+					},
+					children: d.name
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					style: {
+						marginTop: ".65em",
+						opacity: .85,
+						fontWeight: 500
+					},
+					children: d.title
 				})]
 			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				style: {
@@ -29836,7 +29844,7 @@ else {
 		lang: input.lang === "en" ? "en" : "vi"
 	}));
 	process.stdout.write(`<!doctype html><html lang="${input.lang === "en" ? "en" : "vi"}"><head><meta charset="utf-8"><title>CV</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-@page {size:A4;margin:0} *{box-sizing:border-box} html,body{margin:0;padding:0;background:white} body{width:794px} .cv-document{overflow-wrap:anywhere} .cv-document>div{min-height:1123px} a{color:inherit} section{break-inside:auto} li{break-inside:avoid} svg{display:inline-block;vertical-align:middle} @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+@page {size:A4;margin:0} *{box-sizing:border-box} html,body{margin:0;padding:0;background:white} body{width:794px} .cv-document{overflow-wrap:anywhere} .cv-document>div{min-height:1123px} a{color:inherit} section{break-inside:auto} h1,h2,h3,h4,section>div:first-child{break-after:avoid} p{orphans:3;widows:3} li{break-inside:avoid} svg{display:inline-block;vertical-align:middle} @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>${html}</body></html>`);
 }
 export {};

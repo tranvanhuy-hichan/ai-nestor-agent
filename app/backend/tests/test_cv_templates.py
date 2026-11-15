@@ -72,3 +72,79 @@ def test_cv_profile_is_required_and_editor_respects_skipped_sections():
         assert any(f['type'] == 'cv-profile' and f['required'] for f in creation['fields'])
         assert 'skipped_sections' in creation['task']
         assert 'không nâng khống' in creation['task']
+
+
+def test_cv_template_picker_is_first_field_in_both_entry_flows():
+    for flow in form_for('cv-viec-lam')['flows']:
+        first = flow['steps'][0]['fields'][0]
+        assert first['key'] == 'mau_cv'
+        assert first['type'] == 'cv-template' and first['required']
+
+
+def test_long_cv_is_not_silently_truncated():
+    data = {
+        'name': 'An',
+        'summary': 'Nội dung giới thiệu. ' * 100 + 'END_SUMMARY',
+        'experience': [{'role': f'Role {i}', 'company': f'Company {i}', 'desc': 'Chi tiết công việc. ' * 100 + f'END_EXP_{i}'} for i in range(15)],
+        'projects': [{'name': f'Project {i}', 'desc': 'Chi tiết dự án. ' * 80 + f'END_PROJECT_{i}'} for i in range(11)],
+        'awards': 'Chứng chỉ chuyên môn. ' * 70 + 'END_AWARDS',
+        'skills': [{'name': f'SKILL_{i}'} for i in range(25)],
+    }
+    result = render('modern', data)
+    assert result.returncode == 0, result.stderr
+    assert 'END_SUMMARY' in result.stdout and 'END_AWARDS' in result.stdout
+    for i in range(15):
+        assert f'END_EXP_{i}' in result.stdout
+    for i in range(11):
+        assert f'END_PROJECT_{i}' in result.stdout
+    assert 'SKILL_24' in result.stdout
+
+
+def test_incomplete_edit_is_rejected_instead_of_silently_printing_raw_input():
+    from argus.services.cv_content import preserve_profile, IncompleteCvError
+    profile = {'template': 'modern', 'skipped_sections': [], 'data': {'name': 'An',
+        'projects': [{'id': 'p1', 'name': 'One', 'desc': 'Built 12 integrations.'}, {'id': 'p2', 'name': 'Two', 'desc': 'Developed a dashboard.'}]}}
+    with pytest.raises(IncompleteCvError, match='CHƯA xuất file'):
+        preserve_profile(profile, {'projects': []})
+    with pytest.raises(IncompleteCvError, match='thiếu số liệu'):
+        preserve_profile(profile, {'projects': [{'id': 'p1', 'name': 'One', 'desc': 'Built integrations.'}, {'id': 'p2', 'name': 'Two', 'desc': 'Designed and developed an accessible dashboard.'}]})
+
+
+def test_concise_rewrite_and_skill_corrections_are_not_replaced_with_raw_text():
+    from argus.services.cv_content import preserve_profile
+    original = 'I worked on developing and implementing ' + 'customer integration features ' * 12 + 'for 12 customer systems.'
+    profile = {'template': 'modern', 'skipped_sections': [], 'data': {'name': 'An',
+        'experience': [{'id': 'e1', 'role': 'Engineer', 'company': 'ACME', 'desc': original}],
+        'skills': [{'id': 's1', 'name': 'Devopts, Docker, Linux'}]}}
+    rewrite = 'Developed and maintained integrations for 12 customer systems.'
+    output, _ = preserve_profile(profile, {'experience': [{'id': 'e1', 'desc': rewrite}], 'skills': [{'id': 's1', 'name': 'DevOps, Docker và Linux'}]})
+    assert output['experience'][0]['desc'] == rewrite
+    assert output['skills'][0]['name'] == 'DevOps, Docker và Linux'
+
+
+def test_no_photo_portfolio_does_not_render_oversized_initials_placeholder():
+    result = render('anh-lon-den', {'name': 'Nguyễn Văn An', 'title': 'Engineer', 'skills': [{'name': 'Python'}]})
+    assert result.returncode == 0
+    assert 'height:16em' not in result.stdout
+    assert 'font-size:4.5em' not in result.stdout
+    assert 'Python' in result.stdout and 'Nguyễn Văn An' in result.stdout
+
+
+def test_editor_can_improve_wording_and_reorder_without_reassigning_entries():
+    from argus.services.cv_content import preserve_profile
+    profile = {'template': 'modern', 'skipped_sections': [], 'data': {'name': 'An', 'projects': [
+        {'id': 'p1', 'name': 'One', 'desc': 'Built 12 integrations.'}, {'id': 'p2', 'name': 'Two', 'desc': 'Built a customer dashboard.'}]}}
+    output, _ = preserve_profile(profile, {'projects': [
+        {'id': 'p2', 'name': 'Two', 'desc': 'Designed and built a customer dashboard with accessible interface components.'},
+        {'id': 'p1', 'name': 'One', 'desc': 'Designed, built and maintained 12 reliable integrations with customer systems.'}]})
+    assert output['projects'][0]['id'] == 'p1' and '12 reliable' in output['projects'][0]['desc']
+    assert output['projects'][1]['id'] == 'p2' and 'accessible' in output['projects'][1]['desc']
+
+
+def test_original_profile_is_read_from_user_history_not_model_generated_data():
+    from argus.services.cv_content import profile_from_messages
+    source = {'template': 'modern', 'data': {'name': 'An', 'projects': [{'name': 'Keep me'}]}, 'skipped_sections': []}
+    messages = [{'role': 'user', 'content': '- Profile: ' + json.dumps(source)},
+                {'role': 'assistant', 'content': '- Profile: ' + json.dumps({**source, 'data': {'name': 'Wrong'}})},
+                {'role': 'user', 'content': 'Please fix the missing projects.'}]
+    assert profile_from_messages(messages) == source

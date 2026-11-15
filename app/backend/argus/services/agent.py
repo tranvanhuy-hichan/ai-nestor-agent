@@ -324,6 +324,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
                             env=skillmod.env_for(skills, cfg), enabled=cfg.agent.tools_enabled, skills={n: s for n, s in skills.items() if s.active},
                             sandbox={"mode": cfg.agent.exec_sandbox, "image": cfg.agent.sandbox_image, "network": cfg.agent.sandbox_network})
     ctx.depth = depth
+    ctx.session_id = workdir_sid or sid
     ctx.asker = asker
     if depth == 0:
         checkpoints.begin(sid)

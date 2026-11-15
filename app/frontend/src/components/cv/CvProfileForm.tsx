@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Field, Input, Select, Textarea } from '@/components/ui/Form'
 import { schemaForTemplate, type CvInput } from '@/lib/cv/templateSchema'
 import { parseProfile, profileIssues } from '@/lib/cv/profile'
 import { t } from '@/lib/i18n.ts'
+import CvPhotoUpload from './CvPhotoUpload'
 
 export default function CvProfileForm({ template, value, onChange }: { template: string; value: string; onChange: (v: string) => void }) {
-  const [photoError, setPhotoError] = useState('')
   useEffect(() => {
     if (!template) return
     const p = parseProfile(value)
@@ -28,26 +28,7 @@ export default function CvProfileForm({ template, value, onChange }: { template:
   return <div className="space-y-4">
     <p className="text-sm text-muted">Các mục dưới đây lấy từ mẫu bạn đã chọn. Cứ viết ý thô; AI sẽ chỉnh cách diễn đạt, sắp xếp và điền vào CV. Mục chưa có thì chọn bỏ qua.</p>
     <div className="grid gap-3 md:grid-cols-2">{schema.contact.map((f) => input(f, String(profile.data[f.key] ?? ''), (v) => set(f.key, v)))}</div>
-    {schema.photo && <Field label="Ảnh chân dung (không bắt buộc)" hint="Ảnh JPEG, PNG hoặc WebP, tối đa 2 MB. Có thể bỏ ảnh."><input type="file" accept="image/jpeg,image/png,image/webp" onChange={async (e) => {
-      const f = e.target.files?.[0]
-      if (!f) return
-      if (f.size > 2_000_000 || !['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) { setPhotoError('Chọn ảnh JPEG, PNG hoặc WebP dưới 2 MB'); e.target.value = ''; return }
-      setPhotoError('')
-      const reader = new FileReader()
-      reader.onload = () => {
-        const img = new Image()
-        img.onload = () => {
-          const canvas = document.createElement('canvas')
-          const ratio = Math.min(1, 512 / Math.max(img.width, img.height))
-          canvas.width = Math.round(img.width * ratio); canvas.height = Math.round(img.height * ratio)
-          canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
-          set('photo', canvas.toDataURL('image/jpeg', 0.85))
-        }
-        img.onerror = () => setPhotoError('Không đọc được ảnh, vui lòng chọn ảnh khác')
-        img.src = String(reader.result)
-      }
-      reader.readAsDataURL(f)
-    }} />{photoError && <p role="alert" className="mt-1 text-xs text-bad">{photoError}</p>}{typeof profile.data.photo === 'string' && profile.data.photo && <div className="mt-2 flex items-center gap-3"><img src={profile.data.photo} alt="Ảnh chân dung đã chọn" className="size-16 rounded object-cover" /><button type="button" onClick={() => set('photo', '')} className="text-xs text-accent">Bỏ ảnh</button></div>}</Field>}
+    {schema.photo && <CvPhotoUpload value={typeof profile.data.photo === 'string' ? profile.data.photo : ''} onChange={(photo) => set('photo', photo)} />}
     {schema.sections.map((s) => {
       const skipped = profile.skipped.includes(s.key)
       const rows = Array.isArray(profile.data[s.key]) ? profile.data[s.key] as Record<string, string>[] : []

@@ -9,7 +9,6 @@ import { dateRange, lines, type CvData } from '@/lib/cv/types';
  * portfolio with a tall photo, clinical boxes, formal grid, diagonal header, and a student layout that leads with education.
  * Each factory takes a small variant object so one layout can serve several industries.
  */
-const initials = (n: string) => n.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() || '').join('');
 const D = ({ a, b }: { a: string; b: string }) => <span style={{ color: '#6b7280', fontSize: '0.9em', whiteSpace: 'nowrap' }}>{dateRange(a, b)}</span>;
 const ink = '#1f2937';
 
@@ -131,12 +130,15 @@ export const portfolio = (v: Skin = {}) => function Portfolio({ data: d, accent,
   return (
     <div style={{ display: 'flex', minHeight: 'inherit', background: v.bg || '#fff', lineHeight: 1.5, color: ink }}>
       <aside style={{ width: '37%', background: dk, color: '#fff', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ position: 'relative', flex: 'none' }}>
-          {showPhoto && d.photo ? <Photo src={d.photo} size={22.6} radius="0" style={{ width: '100%', height: '21em' }} /> : <div style={{ height: '16em', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '4.5em', fontWeight: 800, background: 'rgba(0,0,0,.18)' }}>{initials(d.name)}</div>}
+        {showPhoto && d.photo ? <div style={{ position: 'relative', flex: 'none' }}>
+          <Photo src={d.photo} size={22.6} radius="0" style={{ width: '100%', height: '21em' }} />
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '2.6em 1.4em 1em', background: 'linear-gradient(transparent, rgba(0,0,0,.65))' }}>
-            <div style={{ fontSize: '2em', fontWeight: 800, margin: 0, lineHeight: 1.1 }}>{d.name}</div><div style={{ opacity: 0.9, fontWeight: 600 }}>{d.title}</div>
+            <div style={{ fontSize: '2em', fontWeight: 800, lineHeight: 1.1 }}>{d.name}</div><div style={{ opacity: 0.9, fontWeight: 600 }}>{d.title}</div>
           </div>
-        </div>
+        </div> : <header style={{ padding: '2.6em 1.4em 1.5em', borderBottom: '1px solid rgba(255,255,255,.15)' }}>
+          <div style={{ fontSize: '2em', fontWeight: 800, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{d.name}</div>
+          <div style={{ marginTop: '.65em', opacity: .85, fontWeight: 500 }}>{d.title}</div>
+        </header>}
         <div style={{ padding: '1.5em 1.4em', display: 'flex', flexDirection: 'column', gap: '1.4em' }}>
           <section><Label t="Liên hệ" c="#fff" onDark /><Contacts d={d} color="#fff" size={0.9} /></section>
           {h.skills && <section><Label t="Kỹ năng" c="#fff" onDark /><Skill d={d} accent={accent} kind={v.skill || 'bar'} onDark /></section>}
