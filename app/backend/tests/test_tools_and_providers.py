@@ -192,3 +192,24 @@ def test_reasoning_effort_only_sent_when_chosen(monkeypatch):
     list(providers.OpenAICompat(cfg).stream([{"role": "user", "content": "hi"}], [], effort="high"))
     list(providers.OpenAICompat(cfg).stream([{"role": "user", "content": "hi"}], [], effort="bogus"))
     assert "reasoning_effort" not in sent[0] and sent[1]["reasoning_effort"] == "high" and "reasoning_effort" not in sent[2]
+
+
+def test_openrouter_gets_default_max_tokens_and_retries_on_402(monkeypatch):
+    sent = []
+
+    def fake(*a, **k):
+        sent.append(k["json"].get("max_tokens"))
+        if len(sent) == 1:
+            st = FakeStream([], status=402)
+            st.text = '{"error":{"message":"You requested up to 16384 tokens, but can only afford 5000."}}'
+            return st
+        return FakeStream(sse({"choices": [{"delta": {"content": "ok"}}]}))
+
+    monkeypatch.setattr(providers.httpx, "stream", fake)
+    cfg = ProviderCfg(base_url="https://openrouter.ai/api/v1", model="anthropic/x")
+    list(providers.OpenAICompat(cfg).stream([{"role": "user", "content": "hi"}], []))
+    assert sent == [providers.OPENROUTER_DEFAULT_MAX, 5000 - 64]
+    other = []
+    monkeypatch.setattr(providers.httpx, "stream", lambda *a, **k: (other.append(k["json"].get("max_tokens")), FakeStream(sse({"choices": [{"delta": {"content": "ok"}}]})))[1])
+    list(providers.OpenAICompat(ProviderCfg(base_url="http://x/v1", model="m")).stream([{"role": "user", "content": "hi"}], []))
+    assert other == [None]

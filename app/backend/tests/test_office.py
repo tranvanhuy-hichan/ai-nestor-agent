@@ -43,7 +43,7 @@ def test_vanban_writer_and_review(tmp_path):
     c = ctx(tmp_path)
     out, ok = tools.call(c, "vanban_types", {"document_type_key": "TO_TRINH"})
     assert ok and "section_heading" in out and "two_columns" in out, out
-    out, ok = tools.call(c, "vanban_write_docx", {"path": "tt", "document_type_key": "TO_TRINH", "paragraphs": json.dumps(to_trinh_paragraphs())})
+    out, ok = tools.call(c, "vanban_write_docx", {"path": "tt", "document_type_key": "TO_TRINH", "paragraphs": json.dumps(to_trinh_paragraphs()), "ngan_theo_yeu_cau": True})
     assert ok and "CẢNH BÁO" not in out, out
     from docx import Document
     text = "\n".join(c.text for t in Document(tmp_path / "tt.docx").tables for r in t.rows for c in r.cells)
@@ -80,7 +80,7 @@ def test_review_accepts_placeholder_signature(tmp_path):
     c = ctx(tmp_path)
     paras = to_trinh_paragraphs()
     paras[-1]["right_lines"] = [{"role": "signature_authority", "text": "……"}, {"role": "signature_name", "text": "……"}]
-    out, ok = tools.call(c, "vanban_write_docx", {"path": "ph", "document_type_key": "TO_TRINH", "paragraphs": json.dumps(paras)})
+    out, ok = tools.call(c, "vanban_write_docx", {"path": "ph", "document_type_key": "TO_TRINH", "paragraphs": json.dumps(paras), "ngan_theo_yeu_cau": True})
     assert ok, out
     out, _ = tools.call(c, "review_vn_document", {"path": "ph.docx"})
     assert "[LỖI] Thẩm quyền ký" not in out, out

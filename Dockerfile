@@ -11,8 +11,11 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 ARGUS_HOME=/app ARGUS_CONFIG=/app/data/config.json ARGUS_TEMPLATE=/app/template/workspace
 WORKDIR /app
 COPY app/backend/ app/backend/
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs fonts-liberation && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir -e app/backend
+RUN python -m playwright install --with-deps chromium
 COPY --from=web /web/dist app/frontend/dist
+COPY --from=web /backend/argus/cv_templates app/backend/argus/cv_templates
 # ban mau de server tu tao lai workspace khi nguoi dung mount thu muc trong
 COPY app/templates/workspace /app/template/workspace
 # du lieu (DB, config.json co API key) va workspace nen mount volume de khong mat khi build lai

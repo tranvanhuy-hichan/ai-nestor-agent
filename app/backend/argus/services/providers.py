@@ -14,6 +14,10 @@ from ..core.config import ProviderCfg
 TIMEOUT = httpx.Timeout(300, connect=10)
 
 
+OPENROUTER_DEFAULT_MAX = 16384
+_AFFORD = re.compile(r"can only afford (\d+)")
+
+
 class ProviderError(Exception):
     def __init__(self, message: str, status: int | None = None, transient: bool | None = None):
         super().__init__(message)
@@ -87,6 +91,9 @@ class OpenAICompat:
                 "stream": True, "stream_options": {"include_usage": True}}
         if max_tokens:
             body["max_tokens"] = max_tokens
+        elif "openrouter.ai" in self.cfg.base_url:
+            # OpenRouter tru truoc tin dung theo max_tokens toi da cua model (Claude: 64k) neu khong khai bao -> loi 402 khi so du thap.
+            body["max_tokens"] = OPENROUTER_DEFAULT_MAX
         if tools:
             # Groq/OpenAI chi nhan toi da 128 tool moi yeu cau: giu 128 tool dau (tool co san truoc, MCP sau).
             body["tools"] = [{"type": "function", "function": t} for t in tools[:128]]
@@ -115,6 +122,10 @@ class OpenAICompat:
                     # Model khong ho tro tool (Cohere Aya, mot so model Cloudflare...) -> goi lai khong kem tool, chi chat thuong
                     no_tools_body = {k: v for k, v in req_body.items() if k not in ("tools", "tool_choice")}
                     yield from _do_stream(no_tools_body)
+                    return
+                elif r.status_code == 402 and req_body.get("max_tokens") and (r.read() or True) and (m := _AFFORD.search(r.text)) and int(m.group(1)) >= 1024 and int(m.group(1)) < req_body["max_tokens"]:
+                    # Het tin dung cho max_tokens yeu cau: ha xuong muc tai khoan con chi tra duoc roi goi lai mot lan.
+                    yield from _do_stream({**req_body, "max_tokens": int(m.group(1)) - 64})
                     return
                 elif r.status_code >= 400:
                     r.read()

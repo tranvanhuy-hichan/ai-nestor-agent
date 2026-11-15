@@ -2,6 +2,7 @@
 import json
 import re
 
+from ..assistant_defs import forms as formsmod
 from ..core import config as cfgmod
 
 OFFICE = ("Khi cần giao file, hãy tạo file thật bằng tool: create_docx (Word), create_xlsx (Excel có công thức), create_pptx (PowerPoint), "
@@ -107,6 +108,7 @@ def _normalize(d: dict) -> dict:
     out = {"skills": [], "tools": None, "done_criteria": list(DEFAULT_CRITERIA), "deliverables": ["none"], "starters": [], "description": "", **d}
     out["prompt"] = f"{out['prompt'].strip()} {BASE}{OFFICE}"
     out["builtin"] = True
+    out["form"] = formsmod.form_for(out["id"])
     return out
 
 
@@ -146,6 +148,8 @@ def validate_def(d: dict, known_tools: set[str], known_skills: set[str]) -> list
         for t in allow:
             if t not in known_tools:
                 errs.append(f"{i}: tool '{t}' khong ton tai")
+    if d.get("form"):
+        errs += formsmod.validate_form(i, d["form"])
     dels = d.get("deliverables") or []
     if not dels:
         errs.append(f"{i}: thieu deliverables")
@@ -180,7 +184,7 @@ def _write(items: list[dict]) -> None:
 
 
 def list_all() -> list[dict]:
-    return [*BUILTIN, *_custom()]
+    return [a if a.get("form") else {**a, "form": formsmod.form_for(a["id"])} for a in [*BUILTIN, *_custom()]]
 
 
 def get(aid: str | None) -> dict | None:
@@ -252,11 +256,23 @@ def quality_gate(a: dict) -> str:
             "Kết thúc bằng một danh sách kiểm ngắn, mỗi tiêu chí một dòng bắt đầu bằng ✓ (đạt) hoặc ✗ (chưa đạt, nêu lý do), rồi liệt kê các file đã tạo.")
 
 
+INTAKE = ("## Cách nhận yêu cầu\n"
+          "Yêu cầu có thể đến từ biểu mẫu của trang chức năng: dòng đầu nêu việc cần làm, các dòng \"- Nhãn: giá trị\" là thông tin người dùng đã điền, "
+          "đường dẫn dạng uploads/... là file họ đã tải lên (đọc bằng read_document hoặc read). Thông tin đã điền là chắc chắn: KHÔNG hỏi lại, "
+          "chỉ hỏi (ask_user, gộp một lần) phần thật sự còn thiếu. Nếu một ô bỏ trống, tự chọn giá trị hợp lý, ghi rõ giả định trong kết quả.\n\n"
+          "## Nguyên tắc soạn thảo (áp dụng mỗi khi tạo văn bản, tài liệu, báo cáo)\n"
+          "- Người dùng cần bản dùng được ngay, không phải cái khung. Hãy TỰ VIẾT ĐẦY ĐỦ phần nội dung chính (lý do, căn cứ, lập luận, nội dung triển khai, đề nghị...) bằng suy luận từ bối cảnh và kiến thức chuyên môn, độ dài đúng với loại văn bản.\n"
+          "- Nếu có web_search/web_fetch: TRƯỚC khi viết, tìm 2-3 văn bản, mẫu hoặc quy định thực tế tương tự (cùng loại, cùng lĩnh vực) để lấy bố cục, văn phong và căn cứ pháp lý thật; chỉ dẫn căn cứ có thật kèm số hiệu và ngày ban hành, rồi ghi nguồn đã tra trong phần báo kết quả.\n"
+          "- Chỉ để trống '……' ở dữ kiện riêng mà chỉ người dùng mới có: số và ký hiệu văn bản, ngày ký, họ tên người ký, số liệu nội bộ chưa được cung cấp. Số liệu ước tính được (quy mô, tổng mức, tiến độ...) thì điền giá trị tham khảo hợp lý kèm '(dự kiến, cần xác nhận)'. Tuyệt đối không giao bản chỉ có tiêu đề hay phần nội dung chính để trống.\n"
+          "- Không bịa tên người; không lấy tên người dùng làm người ký nếu họ chưa nói.\n"
+          "- Nếu bước tự kiểm cuối còn mục ✗, hãy sửa file rồi mới giao; không giao bản còn lỗi chỉ kèm danh sách lỗi.")
+
+
 def prompt_for(aid: str | None) -> str:
     a = get(aid)
     if not a:
         return ""
-    parts = [f"## Bạn đang đóng vai trợ lý: {a['name']}\n{a['prompt']}", _skill_text(a.get("skills") or []), quality_gate(a)]
+    parts = [f"## Bạn đang đóng vai trợ lý: {a['name']}\n{a['prompt']}", INTAKE, _skill_text(a.get("skills") or []), quality_gate(a)]
     return "\n\n".join(p for p in parts if p)
 
 

@@ -146,7 +146,11 @@ export function ChatPage() {
     if (initial && !sentInitial.current && cfg.data) {
       sentInitial.current = true
       nav('.', { replace: true, state: null })
-      void chat.send(initial, null, [], { assistant: assistantRef.current, ...(simple ? { permission: 'guarded' } : {}) })
+      const st = location.state as { session?: string; attachments?: string[] } | null
+      void (async () => {
+        if (st?.session) await chat.open(st.session) // phiên đã tạo sẵn (kèm file tải lên) từ trang chức năng
+        void chat.send(initial, null, st?.attachments ?? [], { assistant: assistantRef.current, ...(simple ? { permission: 'guarded' } : {}) })
+      })()
     }
   }, [initial, cfg.data, chat, nav])
 
@@ -170,6 +174,8 @@ export function ChatPage() {
   useEffect(() => { if (chat.sessionId) store.set('last-session', chat.sessionId) }, [chat.sessionId])
   useEffect(() => {
     if (!wanted) return
+    restored.current = true // đã có phiên được chỉ định: không được khôi phục 'phiên cuối' đè lên sau khi xóa ?session
+    store.set('last-session', wanted)
     setPermission(permStore.get(wanted) ?? 'default'); void chat.open(wanted); setParams({}, { replace: true })
   }, [wanted, chat, setParams, sessions.data, nav])
 

@@ -18,7 +18,8 @@ import { ActivityPage } from '@/features/activity/ActivityPage'
 import { CODE_MODE } from '@/lib/features'
 import { useLang } from '@/lib/i18n.ts'
 import { useUiMode } from '@/lib/uiMode'
-import { ExamShufflePage } from '@/features/exam/ExamShufflePage'
+import { FeatureHub } from '@/features/feature/FeatureHub'
+import { FeaturePage } from '@/features/feature/FeaturePage'
 import { SimpleHome } from '@/features/simple/SimpleHome'
 import { SimpleSettings } from '@/features/simple/SimpleSettings'
 
@@ -39,7 +40,9 @@ export default function App() {
         <Route path="history" element={<Navigate to="/tasks" replace />} />
         {CODE_MODE && !simple && <Route path="code" element={<CodePage />} />}
         <Route path="chat" element={<ChatPage />} />
-        <Route path="xao-de" element={<ExamShufflePage />} />
+        <Route path="xao-de" element={<Navigate to="/f/ra-de-cham-bai?tab=exam-shuffle" replace />} />
+        <Route path="f" element={<FeatureHub />} />
+        <Route path="f/:id" element={<FeaturePage />} />
         <Route path="activity" element={adv(<ActivityPage />)} />
         <Route path="dashboard" element={<Navigate to="/activity" replace />} />
         <Route path="automations" element={<AutomationsPage />} />

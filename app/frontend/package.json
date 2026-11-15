@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run build:cv",
     "lint": "oxlint",
     "preview": "vite preview",
-    "i18n:check": "node scripts/check-i18n.mjs"
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "build:cv": "vite build --config vite.cv.config.ts"
   },
   "dependencies": {
     "@lobehub/icons-static-svg": "^1.102.0",

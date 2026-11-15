@@ -36,6 +36,7 @@ argus = "argus.cli:main"
 include = ["argus*"]
 
 [tool.setuptools.package-data]
+"argus" = ["cv_templates/*.mjs"]
 "argus.services.vanban" = ["references/*.json"]
 "argus.bundled_skills" = ["**/*", "*.md"]
 

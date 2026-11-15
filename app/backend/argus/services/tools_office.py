@@ -71,7 +71,7 @@ def _fill_docx(doc, content: str) -> None:
         i += 1
 
 
-_ADMIN_TITLE = re.compile(r"^\s*#*\s*\**\s*(BÁO CÁO|TỜ TRÌNH|CÔNG VĂN|QUYẾT ĐỊNH|BIÊN BẢN|KẾ HOẠCH|THÔNG BÁO|GIẤY MỜI|NGHỊ QUYẾT|CÔNG ĐIỆN|GIẤY GIỚI THIỆU|CHỈ THỊ|KẾT LUẬN|QUY CHẾ|QUY ĐỊNH|HƯỚNG DẪN|ĐỀ ÁN|PHƯƠNG ÁN)\b", re.M)
+_ADMIN_TITLE = re.compile(r"^\s*#*\s*\**\s*(BÁO CÁO|TỜ TRÌNH|CÔNG VĂN|QUYẾT ĐỊNH|BIÊN BẢN|KẾ HOẠCH|THÔNG BÁO|GIẤY MỜI|NGHỊ QUYẾT|CÔNG ĐIỆN|GIẤY GIỚI THIỆU|CHỈ THỊ|KẾT LUẬN|QUY CHẾ|QUY ĐỊNH|HƯỚNG DẪN|ĐỀ ÁN|PHƯƠNG ÁN)\b", re.M | re.I)
 _ADMIN_HINT = re.compile(r"(Kính gửi|UBND|Ủy ban nhân dân|Cộng hòa xã hội|Chủ đầu tư|cơ quan ban hành|Nơi nhận|Căn cứ (Luật|Nghị định|Thông tư|Quyết định))", re.I)
 
 
@@ -252,16 +252,92 @@ def vanban_types(ctx, document_type_key=""):
     return json.dumps({"types": brief, "roles": info["roles"]}, ensure_ascii=False) + "\nGọi lại vanban_types(document_type_key=...) để xem cấu trúc chi tiết.\n\n" + VANBAN_RULES
 
 
+_HEAD_LEFT = ("parent_org", "issuing_org", "document_number")
+_HEAD_RIGHT = ("national_name", "motto", "place_date")
+_FOOT_LEFT = ("recipients_label", "recipients_item")
+_FOOT_RIGHT = ("signature_authority", "signature_name")
+
+
+def _is_plain(it) -> bool:
+    return isinstance(it, dict) and (it.get("layout") or "paragraph") == "paragraph" and bool(it.get("role"))
+
+
+def _two_col_has(paras, roles) -> bool:
+    for it in paras:
+        if isinstance(it, dict) and it.get("layout") == "two_columns":
+            for side in ("left_lines", "right_lines"):
+                if any(isinstance(l, dict) and l.get("role") in roles for l in it.get(side) or []):
+                    return True
+    return False
+
+
+def _normalize_layout(paras, key: str):
+    """Model hay xep quoc hieu, co quan, so, ngay thang va noi nhan/chu ky thanh cac doan doc: ghep lai thanh khoi hai cot dung the thuc NĐ 30
+    (co quan + so + trich yeu cong van ben trai; quoc hieu, tieu ngu, dia danh ngay thang ben phai; noi nhan ben trai, chu ky ben phai). Tra ve (paras moi, ghi chu)."""
+    if not isinstance(paras, list):
+        return paras, []
+    out, notes = list(paras), []
+    left_h = _HEAD_LEFT + (("summary_cong_van",) if key == "CONG_VAN" else ())
+    blocks = [("đầu văn bản (cơ quan/số bên trái, quốc hiệu/ngày tháng bên phải)", left_h, _HEAD_RIGHT, 40)]
+    if key != "BIEN_BAN":
+        blocks.append(("nơi nhận (trái) và chữ ký (phải)", _FOOT_LEFT, _FOOT_RIGHT, 50))
+    for label, lroles, rroles, pct in blocks:
+        allr = set(lroles) | set(rroles)
+        if _two_col_has(out, allr):
+            continue
+        idx = [i for i, it in enumerate(out) if _is_plain(it) and it.get("role") in allr]
+        left = [out[i] for i in idx if out[i]["role"] in lroles]
+        right = [out[i] for i in idx if out[i]["role"] in rroles]
+        if not left or not right:
+            continue
+        first = idx[0]
+        merged = {"layout": "two_columns", "left_width_pct": pct, "left_lines": [{"role": x["role"], "text": x.get("text", "")} for x in left], "right_lines": [{"role": x["role"], "text": x.get("text", "")} for x in right]}
+        drop = set(idx)
+        out = [merged if i == first else it for i, it in enumerate(out) if i == first or i not in drop]
+        notes.append(label)
+    return out, notes
+
+
+_DEPTH_MIN = {**{k: 450 for k in ("TO_TRINH", "BAO_CAO", "BAO_CAO_CO_BANG", "KE_HOACH", "DE_AN", "DU_AN", "CHUONG_TRINH", "PHUONG_AN", "HUONG_DAN", "NGHI_QUYET", "QUY_CHE", "QUY_DINH", "CHI_THI", "THONG_CAO")},
+              **{k: 170 for k in ("CONG_VAN", "THONG_BAO", "QUYET_DINH_TRUC_TIEP", "QUYET_DINH_GIAN_TIEP", "VAN_BAN_CO_TEN_LOAI")}}
+
+
+def _check_depth(paras, key: str) -> None:
+    """Chan ban chi co khung: van ban hanh chinh thuc chat phai du dai noi dung. Gioi han tu theo loai."""
+    need = _DEPTH_MIN.get(key)
+    if not need:
+        return
+    words = 0
+    placeholders = 0
+    for it in paras if isinstance(paras, list) else []:
+        if not isinstance(it, dict):
+            continue
+        texts = [it.get("text")] if it.get("layout", "paragraph") == "paragraph" else []
+        texts += [c for row in it.get("table_rows") or [] for c in (row if isinstance(row, list) else [row])]
+        for t in texts:
+            if t:
+                words += len(str(t).split())
+                placeholders += str(t).count("cần xác nhận")
+    if words < need:
+        raise ValueError(f"Nội dung mới có khoảng {words} từ, quá ngắn cho loại {key} (cần tối thiểu khoảng {need} từ). Đây mới là cái khung, CHƯA đạt. "
+                         "Hãy viết lại ĐẦY ĐỦ từng phần thành câu và đoạn có lập luận (sự cần thiết với số liệu thực tế, căn cứ pháp lý đã tra cứu, nội dung/quy mô/giải pháp cụ thể, tổ chức thực hiện, kiến nghị rõ ràng), dùng thông tin đã tra bằng web_search/web_fetch, rồi gọi lại vanban_write_docx. "
+                         "Không dùng vài gạch đầu dòng ngắn cho phần nội dung chính.")
+    if placeholders > 6:
+        raise ValueError(f"Có {placeholders} chỗ ghi '(dự kiến, cần xác nhận)': quá nhiều, văn bản như chưa viết. Chỉ gắn ghi chú đó cho tối đa vài con số then chốt; những chỗ khác hãy viết nội dung cụ thể hoặc câu định tính dựa trên thông tin đã tra cứu.")
+
+
 @tool("vanban_write_docx", "BƯỚC 2: tạo file .docx văn bản hành chính ĐÚNG thể thức NĐ 30/2020 từ danh sách đoạn có role tường minh. Role không hợp lệ bị từ chối. 'paragraphs' là JSON mảng [{\"role\":\"national_name\",\"text\":\"...\"}, {\"layout\":\"two_columns\",\"left_lines\":[...],\"right_lines\":[...]}, ...]. Đọc quy tắc từ vanban_types trước.",
       {"path": ("string", "đường dẫn file đầu ra, vd to-trinh.docx"), "document_type_key": ("string", "vd TO_TRINH, CONG_VAN, QUYET_DINH_TRUC_TIEP, BIEN_BAN"),
-       "paragraphs": ("string", "JSON mảng các đoạn/khối"), "orientation": ("string", "portrait (mặc định) hoặc landscape cho cả văn bản")},
+       "paragraphs": ("string", "JSON mảng các đoạn/khối"), "orientation": ("string", "portrait (mặc định) hoặc landscape cho cả văn bản"),
+       "ngan_theo_yeu_cau": ("boolean", "chỉ đặt true khi người dùng yêu cầu rõ một văn bản rất ngắn; mặc định false và hệ thống từ chối bản chỉ có khung")},
       required=["path", "document_type_key", "paragraphs"], risk="file")
-def vanban_write_docx(ctx, path, document_type_key, paragraphs, orientation=None):
+def vanban_write_docx(ctx, path, document_type_key, paragraphs, orientation=None, ngan_theo_yeu_cau=False):
     w = _vanban()
     paras = _json(paragraphs, "paragraphs")
+    key = document_type_key.strip().upper()
+    paras, merged_notes = _normalize_layout(paras, key)
     _check_paragraphs(paras)
     p = _out(ctx, path, ".docx")
-    key = document_type_key.strip().upper()
     spec = (w._list_document_types()["types"]).get(key)
     if not spec:
         raise ValueError(f"document_type_key '{document_type_key}' không hợp lệ. Gọi vanban_types để xem danh sách.")
@@ -272,10 +348,18 @@ def vanban_write_docx(ctx, path, document_type_key, paragraphs, orientation=None
         raise ValueError(f"Writer từ chối: {e}") from e
     except (AttributeError, KeyError, TypeError) as e:
         raise ValueError(f"Cấu trúc paragraphs chưa đúng ({type(e).__name__}: {e}). {_LINE_HELP}") from e
+    if not ngan_theo_yeu_cau:
+        try:
+            _check_depth(paras, key)
+        except ValueError:
+            p.unlink(missing_ok=True)
+            raise
     have = {a.get("role") for a in res.get("applied") or [] if isinstance(a, dict)}
     missing = [r for r in _required_roles(spec.get("structure") or []) if r not in have]
     summary = " | ".join(f"{a.get('role')}" for a in (res.get("applied") or [])[:60] if isinstance(a, dict))
     out = f"Đã tạo {res['file_name']} ({res['file_size']} byte) tại {res['file_path']} (loại {key}, khổ A4).\nCác role đã áp: {summary}"
+    if merged_notes:
+        out += "\nĐã tự ghép thành khối hai cột đúng thể thức: " + "; ".join(merged_notes) + ". Lần sau dùng layout two_columns như mẫu trong templates/."
     if missing:
         out += f"\nCẢNH BÁO: thiếu role bắt buộc theo Mẫu NĐ 30: {', '.join(missing)}. Bổ sung (hoặc để '……') rồi gọi lại tối đa 1 lần."
     return out
