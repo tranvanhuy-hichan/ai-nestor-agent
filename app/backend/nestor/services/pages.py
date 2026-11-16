@@ -1,6 +1,8 @@
 """Trang kieu Notion: moi trang la mot file markdown trong workspace/pages/<id>.md, co dau frontmatter (tieu de, trang cha, thu tu).
 Dung file thuong de agent doc/ghi duoc bang tool, nguoi dung van so huu du lieu va xuat ra de dang."""
 import re
+import base64
+import binascii
 import threading
 import time
 import uuid
@@ -86,7 +88,7 @@ def create(title: str = "", parent: str = "", content: str = "", icon: str = "")
             _read(parent)  # trang cha phai ton tai
         pid, now = uuid.uuid4().hex[:10], time.time()
         sibs = [p["order"] for p in list_pages() if p["parent"] == parent]
-        meta = {"title": (title or "Chưa đặt tên").strip()[:200], "parent": parent, "icon": icon[:8], "order": (max(sibs) + 1) if sibs else 0, "created": now, "updated": now}
+        meta = {"title": (title or "Chưa đặt tên").strip()[:200], "parent": parent, "icon": _icon(icon), "order": (max(sibs) + 1) if sibs else 0, "created": now, "updated": now}
         _write(pid, meta, content)
         return get(pid)
 
@@ -97,7 +99,7 @@ def update(pid: str, title: str | None = None, content: str | None = None, icon:
         if title is not None:
             meta["title"] = title.strip()[:200] or "Chưa đặt tên"
         if icon is not None:
-            meta["icon"] = icon[:8]
+            meta["icon"] = _icon(icon)
         meta["updated"] = time.time()
         _write(pid, meta, body if content is None else content)
         return get(pid)
@@ -190,3 +192,49 @@ def chat_context(pid: str) -> str:
             f"Tài liệu dài thì chia thành các trang con bằng page_create với parent_id={pid}, rồi đặt link tới chúng trong trang này theo dạng [Tên](/pages/<mã>). "
             f"KHÔNG tạo file docx/xlsx/pptx/pdf trừ khi người dùng yêu cầu rõ ràng định dạng file đó. Đọc trang bằng page_read trước khi sửa phần đã có. "
             f"Trang con hiện có: {kids}. Dùng page_list để xem cả cây trang. Sau khi ghi xong, trả lời 1-2 câu nói rõ bạn đã viết gì và ở trang nào, không chép lại cả nội dung vào khung chat.")
+
+
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
+ASSET_RE = re.compile(r"^[a-f0-9]{32}\.(?:png|jpg|gif|webp)$")
+
+
+def _icon(value: str) -> str:
+    if value.startswith("/api/pages/assets/") and ASSET_RE.fullmatch(value.rsplit("/", 1)[-1]):
+        return value
+    return value[:32] if not value.startswith(("/", "http:", "https:")) else ""
+
+
+def save_image(data: str) -> str:
+    """Store raster images locally; never fetch remote URLs or accept active SVG."""
+    if len(data) > ((MAX_IMAGE_BYTES + 2) // 3) * 4:
+        raise PageError("Ảnh vượt quá 10 MB")
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except (ValueError, binascii.Error) as e:
+        raise PageError("Dữ liệu ảnh không hợp lệ") from e
+    if not raw or len(raw) > MAX_IMAGE_BYTES:
+        raise PageError("Ảnh trống hoặc vượt quá 10 MB")
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        ext = "png"
+    elif raw.startswith(b"\xff\xd8\xff"):
+        ext = "jpg"
+    elif raw.startswith((b"GIF87a", b"GIF89a")):
+        ext = "gif"
+    elif raw.startswith(b"RIFF") and raw[8:12] == b"WEBP":
+        ext = "webp"
+    else:
+        raise PageError("Chỉ hỗ trợ ảnh PNG, JPEG, GIF hoặc WebP")
+    name = f"{uuid.uuid4().hex}.{ext}"
+    target = _dir() / "assets"
+    target.mkdir(exist_ok=True)
+    (target / name).write_bytes(raw)
+    return f"/api/pages/assets/{name}"
+
+
+def image_path(name: str) -> Path:
+    if not ASSET_RE.fullmatch(name):
+        raise PageError("mã ảnh không hợp lệ")
+    path = _dir() / "assets" / name
+    if not path.is_file():
+        raise PageError("không có ảnh này")
+    return path

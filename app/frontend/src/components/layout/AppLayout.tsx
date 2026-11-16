@@ -23,7 +23,7 @@ const SIMPLE: NavItem[] = [
   { to: '/chat', label: tk('Trợ lý'), icon: Sparkles, hint: tk('Trò chuyện và giao việc cho trợ lý') },
   { to: '/tasks', label: tk('Việc đã làm'), icon: ListTodo, hint: tk('Các việc trợ lý làm ngầm và kết quả') },
   { to: '/automations', label: tk('Lịch tự động'), icon: Clock, hint: tk('Việc lặp lại theo giờ, theo ngày') },
-  { to: '/pages', label: tk('Trang'), icon: NotebookText, hint: tk('Ghi chú và tài liệu của bạn, agent đọc và viết được') },
+  { to: '/pages', label: tk('Sổ tay'), icon: NotebookText, hint: tk('Ghi chú và tài liệu của bạn, agent đọc và viết được') },
   { to: '/documents', label: tk('Tài liệu'), icon: FileSearch, hint: tk('Hỏi đáp trên văn bản, quy chế của bạn') },
   { to: '/skills', label: tk('Kỹ năng của tôi'), icon: Puzzle, hint: tk('Những cách làm trợ lý đã học') },
   { to: '/settings', label: tk('Cài đặt'), icon: Settings, hint: tk('Ngôn ngữ, Zalo, tài khoản AI') },
@@ -38,7 +38,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   ] },
   { title: tk('Khả năng của agent'), items: [
     { to: '/skills', label: tk('Kỹ năng'), icon: Puzzle, hint: tk('Dạy agent làm thêm việc mới') },
-    { to: '/pages', label: tk('Trang'), icon: NotebookText, hint: tk('Ghi chú và tài liệu của bạn, agent đọc và viết được') },
+    { to: '/pages', label: tk('Sổ tay'), icon: NotebookText, hint: tk('Ghi chú và tài liệu của bạn, agent đọc và viết được') },
     { to: '/documents', label: tk('Tài liệu'), icon: FileSearch, hint: tk('Hỏi đáp trên hợp đồng, báo cáo, bảng tính của bạn') },
     { to: '/plugins', label: tk('Tiện ích'), icon: Blocks, hint: tk('Nối GitHub, Notion, Canva… chỉ bằng một cú bấm') },
     { to: '/integrations', label: tk('Kết nối'), icon: Cable, hint: tk('Telegram, API, công cụ ngoài') },
@@ -142,7 +142,7 @@ export function AppLayout() {
   const auth = useQuery({ queryKey: ['auth-status'], queryFn: () => api.get<{ required: boolean }>('/api/auth/status') })
   const logout = () => { void api.post('/api/auth/logout').then(() => window.dispatchEvent(new Event('auth-required'))) }
 
-  const isChat = location.pathname.startsWith('/chat') || location.pathname.startsWith('/f/')
+  const compactSidebar = location.pathname.startsWith('/chat') || location.pathname.startsWith('/f/') || location.pathname === '/pages' || location.pathname.startsWith('/pages/')
   const unread = count.data?.unread ?? 0
 
   const onEnter = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current); setExpanded(true) }
@@ -235,8 +235,8 @@ export function AppLayout() {
 
   return (
     <div className="flex h-full">
-      {isChat ? (
-        /* Chat mode: wrapper w-14 giữ chỗ trong layout (không giật),
+      {compactSidebar ? (
+        /* Focus mode: wrapper w-14 giữ chỗ trong layout (không giật),
            aside fixed không trôi theo scroll, mở rộng mượt mà bằng CSS transition width */
         <div className="relative hidden w-14 shrink-0 lg:block">
           <aside
