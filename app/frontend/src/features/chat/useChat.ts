@@ -15,6 +15,7 @@ export type Item =
   | { key: string; kind: 'approval'; aid: string; approvalKind: string; detail: string; status: 'pending' | 'allowed' | 'denied' }
   | { key: string; kind: 'question'; qid: string; question: string; options: string[]; form?: import('@/lib/chatStream').FormQuestion[]; answer: string | null }
   | { key: string; kind: 'summary'; files: { path: string; status: string; added: number; removed: number }[]; undone: boolean }
+  | { key: string; kind: 'login'; name: string; label: string }
   | { key: string; kind: 'notice' | 'error'; text: string }
 
 let seq = 0
@@ -92,6 +93,8 @@ export function useChat() {
           return [...base.filter((it) => it.kind !== 'summary'), { key: k(), kind: 'summary', files: e.files, undone: false }]
         case 'approval_done':
           return base.map((it) => (it.kind === 'approval' && it.aid === e.id && it.status === 'pending' ? { ...it, status: e.ok ? 'allowed' : 'denied' } : it))
+        case 'service_login':
+          return base.some((it) => it.kind === 'login' && it.name === e.name) ? base : [...base, { key: k(), kind: 'login', name: e.name, label: e.label }]
         case 'notice':
           return [...base, { key: k(), kind: 'notice', text: e.tpl ? t(e.tpl, e.vars) : e.message }]
         case 'error':
@@ -111,7 +114,7 @@ export function useChat() {
     return r.id
   }, [qc])
 
-  const send = useCallback(async (text: string, provider: string | null, attachments: string[] = [], opts: { assistant?: string; permission?: string; effort?: string; docs?: boolean; temperature?: number; max_tokens?: number } = {}) => {
+  const send = useCallback(async (text: string, provider: string | null, attachments: string[] = [], opts: { assistant?: string; context?: string; permission?: string; effort?: string; docs?: boolean; temperature?: number; max_tokens?: number } = {}) => {
     if (busy || !text.trim()) return
     currentProviderRef.current = provider
     setBusy(true)

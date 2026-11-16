@@ -4,7 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..core import config as cfgmod
 from ..services import assistants, chat_runner, sessions, usage, workfiles
@@ -115,6 +115,15 @@ class ChatBody(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     assistant: str | None = None  # id tro ly chuyen trach (services/assistants.py)
+    context: str = Field("", max_length=4000)  # ngu canh giao dien them vao system prompt (vd trang dang mo)
+
+
+def _context(ctx: str) -> str:
+    """Giao dien chi gui nhan ngu canh ('page:<ma>'); noi dung that do backend dung, khong nhan van ban tuy y."""
+    if ctx.startswith("page:"):
+        from ..services import pages
+        return pages.chat_context(ctx[5:].strip())
+    return ""
 
 
 @router.post("/chat")
@@ -125,7 +134,7 @@ def chat(body: ChatBody):
         for ev in chat_runner.stream_chat(body.session, body.text, body.provider, attachments=body.attachments, permission=body.permission,
                                             effort=None if body.effort == "auto" else body.effort, docs=body.docs,
                                             temperature=body.temperature, max_tokens=body.max_tokens, detach=True,
-                                            system_extra=assistants.prompt_for(eff), tool_allow=assistants.tool_allow(eff), assistant=body.assistant):
+                                            system_extra="\n\n".join(x for x in (assistants.prompt_for(eff), _context(body.context)) if x), tool_allow=assistants.tool_allow(eff), assistant=body.assistant):
             yield _sse(ev)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)

@@ -196,32 +196,107 @@ def create_xlsx(ctx, path, sheets):
     return f"Đã tạo {p.name} với {len(data)} sheet tại {p}."
 
 
-@tool("create_pptx", "Tạo file PowerPoint (.pptx) thật. 'slides' là JSON mảng [{\"title\": \"...\", \"bullets\": [\"...\"], \"notes\": \"ghi chú diễn giả\"}]. Slide đầu có bullets rỗng sẽ là slide bìa.",
+def _fit_pt(text_len: int, lines: int, base: int, floor: int) -> int:
+    """Co chu theo luong chu de khong tran khung (python-pptx khong tu co chu)."""
+    pt = base
+    while pt > floor and (text_len * (pt / 18) * 0.55 + lines * pt * 1.5) > 2400:
+        pt -= 2
+    return pt
+
+
+@tool("create_pptx", "Tạo file PowerPoint (.pptx) thật, khổ 16:9, tự co cỡ chữ và tự tách slide quá dài. 'slides' là JSON mảng [{\"title\": \"...\", \"bullets\": [\"...\"], \"notes\": \"ghi chú diễn giả\"}]. Slide đầu có bullets rỗng sẽ là slide bìa. Ưu tiên Canva (canva_check) khi người dùng muốn slide đẹp; dùng tool này khi cần file .pptx ngay hoặc không dùng Canva.",
       {"path": ("string", "đường dẫn file, vd bao-cao.pptx"), "slides": ("string", "JSON mảng slide")}, risk="file")
 def create_pptx(ctx, path, slides):
     from pptx import Presentation
+    from pptx.util import Emu, Inches, Pt
     data = _json(slides, "slides")
     if not isinstance(data, list) or not data:
         raise ValueError("slides phải là mảng không rỗng.")
     p = _out(ctx, path, ".pptx")
     prs = Presentation()
+    prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
+    W, H = prs.slide_width, prs.slide_height
+    # tach slide co nhieu y: toi da 6 dong/slide, giu tieu de + ghi chu
+    pages: list[dict] = []
     for k, s in enumerate(data):
+        bl = [str(b) for b in (s.get("bullets") or [])]
+        if k == 0 and not bl:
+            pages.append(s)
+            continue
+        chunks = [bl[i:i + 6] for i in range(0, max(len(bl), 1), 6)] or [[]]
+        for j, ch in enumerate(chunks):
+            pages.append({**s, "bullets": ch, "title": s.get("title", "") + (f" ({j + 1}/{len(chunks)})" if len(chunks) > 1 else ""), "notes": s.get("notes", "") if j == 0 else ""})
+    for k, s in enumerate(pages):
         bullets = s.get("bullets") or []
         cover = k == 0 and not bullets
         sl = prs.slides.add_slide(prs.slide_layouts[0 if cover else 1])
-        sl.shapes.title.text = s.get("title", "")
+        title = sl.shapes.title
+        title.text = s.get("title", "")
         if cover:
+            title.left, title.top, title.width, title.height = Inches(1), Inches(2.3), W - Inches(2), Inches(1.8)
+            for para in title.text_frame.paragraphs:
+                for r in para.runs:
+                    r.font.size = Pt(_fit_pt(len(s.get("title", "")), 1, 44, 28)); r.font.bold = True
             if len(sl.placeholders) > 1:
-                sl.placeholders[1].text = s.get("subtitle", "")
+                sub = sl.placeholders[1]
+                sub.text = s.get("subtitle", "")
+                sub.left, sub.top, sub.width, sub.height = Inches(1), Inches(4.3), W - Inches(2), Inches(1.2)
+                for para in sub.text_frame.paragraphs:
+                    for r in para.runs:
+                        r.font.size = Pt(24)
         else:
-            tf = sl.placeholders[1].text_frame
-            tf.text = str(bullets[0]) if bullets else ""
+            title.left, title.top, title.width, title.height = Inches(0.7), Inches(0.4), W - Inches(1.4), Inches(1.3)
+            tf0 = title.text_frame
+            tf0.word_wrap = True
+            for para in tf0.paragraphs:
+                for r in para.runs:
+                    r.font.size = Pt(_fit_pt(len(s.get("title", "")) * 2, 1, 36, 24)); r.font.bold = True
+            body = sl.placeholders[1]
+            body.left, body.top, body.width, body.height = Inches(0.9), Inches(1.9), W - Inches(1.8), H - Inches(2.4)
+            tf = body.text_frame
+            tf.word_wrap = True
+            total = sum(len(b) for b in bullets)
+            pt = _fit_pt(total, len(bullets), 28, 16)
+            tf.text = bullets[0] if bullets else ""
             for b in bullets[1:]:
-                tf.add_paragraph().text = str(b)
+                tf.add_paragraph().text = b
+            for para in tf.paragraphs:
+                para.space_after = Pt(10)
+                for r in para.runs:
+                    r.font.size = Pt(pt)
         if s.get("notes"):
             sl.notes_slide.notes_text_frame.text = s["notes"]
     prs.save(p)
-    return f"Đã tạo {p.name} với {len(data)} slide tại {p}."
+    return f"Đã tạo {p.name} với {len(pages)} slide tại {p}."
+
+
+@tool("canva_check", "Kiểm tra Canva đã đăng nhập chưa để làm slide đẹp bằng Canva. Gọi tool này TRƯỚC khi tạo slide. Nếu chưa đăng nhập, giao diện sẽ hiện nút đăng nhập Canva cho người dùng; khi đã đăng nhập sẽ trả về danh sách công cụ Canva để tạo bài thuyết trình.",
+      {}, risk="safe")
+def canva_check(ctx):
+    from . import mcp_catalog, mcp_client
+    cfg = cfgmod.load()
+    if "canva" not in cfg.mcp_servers:
+        entry = next(s for s in mcp_catalog.SERVICES if s["id"] == "canva")
+        cfg.mcp_servers["canva"] = cfgmod.McpServerCfg(transport="http", url=entry["url"], service=True, oauth=True, enabled=True, confirm=True)
+        cfgmod.save(cfg)
+        mcp_client.manager.apply(cfg.mcp_servers)
+    st = mcp_client.manager.status().get("canva", {})
+    if st.get("status") == "connected":
+        names = ", ".join(t["full_name"] for t in st.get("tools", []))
+        return ("Canva đã đăng nhập. Quy trình làm slide THEO MẪU:\n"
+                "1. Tìm mẫu: canva__search-brand-templates và canva__search-designs (loại presentation). Chỉ nhận mẫu là BÀI THUYẾT TRÌNH; bỏ CV, poster, tài liệu. "
+                "Cho người dùng chọn 1 mẫu (ask_user, nêu tên mẫu); nếu họ đã đưa id/link mẫu thì dùng luôn. Không có mẫu phù hợp thì nói rõ rồi mới để Canva tự dựng.\n"
+                "2. Dùng mẫu: gọi canva__create-design với design_type presentation, đưa mẫu đã chọn vào tham số references (id mẫu) để Canva dựng theo phong cách mẫu, "
+                "kèm brief đủ nội dung. Nếu là brand template có trường autofill (canva__get-brand-template-dataset) thì dùng canva__create-design-from-brand-template và điền dữ liệu.\n"
+                "3. KHÔNG dùng canva__copy-design rồi sửa từng text trong từng trang bằng start-editing-transaction: rất nhiều bước, hay mất element_id và dễ kẹt. "
+                "Chỉ dùng chỉnh sửa để vá vài lỗi nhỏ sau khi đã có bản tạo xong.\n"
+                "4. Brief gồm: người nghe, mục đích, giọng điệu, dàn ý TỪNG slide (tiêu đề là câu khẳng định + 3-5 ý ngắn, ≤ ~40 từ/slide, số liệu cụ thể), yêu cầu có hình/sơ đồ, không để slide trống nửa trang.\n"
+                "5. Job chạy ngầm: gọi canva__get-create-design-async-job tới khi xong, rồi xem canva__get-design-pages. Không dùng tool legacy (generate-design, create-design-from-candidate).\n"
+                "6. Nếu sau 2 lần thử mà Canva vẫn không ra kết quả dùng được, DỪNG và đề nghị tạo file .pptx offline bằng create_pptx, đừng lặp mãi.\n"
+                "7. Trả link dưới dạng URL trần trên một dòng riêng (không backtick), hỏi có cần xuất .pptx/PDF không (canva__export-design). Công cụ có sẵn: " + names)
+    ctx.emit({"type": "service_login", "name": "canva", "label": "Canva", "tpl": "Đăng nhập Canva để làm slide đẹp hơn", "message": "Đăng nhập Canva để làm slide đẹp hơn"})
+    return ("Canva CHƯA đăng nhập. Giao diện đã hiện nút đăng nhập cho người dùng. Hãy nói ngắn gọn: bạn có thể bấm 'Đăng nhập Canva' rồi nhắn lại 'xong', "
+            "hoặc nếu muốn có file ngay thì dùng create_pptx. KHÔNG tự tạo file create_pptx cho tới khi người dùng chọn.")
 
 
 VANBAN_RULES = """QUY TẮC (skill van-ban-hanh-chinh, NĐ 30/2020):

@@ -8,6 +8,7 @@ import { CodePage } from '@/features/code/CodePage'
 import { ChatPage } from '@/features/chat/ChatPage'
 import { HomePage } from '@/features/home/HomePage'
 import { IntegrationsPage } from '@/features/integrations/IntegrationsPage'
+import { PagesPage } from '@/features/pages/PagesPage'
 import { DocumentsPage } from '@/features/documents/DocumentsPage'
 import { PluginsPage } from '@/features/plugins/PluginsPage'
 import { ProvidersPage } from '@/features/providers/ProvidersPage'
@@ -51,6 +52,8 @@ export default function App() {
         <Route path="skills" element={<SkillsPage />} />
         <Route path="plugins" element={adv(<PluginsPage />)} />
         <Route path="documents" element={<DocumentsPage />} />
+        <Route path="pages" element={<PagesPage />} />
+        <Route path="pages/:id" element={<PagesPage />} />
         <Route path="providers" element={adv(<ProvidersPage />)} />
         <Route path="integrations" element={adv(<IntegrationsPage />)} />
         <Route path="audit" element={<Navigate to="/activity?tab=log" replace />} />
