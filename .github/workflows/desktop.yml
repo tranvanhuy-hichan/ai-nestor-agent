@@ -34,11 +34,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e app/backend pyinstaller
-          pyinstaller --noconfirm --distpath app/desktop/build --workpath app/desktop/build/work app/desktop/argus-server.spec
+          pyinstaller --noconfirm --distpath app/desktop/build --workpath app/desktop/build/work app/desktop/nestor-server.spec
 
       - name: Smoke test the bundled server
         shell: bash
-        run: python app/desktop/smoke_test.py app/desktop/build/argus-server
+        run: python app/desktop/smoke_test.py app/desktop/build/nestor-server
 
       - name: Package desktop app
         working-directory: app/desktop
@@ -48,7 +48,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: argus-desktop-${{ matrix.os }}
+          name: nestor-desktop-${{ matrix.os }}
           path: |
             app/desktop/dist/*.AppImage
             app/desktop/dist/*.deb

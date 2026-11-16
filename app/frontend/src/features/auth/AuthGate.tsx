@@ -22,7 +22,7 @@ function LoginPage({ onSuccess }: { onSuccess: () => void }) {
       <form onSubmit={(e) => void submit(e)} className="w-full max-w-sm space-y-4 rounded-2xl border border-line bg-panel p-6">
         <div className="flex flex-col items-center gap-2 text-center">
           <div className="grid size-12 place-items-center rounded-xl bg-accent text-accent-fg"><Bot className="size-6" /></div>
-          <h1 className="text-lg font-semibold">{t('Đăng nhập Argus Agent')}</h1>
+          <h1 className="text-lg font-semibold">{t('Đăng nhập Nestor Agent')}</h1>
         </div>
         <label className="block"><span className="sr-only">{t('Mật khẩu')}</span>
           <Input type="password" autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('Mật khẩu')} /></label>
@@ -35,7 +35,7 @@ function LoginPage({ onSuccess }: { onSuccess: () => void }) {
 
 /** Chan toan bo ung dung bang trang dang nhap khi da dat mat khau; bat su kien 401 tu moi lenh goi API. */
 const INTRO_MS = 1400
-const introSeen = () => { try { return sessionStorage.getItem('argus-intro') === '1' } catch { return false } }
+const introSeen = () => { try { return sessionStorage.getItem('nestor-intro') === '1' } catch { return false } }
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const qc = useQueryClient()
@@ -45,13 +45,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [gone, setGone] = useState(() => introSeen())
   useEffect(() => {
     if (!intro) return
-    const t1 = setTimeout(() => { setIntro(false); try { sessionStorage.setItem('argus-intro', '1') } catch { /* khong luu duoc thi thoi */ } }, INTRO_MS)
+    const t1 = setTimeout(() => { setIntro(false); try { sessionStorage.setItem('nestor-intro', '1') } catch { /* khong luu duoc thi thoi */ } }, INTRO_MS)
     return () => clearTimeout(t1)
   }, [intro])
   useEffect(() => {  // nut "Xem man hinh chao" o Trang chu
     const replay = () => { setIntro(true); setGone(false) }
-    window.addEventListener('argus-intro', replay)
-    return () => window.removeEventListener('argus-intro', replay)
+    window.addEventListener('nestor-intro', replay)
+    return () => window.removeEventListener('nestor-intro', replay)
   }, [])
   const ready = state !== 'loading' && !intro
   useEffect(() => {

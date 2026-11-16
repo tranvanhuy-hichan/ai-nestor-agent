@@ -1,6 +1,6 @@
 import pytest
 
-from argus.services import api_run, tokens
+from nestor.services import api_run, tokens
 
 
 def test_deny_blocks_everything():

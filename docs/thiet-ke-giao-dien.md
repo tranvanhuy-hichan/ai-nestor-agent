@@ -1,6 +1,6 @@
 # Thiết kế giao diện cho người dùng phổ thông
 
-Argus có hai giao diện trong cùng một ứng dụng, đổi bằng nút **Nâng cao / Đơn giản** ở cuối thanh bên (lựa chọn lưu trong `localStorage`, khóa `ui-mode`, mặc định là *Đơn giản*).
+Nestor có hai giao diện trong cùng một ứng dụng, đổi bằng nút **Nâng cao / Đơn giản** ở cuối thanh bên (lựa chọn lưu trong `localStorage`, khóa `ui-mode`, mặc định là *Đơn giản*).
 
 ## Người dùng mục tiêu
 

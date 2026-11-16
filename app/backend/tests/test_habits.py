@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.services import habits, notifications, scheduler, sessions, skills
+from nestor.core import config as cfgmod
+from nestor.services import habits, notifications, scheduler, sessions, skills
 
 REQ = "Tóm tắt tin tức công nghệ hôm nay giúp tôi"
 
@@ -97,7 +97,7 @@ def test_disabled_by_config():
 def test_api_is_mounted_and_accept_dismiss(monkeypatch):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
+    from nestor.main import app
     c = TestClient(app)
     monkeypatch.setattr(habits, "make_provider", lambda cfg: Fake(""))
     for _ in range(3):

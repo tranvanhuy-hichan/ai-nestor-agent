@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from argus.services import agent, hooks, tools
+from nestor.services import agent, hooks, tools
 
 
 def _ctx(tmp_path, **kw):
@@ -52,7 +52,7 @@ def test_project_docs_walks_parents(tmp_path, monkeypatch):
 
 
 def test_plan_finalize_closes_last_report_step(tmp_env):
-    from argus.services import plans
+    from nestor.services import plans
     plans.set_items("s1", ["a", "b", "c"])
     plans.update("s1", 1, "done"); plans.update("s1", 2, "done"); plans.update("s1", 3, "in_progress")
     out = plans.finalize("s1")
@@ -66,7 +66,7 @@ def test_plan_finalize_closes_last_report_step(tmp_env):
 
 
 def test_plan_finalize_does_not_close_never_started_step(tmp_env):
-    from argus.services import plans
+    from nestor.services import plans
     plans.set_items("s4", ["a", "b"])
     plans.update("s4", 1, "in_progress")
     assert [i["status"] for i in plans.finalize("s4")] == ["done", "pending"]

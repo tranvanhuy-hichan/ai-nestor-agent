@@ -20,7 +20,7 @@ export function Images({ text, onOpen }: { text: string; onOpen?: (p: string) =>
 }
 
 let stopReading: (() => void) | null = null
-const SPEECH_RATE_EVENT = 'argus-speech-rate'
+const SPEECH_RATE_EVENT = 'nestor-speech-rate'
 const RATES = [1, 1.15, 1.3, 1.5]
 const storedRate = () => { try { const n = Number(localStorage.getItem('speech:rate')); return RATES.includes(n) ? n : 1.15 } catch { return 1.15 } }
 const subscribeRate = (listener: () => void) => {

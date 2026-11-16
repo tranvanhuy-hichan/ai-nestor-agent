@@ -244,7 +244,7 @@ const dict: Record<string, string> = {
   'Đã đọc': 'Read',
 
   // AuthGate
-  'Đăng nhập Argus Agent': 'Sign in to Argus Agent',
+  'Đăng nhập Nestor Agent': 'Sign in to Nestor Agent',
   'Nhập mật khẩu đã đặt trong Cài đặt.': 'Enter the password set in Settings.',
   'Mật khẩu': 'Password',
   'Đăng nhập': 'Sign in',

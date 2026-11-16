@@ -1,7 +1,7 @@
 # CV theo mẫu mystore
 
 Nguồn mẫu: `mystore/components/cv/templates`, cùng `parts`, `lang`, `levels` và model `lib/cv`.
-Các file đã được sao chép vào Argus, không phụ thuộc đường dẫn hoặc dịch vụ mystore khi chạy.
+Các file đã được sao chép vào Nestor, không phụ thuộc đường dẫn hoặc dịch vụ mystore khi chạy.
 Giữ các bố cục gốc; sửa lỗi nhãn mục trong mẫu Tech và giữ liên kết dự án khi chuẩn hóa dữ liệu.
 
 ## Sử dụng
@@ -23,7 +23,7 @@ hoặc ép chữ nhỏ để vừa một trang. Công cụ báo số trang thự
 ## Dựng và chạy
 
 - `npm --prefix app/frontend run build`: dựng giao diện và renderer dùng chung React templates.
-- Renderer tự chứa thư viện React tại `app/backend/argus/cv_templates/render.mjs`.
+- Renderer tự chứa thư viện React tại `app/backend/nestor/cv_templates/render.mjs`.
 - Backend cần Node.js trên PATH, Playwright và Chromium. Cài browser bằng
   `.venv/bin/python -m playwright install chromium` nếu chưa có Chrome/Chromium hệ thống.
 - Docker đã bổ sung Node.js và Playwright Chromium; chưa kiểm thử build image trong thay đổi này.

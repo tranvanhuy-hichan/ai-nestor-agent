@@ -9,9 +9,9 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from argus.core import config as cfgmod
-from argus.services import agent as agent_mod
-from argus.services import assistants, sessions, skills as skillmod, tools, workfiles
+from nestor.core import config as cfgmod
+from nestor.services import agent as agent_mod
+from nestor.services import assistants, sessions, skills as skillmod, tools, workfiles
 
 CONTENT = assistants._load_content()
 MIN_SKILL = 800
@@ -225,7 +225,7 @@ def test_assistant_persists_per_session(llm):
     need("ke-toan")
     seen = []
     llm(lambda m, t: seen.append(m[0]["content"]) or {"content": "ok"})
-    c = TestClient(__import__("argus.main", fromlist=["app"]).app)
+    c = TestClient(__import__("nestor.main", fromlist=["app"]).app)
     evs = read_stream(c.post("/api/chat", json={"text": "chào", "assistant": "ke-toan"}))
     sid = next(e["id"] for e in evs if e["type"] == "session")
     assert c.get(f"/api/sessions/{sid}").json()["assistant"] == "ke-toan"
@@ -249,7 +249,7 @@ def test_assistant_persists_per_session(llm):
 
 
 def test_old_database_gets_assistant_column(tmp_env):
-    from argus.core import db as dbmod
+    from nestor.core import db as dbmod
     with dbmod.db() as c:
         cols = [r["name"] for r in c.execute("PRAGMA table_info(sessions)")]
     assert "assistant" in cols
@@ -264,8 +264,8 @@ def test_bundled_skills_are_advertised_compactly_for_auto_selection(tmp_env):
     assert "skills_read" in block and "khong can nguoi dung chon skill" in block
     assert len(block) < 15000  # rut gon: khong lam phinh prompt chung
     # model goi skills_read doc duoc skill di kem
-    from argus.services import tools
-    from argus.services.tools import ToolContext
+    from nestor.services import tools
+    from nestor.services.tools import ToolContext
     out, ok = tools.call(ToolContext(workspace=cfg.workspace_path(), skills=sk), "skills_read", {"name": "van-thu-nd30"})
     assert ok and "vanban_write_docx" in out
 
@@ -282,7 +282,7 @@ def test_workspace_skill_overrides_bundled(tmp_env):
 
 
 # ---- form chuc nang (moi tro ly mot trang rieng) ----
-from argus.assistant_defs import forms as formsmod  # noqa: E402
+from nestor.assistant_defs import forms as formsmod  # noqa: E402
 
 
 @pytest.mark.parametrize("d", assistants.BUILTIN, ids=lambda d: d["id"])
@@ -333,7 +333,7 @@ def test_list_all_adds_default_form_to_custom_assistant(tmp_env):
 
 
 def test_vanban_write_docx_rejects_skeleton_but_accepts_full_draft(tmp_path):
-    from argus.services import tools_office as T
+    from nestor.services import tools_office as T
     short = [{"role": "body", "text": "Nâng cấp quốc lộ để đảm bảo an toàn giao thông."}]
     with pytest.raises(ValueError, match="quá ngắn"):
         T._check_depth(short, "TO_TRINH")
@@ -350,12 +350,12 @@ def test_van_thu_cannot_use_create_docx():
 
 
 def test_create_docx_blocks_titlecase_admin_documents(tmp_path):
-    from argus.services import tools_office as T
+    from nestor.services import tools_office as T
     assert T._looks_administrative("Tờ trình đề nghị phê duyệt chủ trương\nKính gửi: Bộ Giao thông Vận tải")
 
 
 def test_vanban_normalizes_header_and_footer_into_two_columns():
-    from argus.services import tools_office as T
+    from nestor.services import tools_office as T
     flat = [{"role": r, "text": r} for r in ("national_name", "motto", "issuing_org", "document_number", "place_date")]
     flat += [{"role": "document_type_title", "text": "TỜ TRÌNH"}, {"role": "body", "text": "Nội dung"},
              {"role": "recipients_label", "text": "Nơi nhận:"}, {"role": "recipients_item", "text": "- Như trên;"},

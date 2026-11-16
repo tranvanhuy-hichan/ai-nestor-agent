@@ -15,7 +15,7 @@ export function useLiveTranslation(voice: string) {
   const [voiceError, setVoiceError] = useState('')
   const [voiceReady, setVoiceReady] = useState(false)
   const voiceWindow = useRef<Window | null>(null), outputAudio = useRef<HTMLAudioElement | null>(null)
-  const [captureHandle] = useState(() => `argus-translation-${crypto.randomUUID()}`)
+  const [captureHandle] = useState(() => `nestor-translation-${crypto.randomUUID()}`)
   const handleExposed = useRef(false)
   const [level, setLevel] = useState(false)
   const live = useRef(false), epoch = useRef(0), voiceRef = useRef(voice)
@@ -36,7 +36,7 @@ export function useLiveTranslation(voice: string) {
   const prepareVoice = () => {
     setVoiceError('')
     if (voiceWindow.current && !voiceWindow.current.closed) { voiceWindow.current.focus(); return }
-    const popup = window.open('/translation-audio.html', `argus-voice-${crypto.randomUUID()}`, 'popup,width=460,height=310')
+    const popup = window.open('/translation-audio.html', `nestor-voice-${crypto.randomUUID()}`, 'popup,width=460,height=310')
     if (!popup) { setVoiceError('Trình duyệt đang chặn cửa sổ giọng dịch. Hãy cho phép cửa sổ bật lên rồi bấm mở giọng dịch lại.'); return }
     voiceWindow.current = popup
   }
@@ -90,7 +90,7 @@ export function useLiveTranslation(voice: string) {
       audio.onerror = () => { stopVoice(); voiceFailed.current = true; setVoiceError('Không phát được giọng dịch. Phụ đề vẫn tiếp tục.') }
       audio.onplay = () => { if (generation === voiceEpoch.current) setVoiceError('') }
       try { await audio.play() } catch (e) {
-        if ((e as { name?: string } | null)?.name === 'NotAllowedError' && currentTab.current) { setVoiceError('Bấm Phát trong cửa sổ Giọng dịch Argus để bật âm thanh. Phụ đề vẫn tiếp tục.'); return }
+        if ((e as { name?: string } | null)?.name === 'NotAllowedError' && currentTab.current) { setVoiceError('Bấm Phát trong cửa sổ Giọng dịch Nestor để bật âm thanh. Phụ đề vẫn tiếp tục.'); return }
         throw e
       }
     } catch { if (generation === voiceEpoch.current) { stopVoice(); voiceFailed.current = true; setVoiceError('Không phát được giọng dịch. Phụ đề vẫn tiếp tục.') } }
@@ -117,7 +117,7 @@ export function useLiveTranslation(voice: string) {
       capture.current = () => stream.getTracks().forEach((t) => t.stop())
       const sourceError = captureSourceError(stream, !!settings.captureCurrentTab, captureHandle, handleExposed.current)
       if (sourceError) { stream.getTracks().forEach((t) => t.stop()); throw new Error(sourceError) }
-      if (!stream.getAudioTracks().length) { stream.getTracks().forEach((t) => t.stop()); throw new Error(settings.captureCurrentTab ? 'Chưa chia sẻ âm thanh. Chọn tab Argus này và bật “Chia sẻ âm thanh của tab”.' : 'Chưa chia sẻ âm thanh. Chọn tab YouTube và bật “Chia sẻ âm thanh của tab”.') }
+      if (!stream.getAudioTracks().length) { stream.getTracks().forEach((t) => t.stop()); throw new Error(settings.captureCurrentTab ? 'Chưa chia sẻ âm thanh. Chọn tab Nestor này và bật “Chia sẻ âm thanh của tab”.' : 'Chưa chia sẻ âm thanh. Chọn tab YouTube và bật “Chia sẻ âm thanh của tab”.') }
       const mime = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'].find((m) => MediaRecorder.isTypeSupported(m))
       if (!mime) { stream.getTracks().forEach((t) => t.stop()); throw new Error('Không có định dạng thu âm phù hợp trên trình duyệt này.') }
       capture.current = () => stream.getTracks().forEach((t) => t.stop())

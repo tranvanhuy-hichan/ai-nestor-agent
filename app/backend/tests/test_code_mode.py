@@ -4,15 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.services import agent, sessions, tools, workfiles
+from nestor.core import config as cfgmod
+from nestor.services import agent, sessions, tools, workfiles
 
 
 @pytest.fixture
 def client(tmp_env):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
+    from nestor.main import app
     return TestClient(app)
 
 

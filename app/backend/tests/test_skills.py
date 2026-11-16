@@ -4,8 +4,8 @@ import zipfile
 
 import pytest
 
-from argus.core.config import Config, SkillEntry
-from argus.services import skills as sk
+from nestor.core.config import Config, SkillEntry
+from nestor.services import skills as sk
 
 CLAWDBOT = '''---
 name: weather
@@ -83,7 +83,7 @@ def test_remove_only_inside_skills_dir(tmp_path):
 
 
 def test_bundled_skills_seed_once(tmp_path):
-    from argus.core.workspace import seed_skills, template_dir
+    from nestor.core.workspace import seed_skills, template_dir
     src, dst = template_dir() / "skills", tmp_path / "skills"
     seed_skills(src, dst)
     names = {d.name for d in src.iterdir() if d.is_dir()}
@@ -99,7 +99,7 @@ def test_bundled_skills_seed_once(tmp_path):
 def test_bundled_skill_scripts_work(tmp_path):
     import subprocess
     import sys
-    from argus.core.workspace import template_dir
+    from nestor.core.workspace import template_dir
     root = template_dir() / "skills"
     (tmp_path / "e.json").write_text('[{"title":"Hi, there","start":"2026-11-05 09:00","remind_min":10}]')
     (tmp_path / "c.json").write_text('[{"front":"Q","back":"A\\nB"}]')
@@ -114,7 +114,7 @@ def test_bundled_skill_scripts_work(tmp_path):
 
 def test_skill_tools_endpoint_lists_install_commands(tmp_env):
     from fastapi.testclient import TestClient
-    from argus.main import app
+    from nestor.main import app
     tools = TestClient(app).get("/api/clawhub/tools").json()
     assert tools["yt-dlp"]["windows"].startswith("winget") and tools["ffmpeg"]["linux"].startswith("sudo apt")
     assert all(set(v) == {"mac", "linux", "windows", "url"} for v in tools.values())

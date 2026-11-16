@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.services import agent as agent_mod
-from argus.services import cli_provider, providers, sessions
+from nestor.core import config as cfgmod
+from nestor.services import agent as agent_mod
+from nestor.services import cli_provider, providers, sessions
 
 FAKE = '''import json, os, sys
 prompt = sys.stdin.read()

@@ -31,7 +31,7 @@ export function WorkflowWaiting({ status, label, compact = false }: { status?: s
       <span className="absolute right-0 top-5 size-2 rounded-full bg-accent shadow-sm shadow-accent" />
     </div>
     <div className="relative w-full max-w-md text-center">
-      <div className="mb-2 flex items-center justify-center gap-2"><Sparkles className="size-3.5 text-accent" /><span className="text-[11px] font-medium uppercase tracking-[.16em] text-accent">{t('Argus đang làm việc')}</span></div>
+      <div className="mb-2 flex items-center justify-center gap-2"><Sparkles className="size-3.5 text-accent" /><span className="text-[11px] font-medium uppercase tracking-[.16em] text-accent">{t('Nestor đang làm việc')}</span></div>
       <h3 className="text-base font-semibold tracking-tight sm:text-lg">{t(label)}</h3>
       <p role="status" aria-live="polite" className="mt-2 break-words text-xs leading-relaxed text-muted">{message}</p>
       <div className="mt-3 flex items-center justify-center gap-2 text-xs text-muted/70"><span className="flex gap-1" aria-hidden>{[0,1,2].map((i) => <span key={i} className="workflow-dot size-1 rounded-full bg-accent" style={{ animationDelay: `${i * 160}ms` }} />)}</span><span aria-hidden>{elapsed}</span><span>{t('Kết quả sẽ xuất hiện tại đây')}</span></div>

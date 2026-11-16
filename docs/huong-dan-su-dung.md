@@ -1,10 +1,10 @@
-# Hướng dẫn sử dụng Argus Agent
+# Hướng dẫn sử dụng Nestor Agent
 
 Tài liệu này dành cho người dùng, không cần biết lập trình. Nếu bạn muốn dùng dòng lệnh, xem [cli.md](cli.md). Nếu bạn muốn hiểu hoặc sửa mã nguồn, xem [kien-truc.md](kien-truc.md).
 
 ## Mục lục
 
-1. [Argus Agent là gì](#1-argus-agent-là-gì)
+1. [Nestor Agent là gì](#1-nestor-agent-là-gì)
 2. [Cài đặt và chạy lần đầu](#2-cài-đặt-và-chạy-lần-đầu)
 3. [Làm quen với giao diện](#3-làm-quen-với-giao-diện)
 4. [Trò chuyện với agent](#4-trò-chuyện-với-agent)
@@ -23,13 +23,13 @@ Tài liệu này dành cho người dùng, không cần biết lập trình. N�
 
 ---
 
-## 1. Argus Agent là gì
+## 1. Nestor Agent là gì
 
-Argus Agent là một trợ lý AI cá nhân **chạy ngay trên máy của bạn**. Bạn trò chuyện với nó như với một người trợ lý: nó đọc và viết file, tìm thông tin trên web, mở trình duyệt, chạy lệnh (khi bạn cho phép), nhớ những điều quan trọng về bạn, và có thể làm việc ngầm hoặc theo lịch rồi báo kết quả qua Hộp thư hoặc Telegram.
+Nestor Agent là một trợ lý AI cá nhân **chạy ngay trên máy của bạn**. Bạn trò chuyện với nó như với một người trợ lý: nó đọc và viết file, tìm thông tin trên web, mở trình duyệt, chạy lệnh (khi bạn cho phép), nhớ những điều quan trọng về bạn, và có thể làm việc ngầm hoặc theo lịch rồi báo kết quả qua Hộp thư hoặc Telegram.
 
 Điểm cần nhớ:
 
-- **Dữ liệu ở trên máy bạn.** Hội thoại, bộ nhớ, file và khóa API nằm trong thư mục `user-data/`. Argus không gửi chúng đi đâu, trừ nội dung hội thoại gửi tới mô hình AI mà bạn chọn (ví dụ Gemini). Nếu bạn dùng mô hình chạy trên máy (Ollama), không có gì rời khỏi máy.
+- **Dữ liệu ở trên máy bạn.** Hội thoại, bộ nhớ, file và khóa API nằm trong thư mục `user-data/`. Nestor không gửi chúng đi đâu, trừ nội dung hội thoại gửi tới mô hình AI mà bạn chọn (ví dụ Gemini). Nếu bạn dùng mô hình chạy trên máy (Ollama), không có gì rời khỏi máy.
 - **Agent có "bộ não" là một mô hình AI.** Bạn chọn mô hình ở trang **Mô hình AI**. Có loại chạy trên máy (miễn phí) và loại đám mây (cần khóa API).
 - **Bạn luôn nắm quyền.** Việc nguy hiểm như chạy lệnh hay ghi file ngoài thư mục làm việc đều hỏi bạn trước, trừ khi bạn chủ động chọn "Toàn quyền".
 
@@ -39,24 +39,24 @@ Argus Agent là một trợ lý AI cá nhân **chạy ngay trên máy của bạ
 
 Tải bản cài đặt ở trang **Releases** của dự án rồi cài như một phần mềm bình thường:
 
-- **Windows:** chạy `Argus-Agent-<phiên bản>-win-x64.exe`. Cài một cú bấm, có shortcut ở Start Menu.
-- **Linux:** `Argus-Agent-<phiên bản>-linux-x86_64.AppImage` (cấp quyền chạy rồi bấm đúp) hoặc gói `.deb` (`sudo apt install ./Argus-Agent-*.deb`).
+- **Windows:** chạy `Nestor-Agent-<phiên bản>-win-x64.exe`. Cài một cú bấm, có shortcut ở Start Menu.
+- **Linux:** `Nestor-Agent-<phiên bản>-linux-x86_64.AppImage` (cấp quyền chạy rồi bấm đúp) hoặc gói `.deb` (`sudo apt install ./Nestor-Agent-*.deb`).
 
-Mở "Argus Agent" là có ngay cửa sổ riêng, không cần dòng lệnh, không cần cài Python. App tự chạy server bên trong và tự tắt khi bạn đóng cửa sổ. Dữ liệu (cấu hình, hội thoại, workspace) nằm ở thư mục dữ liệu của người dùng và **được giữ lại khi cập nhật hay gỡ cài đặt**: menu **Trợ giúp → Mở thư mục dữ liệu**. Nếu app không mở được, menu **Trợ giúp → Xem nhật ký**.
+Mở "Nestor Agent" là có ngay cửa sổ riêng, không cần dòng lệnh, không cần cài Python. App tự chạy server bên trong và tự tắt khi bạn đóng cửa sổ. Dữ liệu (cấu hình, hội thoại, workspace) nằm ở thư mục dữ liệu của người dùng và **được giữ lại khi cập nhật hay gỡ cài đặt**: menu **Trợ giúp → Mở thư mục dữ liệu**. Nếu app không mở được, menu **Trợ giúp → Xem nhật ký**.
 
-Bản desktop có dữ liệu riêng, tách khỏi bản chạy bằng CLI hay Docker trên cùng máy, nên hai bên không đụng nhau. Người dùng kỹ thuật vẫn cài và dùng `argus` như mô tả bên dưới.
+Bản desktop có dữ liệu riêng, tách khỏi bản chạy bằng CLI hay Docker trên cùng máy, nên hai bên không đụng nhau. Người dùng kỹ thuật vẫn cài và dùng `nestor` như mô tả bên dưới.
 
 ### Cách dành cho người dùng kỹ thuật: CLI
 
 Cần Python 3.11 trở lên (và Node 20 trở lên nếu muốn tự build giao diện).
 
 ```bash
-git clone https://github.com/tranvanhuy-hichan/argus-agent.git
-cd argus-agent
+git clone https://github.com/tranvanhuy-hichan/nestor-agent.git
+cd nestor-agent
 python3 -m venv .venv
 .venv/bin/pip install -e app/backend
 (cd app/frontend && npm install && npm run build)
-.venv/bin/argus onboard
+.venv/bin/nestor onboard
 ```
 
 Lệnh cuối là **trình hướng dẫn cài đặt lần đầu**. Nó dùng phím mũi tên lên/xuống để chọn, Space để đánh dấu, Enter để xác nhận, và hỏi lần lượt:
@@ -68,18 +68,18 @@ Lệnh cuối là **trình hướng dẫn cài đặt lần đầu**. Nó dùng 
 5. Có kết nối Telegram không.
 6. Có bật heartbeat (agent tự kiểm tra định kỳ) không, và có cài chế độ tự khởi động cùng máy không.
 
-Xong, mở **http://127.0.0.1:8787** trong trình duyệt (hoặc gõ `argus open`).
+Xong, mở **http://127.0.0.1:8787** trong trình duyệt (hoặc gõ `nestor open`).
 
-> Mẹo: thêm `.venv/bin` vào `PATH` (hoặc chạy `source .venv/bin/activate`) để gõ ngắn `argus ...` thay vì `.venv/bin/argus ...`.
+> Mẹo: thêm `.venv/bin` vào `PATH` (hoặc chạy `source .venv/bin/activate`) để gõ ngắn `nestor ...` thay vì `.venv/bin/nestor ...`.
 
 ### Mỗi lần mở máy
 
 | Bạn muốn | Làm gì |
 |---|---|
-| Chạy thủ công | `argus start` rồi `argus open` |
-| Tự chạy mỗi khi bật máy | `argus service install` (làm một lần) |
-| Kiểm tra có đang chạy không | `argus status` |
-| Gặp lỗi lạ | `argus doctor` (chẩn đoán và gợi ý cách sửa) |
+| Chạy thủ công | `nestor start` rồi `nestor open` |
+| Tự chạy mỗi khi bật máy | `nestor service install` (làm một lần) |
+| Kiểm tra có đang chạy không | `nestor status` |
+| Gặp lỗi lạ | `nestor doctor` (chẩn đoán và gợi ý cách sửa) |
 
 ### Chạy bằng Docker
 
@@ -168,7 +168,7 @@ Khi bạn yêu cầu Agent viết code HTML, ứng dụng mini, trang web demo h
 
 ### Quản lý danh sách hội thoại
 
-- **Tự động đặt tên thông minh (Auto-naming)**: Sau câu trả lời đầu tiên, Argus tự động tóm tắt nội dung chính thành một tiêu đề ngắn gọn (3–5 từ) giúp bạn dễ dàng nhận biết chủ đề thảo luận.
+- **Tự động đặt tên thông minh (Auto-naming)**: Sau câu trả lời đầu tiên, Nestor tự động tóm tắt nội dung chính thành một tiêu đề ngắn gọn (3–5 từ) giúp bạn dễ dàng nhận biết chủ đề thảo luận.
 - **Ghim hội thoại (Pin)**: Bấm biểu tượng ghim 📌 cạnh mỗi phiên trò chuyện để đưa các cuộc trò chuyện quan trọng lên đầu danh sách.
 - **Hiển thị đầy đủ tiêu đề**: Thanh bên danh sách trò chuyện được thiết kế rộng rãi (`288px`), tự động xuống 2 dòng (`line-clamp-2`) giúp hiển thị trọn vẹn câu hỏi mà không bị cắt cụt.
 - **Tìm kiếm toàn văn**: Ô tìm kiếm phía trên tìm kiếm cả tiêu đề lẫn nội dung chi tiết bên trong các cuộc trò chuyện cũ.
@@ -250,18 +250,18 @@ Xóa hết nội dung file để tạm dừng. Bấm **Tùy chọn** để đổ
 
 - **Đã cài**: danh sách kỹ năng bạn có. Bật/tắt từng cái, xem nội dung, điền khóa API nếu kỹ năng cần. Kỹ năng còn thiếu điều kiện (thiếu chương trình hoặc biến môi trường) hiển thị rõ cần gì.
 - **Gợi ý cho bạn**: khoảng 28 kỹ năng chọn lọc từ các kỹ năng được tải nhiều nhất trên ClawHub, chia theo nhóm (tìm hiểu và tin tức, văn bản và tài liệu như Word/Excel/PowerPoint/PDF, công việc và liên lạc như Google, Notion, email, âm thanh và video, dữ liệu và tài chính, đời sống, an toàn). Mỗi kỹ năng ghi rõ có cần khóa API, công cụ cài thêm hay chỉ chạy trên macOS/Linux. Bấm vào một kỹ năng để đọc nội dung rồi cài.
-Kỹ năng nào cần chương trình ngoài (ví dụ `yt-dlp`, `ffmpeg`, `whisper`) có mục **Cách cài công cụ này** với lệnh cài sẵn cho macOS, Linux và Windows, bấm để sao chép. Mục này cũng hiện ở tab **Đã cài** khi một kỹ năng báo "Thiếu lệnh". Cài xong, khởi động lại Argus để nhận lệnh mới.
+Kỹ năng nào cần chương trình ngoài (ví dụ `yt-dlp`, `ffmpeg`, `whisper`) có mục **Cách cài công cụ này** với lệnh cài sẵn cho macOS, Linux và Windows, bấm để sao chép. Mục này cũng hiện ở tab **Đã cài** khi một kỹ năng báo "Thiếu lệnh". Cài xong, khởi động lại Nestor để nhận lệnh mới.
 - **Khám phá**: tìm và cài kỹ năng từ **ClawHub**, kho kỹ năng công khai. Có cảnh báo nếu một kỹ năng bị đánh dấu đáng ngờ.
 
 Bạn cũng tự tạo kỹ năng bằng nút **Tạo kỹ năng**. Một kỹ năng là một thư mục trong `user-data/workspace/skills/<tên>/` có file `SKILL.md`. Dùng trong chat bằng cách gõ `/` rồi chọn tên.
 
-**Kỹ năng có sẵn.** Lần đầu chạy, Argus tự thêm 5 kỹ năng (viết bằng tiếng Anh, dùng được với mọi ngôn ngữ): viết email, biên bản họp (kèm file lịch `.ics`), huấn luyện học tập (flashcard xuất sang Anki), CV và phỏng vấn thử, lập kế hoạch ngày (xuất lịch). Các kỹ năng làm việc với Word, Excel, PowerPoint, PDF, tóm tắt và nghiên cứu nằm ở tab **Gợi ý cho bạn**, cài một lần bấm. Gõ `/` trong khung chat để chọn; kỹ năng đã chọn hiện thành thẻ phía trên ô nhập. Mỗi kỹ năng chỉ được thêm một lần: bạn xóa cái nào thì nó không quay lại, còn kỹ năng mới ở bản cập nhật sẽ được thêm vào.
+**Kỹ năng có sẵn.** Lần đầu chạy, Nestor tự thêm 5 kỹ năng (viết bằng tiếng Anh, dùng được với mọi ngôn ngữ): viết email, biên bản họp (kèm file lịch `.ics`), huấn luyện học tập (flashcard xuất sang Anki), CV và phỏng vấn thử, lập kế hoạch ngày (xuất lịch). Các kỹ năng làm việc với Word, Excel, PowerPoint, PDF, tóm tắt và nghiên cứu nằm ở tab **Gợi ý cho bạn**, cài một lần bấm. Gõ `/` trong khung chat để chọn; kỹ năng đã chọn hiện thành thẻ phía trên ô nhập. Mỗi kỹ năng chỉ được thêm một lần: bạn xóa cái nào thì nó không quay lại, còn kỹ năng mới ở bản cập nhật sẽ được thêm vào.
 
-> **Cẩn thận:** kỹ năng tải từ internet chỉ là hướng dẫn, nhưng có thể bảo agent chạy lệnh. Hãy đọc `SKILL.md` trước khi cài và giữ bật xác nhận chạy lệnh. Bạn cũng có thể cài nhanh từ dòng lệnh: `argus skills install <chủ>/<tên>`.
+> **Cẩn thận:** kỹ năng tải từ internet chỉ là hướng dẫn, nhưng có thể bảo agent chạy lệnh. Hãy đọc `SKILL.md` trước khi cài và giữ bật xác nhận chạy lệnh. Bạn cũng có thể cài nhanh từ dòng lệnh: `nestor skills install <chủ>/<tên>`.
 
 ### Gợi ý tạo kỹ năng từ việc lặp lại
 
-Khi bạn gửi cùng một kiểu yêu cầu ở **3 cuộc trò chuyện khác nhau**, Argus nhận ra và hiện thẻ "Tạo kỹ năng (hoặc tự động hóa) cho việc này nhé?" ở Trang chủ, kèm một thông báo. Bản nháp đã được soạn sẵn:
+Khi bạn gửi cùng một kiểu yêu cầu ở **3 cuộc trò chuyện khác nhau**, Nestor nhận ra và hiện thẻ "Tạo kỹ năng (hoặc tự động hóa) cho việc này nhé?" ở Trang chủ, kèm một thông báo. Bản nháp đã được soạn sẵn:
 
 - Việc mang tính định kỳ ("mỗi sáng", "hằng tuần") được đề xuất thành **tự động hóa** (có sẵn lịch cron và lời nhắc).
 - Các việc còn lại thành **kỹ năng** (tên, mô tả, các bước).
@@ -280,7 +280,7 @@ Mục **Tài liệu** (thanh bên, nhóm Công việc) là kho tri thức riêng
 
 ### Quá trình nạp và lập chỉ mục
 
-Argus đọc từng file, cắt thành các đoạn ngắn (chunks ≈ 900 ký tự) và ghi nhớ vị trí cụ thể (trang của PDF, mục của Word, sheet và dòng của Excel, slide của PowerPoint). File trùng nội dung được nhận dạng bằng sha256 và bỏ qua.
+Nestor đọc từng file, cắt thành các đoạn ngắn (chunks ≈ 900 ký tự) và ghi nhớ vị trí cụ thể (trang của PDF, mục của Word, sheet và dòng của Excel, slide của PowerPoint). File trùng nội dung được nhận dạng bằng sha256 và bỏ qua.
 Thanh tiến trình nạp trực quan hiển thị % xử lý và trạng thái: **Đang xử lý**, **Sẵn sàng** hoặc **Lỗi** kèm lý do cụ thể.
 
 Tìm kiếm kết hợp hai cơ chế:
@@ -309,7 +309,7 @@ Nút **Phân tích tài liệu** ở trang Tài liệu giao cho agent một vi�
 
 - `POST /v1/documents?name=ten.pdf` (thân là nội dung file) thêm tài liệu; `DELETE /v1/documents/{id}` xóa. Hai việc này cần token có quyền **Cho phép thêm và xóa tài liệu** (mặc định tắt).
 - `GET /v1/documents` liệt kê; `POST /v1/documents/search` chỉ tìm các đoạn khớp (không gọi model); `POST /v1/documents/ask` hỏi đáp và nhận câu trả lời kèm danh sách nguồn. Mọi token đều dùng được ba việc này.
-- MCP server của Argus (cách cài ở **Kết nối → API & Token**) có thêm các công cụ `kb_upload` (đường dẫn file trên máy), `kb_list`, `kb_search`, `kb_ask`, `kb_delete`.
+- MCP server của Nestor (cách cài ở **Kết nối → API & Token**) có thêm các công cụ `kb_upload` (đường dẫn file trên máy), `kb_list`, `kb_search`, `kb_ask`, `kb_delete`.
 
 ### Tìm theo nghĩa: dùng Ollama trên máy hay Gemini
 
@@ -332,13 +332,13 @@ Sau khi đổi, nhớ bấm **Lưu thay đổi** ở góc phải trên.
 
 Trong **Chỉnh sửa → Tùy chọn nâng cao** có: địa chỉ máy chủ (Base URL), lấy khóa từ biến môi trường, độ sáng tạo (temperature), giá token để ước tính chi phí, và công tắc **"Model hiểu được ảnh"** (chỉ bật nếu mô hình hỗ trợ).
 
-**Về mô hình dùng CLI.** Argus chạy CLI ở chế độ không giao diện và tắt công cụ riêng của nó; Argus vẫn tự điều khiển công cụ nên phê duyệt, kế hoạch và trí nhớ hoạt động như thường. Đổi lại, mỗi bước mở một tiến trình CLI nên chậm hơn (khoảng 3 giây mỗi bước với Claude Code, 7–17 giây với Antigravity), không xem được ảnh và không có ô chọn "mức nỗ lực". Biến `ANTHROPIC_API_KEY` trong môi trường bị bỏ qua để CLI dùng đúng tài khoản đăng nhập. Antigravity và Codex có công cụ riêng (đọc/ghi file, chạy lệnh) mà không tắt được bằng cờ; Argus yêu cầu chúng chỉ trả lời bằng văn bản, và Codex được chạy ở chế độ sandbox chỉ đọc. Antigravity tạo một hội thoại trong lịch sử của `agy` mỗi lần gọi. Codex **chưa được kiểm chứng với bản thật** (chưa cài trên máy phát triển). **Hãy đọc điều khoản của hãng** về việc dùng gói thuê bao theo cách này (Anthropic từng cấm dùng token đăng nhập của gói thuê bao trong ứng dụng bên thứ ba; Argus không lấy token, chỉ chạy chính CLI chính thức, nhưng bạn nên tự xác nhận). Nếu không chắc, dùng API key.
+**Về mô hình dùng CLI.** Nestor chạy CLI ở chế độ không giao diện và tắt công cụ riêng của nó; Nestor vẫn tự điều khiển công cụ nên phê duyệt, kế hoạch và trí nhớ hoạt động như thường. Đổi lại, mỗi bước mở một tiến trình CLI nên chậm hơn (khoảng 3 giây mỗi bước với Claude Code, 7–17 giây với Antigravity), không xem được ảnh và không có ô chọn "mức nỗ lực". Biến `ANTHROPIC_API_KEY` trong môi trường bị bỏ qua để CLI dùng đúng tài khoản đăng nhập. Antigravity và Codex có công cụ riêng (đọc/ghi file, chạy lệnh) mà không tắt được bằng cờ; Nestor yêu cầu chúng chỉ trả lời bằng văn bản, và Codex được chạy ở chế độ sandbox chỉ đọc. Antigravity tạo một hội thoại trong lịch sử của `agy` mỗi lần gọi. Codex **chưa được kiểm chứng với bản thật** (chưa cài trên máy phát triển). **Hãy đọc điều khoản của hãng** về việc dùng gói thuê bao theo cách này (Anthropic từng cấm dùng token đăng nhập của gói thuê bao trong ứng dụng bên thứ ba; Nestor không lấy token, chỉ chạy chính CLI chính thức, nhưng bạn nên tự xác nhận). Nếu không chắc, dùng API key.
 
 **Chọn mô hình nào?** Mô hình nhỏ chạy trên máy (như qwen2.5:3b) miễn phí và riêng tư nhưng yếu, hay quên và gọi công cụ kém. Việc nhiều bước, giao việc cho agent con, hoặc điều khiển trình duyệt nên dùng mô hình đám mây mạnh hơn.
 
 ### Xem hạn mức (giới hạn 5 giờ và theo tuần)
 
-Mỗi mô hình ở trang **Mô hình AI** hiện dòng **Argus đã dùng** (token và số lượt trong 5 giờ và 7 ngày qua). Với **Claude Code** (CLI đã đăng nhập bằng gói thuê bao), Argus còn đọc hạn mức thật bằng lệnh `claude -p /usage` và vẽ hai thanh: **Phiên 5 giờ** và **Tuần**, kèm phần trăm đã dùng, phần trăm còn lại và giờ làm mới. Cùng thông tin này xuất hiện trong nút **Tuỳ chọn** ở khung chat (mục **Hạn mức**) cho model đang chọn. Số liệu được lưu đệm 60 giây; nút làm mới cạnh dòng "Argus đã dùng" lấy lại ngay. Antigravity và Codex chưa có lệnh xem hạn mức nên chỉ hiện phần Argus đã dùng. Hạn mức của gói thuê bao là chung cho mọi nơi bạn dùng (Claude Code, trình duyệt…), không chỉ riêng Argus.
+Mỗi mô hình ở trang **Mô hình AI** hiện dòng **Nestor đã dùng** (token và số lượt trong 5 giờ và 7 ngày qua). Với **Claude Code** (CLI đã đăng nhập bằng gói thuê bao), Nestor còn đọc hạn mức thật bằng lệnh `claude -p /usage` và vẽ hai thanh: **Phiên 5 giờ** và **Tuần**, kèm phần trăm đã dùng, phần trăm còn lại và giờ làm mới. Cùng thông tin này xuất hiện trong nút **Tuỳ chọn** ở khung chat (mục **Hạn mức**) cho model đang chọn. Số liệu được lưu đệm 60 giây; nút làm mới cạnh dòng "Nestor đã dùng" lấy lại ngay. Antigravity và Codex chưa có lệnh xem hạn mức nên chỉ hiện phần Nestor đã dùng. Hạn mức của gói thuê bao là chung cho mọi nơi bạn dùng (Claude Code, trình duyệt…), không chỉ riêng Nestor.
 
 ## 10. Kết nối: công cụ ngoài, Telegram, API
 
@@ -352,17 +352,17 @@ MCP là cách "cắm thêm" công cụ cho agent. Có hai nơi:
 
 **Mục "Tiện ích"** (thanh bên, nhóm Khả năng của agent): danh mục **54 dịch vụ đã kiểm chứng** chia theo lĩnh vực, kể cả những cái bạn chưa dùng: Lập trình và triển khai (GitHub, GitLab, Vercel, Netlify, Cloudflare, Sentry, Datadog, Context7, DeepWiki, Microsoft Learn…), Dữ liệu và hạ tầng (Neon, Supabase, PostHog, Apify, Hugging Face…), Tìm kiếm và tài liệu (Exa, Firecrawl, Tavily), Công việc và cộng tác (Notion, Linear, Asana, Atlassian, ClickUp, monday, Airtable, Todoist, Miro, Zapier…), Thiết kế và website (Canva, Webflow, Wix), Kinh doanh và thanh toán (Stripe, PayPal, Square, Intercom, Ramp, Clay, Close, Shopify, GoDaddy), cùng Buildkite, Better Stack, Grafana, Globalping, AWS Knowledge, AllTrails, Amplitude, Cloudinary. Gõ vào ô tìm kiếm để lọc. Muốn dùng dịch vụ nào, bấm **Dùng** ở dòng đó. Có ba kiểu, ghi rõ ở từng dòng:
 
-- **Đăng nhập bằng tài khoản** (đa số): Argus thêm kết nối và mở trang đăng nhập của dịch vụ trong tab mới. Bạn bấm **Cho phép** (trong vòng 5 phút) rồi đóng tab; dòng dịch vụ chuyển sang **Đã kết nối** kèm số công cụ.
+- **Đăng nhập bằng tài khoản** (đa số): Nestor thêm kết nối và mở trang đăng nhập của dịch vụ trong tab mới. Bạn bấm **Cho phép** (trong vòng 5 phút) rồi đóng tab; dòng dịch vụ chuyển sang **Đã kết nối** kèm số công cụ.
 - **Không cần đăng nhập** (nhãn xanh): kết nối ngay.
-- **Cần token** (nhãn xanh dương, ví dụ GitHub): dịch vụ không cho đăng nhập một chạm, nên hộp thoại hiện ra kèm đường dẫn tới trang tạo token. Dán token vào, Argus lưu (mã hóa) và gửi kèm header của nó.
+- **Cần token** (nhãn xanh dương, ví dụ GitHub): dịch vụ không cho đăng nhập một chạm, nên hộp thoại hiện ra kèm đường dẫn tới trang tạo token. Dán token vào, Nestor lưu (mã hóa) và gửi kèm header của nó.
 
-Bấm vào dòng đã kết nối để xem công cụ và bật/tắt từng cái. **Đăng xuất** xóa token đã lưu; biểu tượng thùng rác **Gỡ** dịch vụ khỏi Argus.
+Bấm vào dòng đã kết nối để xem công cụ và bật/tắt từng cái. **Đăng xuất** xóa token đã lưu; biểu tượng thùng rác **Gỡ** dịch vụ khỏi Nestor.
 
-**Tìm thêm trong thư viện MCP chính thức.** Khi bạn gõ từ khóa (ví dụ "stripe", "vercel"), bên dưới danh mục hiện thêm **kết quả từ thư viện MCP chính thức** (registry.modelcontextprotocol.io). Bấm **Dùng** thì Argus tự thăm dò xem server đó cần đăng nhập kiểu nào (OAuth, token hay không cần) rồi làm tương ứng. **Cẩn thận:** thư viện này do cộng đồng đăng và Argus không kiểm duyệt từng mục; mục có nhãn **Cộng đồng** chưa được xác minh thương hiệu. Argus hỏi xác nhận trước khi thêm, và công cụ của chúng vẫn phải qua bước xin phép. Chỉ dùng nguồn bạn tin.
+**Tìm thêm trong thư viện MCP chính thức.** Khi bạn gõ từ khóa (ví dụ "stripe", "vercel"), bên dưới danh mục hiện thêm **kết quả từ thư viện MCP chính thức** (registry.modelcontextprotocol.io). Bấm **Dùng** thì Nestor tự thăm dò xem server đó cần đăng nhập kiểu nào (OAuth, token hay không cần) rồi làm tương ứng. **Cẩn thận:** thư viện này do cộng đồng đăng và Nestor không kiểm duyệt từng mục; mục có nhãn **Cộng đồng** chưa được xác minh thương hiệu. Nestor hỏi xác nhận trước khi thêm, và công cụ của chúng vẫn phải qua bước xin phép. Chỉ dùng nguồn bạn tin.
 
 Dịch vụ không có trong danh mục lẫn thư viện thì thêm ở mục **Dịch vụ do bạn thêm → Thêm dịch vụ khác** (nhập địa chỉ MCP từ xa).
 
-Token đăng nhập được **mã hóa** trong cơ sở dữ liệu (cùng khóa chủ với API key) và không nằm trong `config.json`; Argus tự làm mới khi hết hạn. Nếu bạn đổi địa chỉ hoặc cổng của Argus thì phải đăng nhập lại. Một số dịch vụ không cho ứng dụng tự đăng ký hoặc cần cấu hình riêng (ví dụ Figma, Slack, HubSpot, Box, Gamma, Calendly), nên không có trong danh mục: tôi đã thử và chúng không dùng được theo cách một chạm.
+Token đăng nhập được **mã hóa** trong cơ sở dữ liệu (cùng khóa chủ với API key) và không nằm trong `config.json`; Nestor tự làm mới khi hết hạn. Nếu bạn đổi địa chỉ hoặc cổng của Nestor thì phải đăng nhập lại. Một số dịch vụ không cho ứng dụng tự đăng ký hoặc cần cấu hình riêng (ví dụ Figma, Slack, HubSpot, Box, Gamma, Calendly), nên không có trong danh mục: tôi đã thử và chúng không dùng được theo cách một chạm.
 
 **Gọi dịch vụ bằng dấu `@` trong Trò chuyện.** Gõ `@` ở ô soạn tin để chọn một dịch vụ hoặc MCP server (kèm logo và trạng thái), ví dụ "Tìm trang họp tuần trước trong @notion". Khi bạn gọi `@tên`, agent chỉ thấy công cụ của dịch vụ đó (đỡ tốn token, đỡ chọn nhầm) và được nhắc dùng đúng nó; gọi nhiều dịch vụ thì nêu từng `@tên`. Tên dịch vụ trong tin nhắn được tô màu. Nếu dịch vụ chưa kết nối, bạn thấy thông báo và agent hướng dẫn đăng nhập.
 
@@ -423,7 +423,7 @@ Vào **Cài đặt → tab Tính năng**.
 
 ### Trình duyệt
 
-Agent tự mở trang web, bấm, điền form và chụp màn hình bằng Chromium trên máy bạn. Cần cài Chromium hoặc Chrome (`argus doctor` báo nếu thiếu).
+Agent tự mở trang web, bấm, điền form và chụp màn hình bằng Chromium trên máy bạn. Cần cài Chromium hoặc Chrome (`nestor doctor` báo nếu thiếu).
 
 - **Chạy ẩn**: tắt đi để xem agent thao tác trực tiếp.
 - **Cho phép địa chỉ nội bộ**: mặc định tắt, chặn `localhost` và mạng LAN để một trang web độc hại không dò được mạng nhà bạn.
@@ -472,7 +472,7 @@ Trang **Thống kê** có hai tab:
 ## 14. An toàn và quyền riêng tư
 
 - **Chỉ nhận kết nối từ chính máy bạn.** Máy chủ nghe ở `127.0.0.1`, và từ chối các yêu cầu có tên máy chủ lạ (chống tấn công DNS rebinding).
-- **Đặt mật khẩu nếu mở cho mạng LAN.** Vào **Cài đặt → An toàn → Bảo mật giao diện**. Nếu bạn cho phép truy cập từ máy khác (`argus start --host 0.0.0.0`), hãy luôn đặt mật khẩu và dùng HTTPS.
+- **Đặt mật khẩu nếu mở cho mạng LAN.** Vào **Cài đặt → An toàn → Bảo mật giao diện**. Nếu bạn cho phép truy cập từ máy khác (`nestor start --host 0.0.0.0`), hãy luôn đặt mật khẩu và dùng HTTPS.
 - **Khóa bí mật được mã hóa.** Khóa API, token Telegram và biến môi trường của MCP được mã hóa trong `user-data/config.json` bằng khóa chủ `user-data/data/master.key`. Điều này bảo vệ khi file config lộ riêng lẻ (gửi kèm báo lỗi, đẩy nhầm lên git); **không** bảo vệ khi kẻ tấn công có cả hai file hoặc đang chạy trên máy của bạn. Hãy sao lưu khóa chủ (xem mục 15).
 - **Lệnh nguy hiểm luôn hỏi.** Chạy lệnh shell, đọc/ghi ngoài thư mục làm việc, gọi công cụ ngoài, gửi yêu cầu HTTP thay đổi dữ liệu. Chỉ chế độ Toàn quyền bỏ qua việc hỏi.
 - **Sandbox Docker (tùy chọn).** Cài đặt → An toàn: chạy lệnh shell của agent trong container cách ly, mặc định không có mạng, chỉ thấy thư mục làm việc của hội thoại. Khuyên dùng khi cài kỹ năng từ internet.
@@ -484,16 +484,16 @@ Trang **Thống kê** có hai tab:
 Toàn bộ dữ liệu cá nhân nằm trong `user-data/`. Sao lưu định kỳ:
 
 ```bash
-argus backup                                   # file nằm ở user-data/backups/
-argus backup --encrypt                         # mã hóa bằng mật khẩu bạn nhập
-argus backup --include-key --encrypt           # kèm khóa chủ, để khôi phục trên máy khác
-argus backup --no-sessions                     # bỏ file của từng hội thoại cho nhẹ
+nestor backup                                   # file nằm ở user-data/backups/
+nestor backup --encrypt                         # mã hóa bằng mật khẩu bạn nhập
+nestor backup --include-key --encrypt           # kèm khóa chủ, để khôi phục trên máy khác
+nestor backup --no-sessions                     # bỏ file của từng hội thoại cho nhẹ
 ```
 
 Khôi phục:
 
 ```bash
-argus restore <file-sao-lưu> --force
+nestor restore <file-sao-lưu> --force
 ```
 
 `--force` sao lưu dữ liệu hiện tại trước khi ghi đè. Nếu bản sao lưu không kèm khóa chủ, truyền `--master-key-file <đường-dẫn>`; thiếu khóa chủ thì các khóa API đã mã hóa không đọc lại được. Chi tiết xem [cli.md](cli.md#backup).
@@ -503,23 +503,23 @@ argus restore <file-sao-lưu> --force
 Bước đầu tiên luôn là chạy:
 
 ```bash
-argus doctor
+nestor doctor
 ```
 
 Nó kiểm tra Python, gói cài đặt, giao diện đã build chưa, quyền file, khóa bí mật, cơ sở dữ liệu, server, các mô hình, Docker, Telegram, trình duyệt, trí nhớ ngữ nghĩa… và gợi ý cách sửa. Thêm `--fix` để tự sửa những lỗi an toàn.
 
 | Hiện tượng | Nguyên nhân thường gặp và cách xử lý |
 |---|---|
-| Trang trắng sau khi cập nhật | Server còn chạy bản cũ. Chạy `argus restart`, rồi tải lại trang bằng Ctrl+Shift+R |
+| Trang trắng sau khi cập nhật | Server còn chạy bản cũ. Chạy `nestor restart`, rồi tải lại trang bằng Ctrl+Shift+R |
 | "Cần khóa API" ở thẻ mô hình | Mở **Chỉnh sửa**, dán khóa, bấm **Lưu thay đổi** |
 | Lỗi 503 hoặc "high demand" từ Gemini | Dịch vụ đang quá tải. Thử lại sau, hoặc đặt một mô hình **dự phòng** |
 | Agent trả lời kỳ lạ, quên ngữ cảnh | Mô hình nhỏ có context ngắn. Giảm "Số tin nhắn gửi kèm" hoặc dùng mô hình mạnh hơn |
 | Agent không tạo được file trong việc nền | Việc nền cần mức "Làm việc an toàn" trở lên. Mức "Chỉ xem" không cho ghi |
 | Bot Telegram im lặng | Server chưa chạy, hoặc chưa bật Telegram trong Kết nối. Bot báo "chưa được phép" thì làm bước ghép đôi `/pair <mã>` |
 | Không tìm thấy bot Telegram | Mở thẳng link `t.me/<tên_bot>` thay vì gõ tên vào ô tìm kiếm |
-| Trình duyệt không chạy | Chưa cài Chromium/Chrome. `argus doctor` báo cách cài |
+| Trình duyệt không chạy | Chưa cài Chromium/Chrome. `nestor doctor` báo cách cài |
 | Thấy "Chế độ hash" ở trí nhớ ngữ nghĩa | Bình thường. Muốn hiểu nghĩa thật, chọn embedding OpenAI/Gemini như mục 11 |
-| Quên mật khẩu giao diện | Sửa `user-data/config.json`: xóa giá trị `password_hash` trong mục `auth`, rồi `argus restart` |
+| Quên mật khẩu giao diện | Sửa `user-data/config.json`: xóa giá trị `password_hash` trong mục `auth`, rồi `nestor restart` |
 | Mất khóa chủ | Các khóa API không giải mã được. Nhập lại khóa ở trang Mô hình AI. Lần sau hãy sao lưu kèm `--include-key --encrypt` |
 
-Xem log của server: `argus logs -f`.
+Xem log của server: `nestor logs -f`.

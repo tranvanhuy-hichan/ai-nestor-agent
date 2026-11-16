@@ -7,8 +7,8 @@ from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Pt, RGBColor
 
-from argus.main import app
-from argus.services import exam_shuffle as ex
+from nestor.main import app
+from nestor.services import exam_shuffle as ex
 
 # (câu hỏi, [đáp án], chỉ số đúng, kiểu: sep = mỗi đáp án một dòng | inline = một dòng)
 QS = [
@@ -169,8 +169,8 @@ def client(tmp_env):
 
 
 def test_shuffle_exam_tool_and_api(tmp_env, client):
-    from argus.services import tools
-    from argus.services.tools import ToolContext
+    from nestor.services import tools
+    from nestor.services.tools import ToolContext
     ws = tmp_env
     make_exam(ws / "de.docx")
     out, ok = tools.call(ToolContext(workspace=ws, full_access=True), "shuffle_exam", {"path": "de.docx", "so_ma_de": 3})

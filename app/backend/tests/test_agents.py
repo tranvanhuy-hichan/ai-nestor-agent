@@ -5,9 +5,9 @@ import uuid
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.services import agent as agent_mod
-from argus.services import jobs, notifications, plans, sessions
+from nestor.core import config as cfgmod
+from nestor.services import agent as agent_mod
+from nestor.services import jobs, notifications, plans, sessions
 
 
 class Fake:
@@ -265,7 +265,7 @@ def test_delete_only_finished_jobs(tmp_env):
 def client(llm):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
+    from nestor.main import app
 
     llm(lambda m, t: {"content": "ok từ nền"})
     return TestClient(app)
@@ -328,8 +328,8 @@ def test_plan_progress_is_nudged_and_auto_started(llm):
 
 # ---------------- goi MCP dich vu bang dau @
 def _mcp_world(monkeypatch, connected=("notion", "linear")):
-    from argus.services import mcp_client
-    from argus.services.tools import ToolDef
+    from nestor.services import mcp_client
+    from nestor.services.tools import ToolDef
 
     defs = {f"{s}__{t}": ToolDef(name=f"{s}__{t}", description=f"[MCP:{s}] {t}", parameters={"type": "object", "properties": {}}, fn=lambda ctx, **a: "ok", risk="mcp", read_only=True)
             for s, t in (("notion", "search"), ("linear", "list_issues"))}
@@ -384,8 +384,8 @@ def test_mention_filter_survives_only_tools(llm, monkeypatch):
 
 # ---------- dung luong token cua phien va ngu canh con lai
 def test_context_window_by_model_name_and_override():
-    from argus.core import config as cfgmod
-    from argus.services import usage as u
+    from nestor.core import config as cfgmod
+    from nestor.services import usage as u
     P = lambda model, base="https://api.example.com/v1", cw=0: cfgmod.ProviderCfg(type="openai", base_url=base, model=model, context_window=cw)  # noqa: E731
     assert u.context_window(P("gemini-2.5-flash")) == 1_048_576
     assert u.context_window(P("claude-sonnet-5-5", cw=0)) == 200_000 and u.context_window(P("sonnet[1m]")) == 1_000_000
@@ -395,8 +395,8 @@ def test_context_window_by_model_name_and_override():
 
 
 def test_session_usage_totals_cost_and_remaining_context(tmp_env):
-    from argus.core import config as cfgmod
-    from argus.services import sessions, usage as u
+    from nestor.core import config as cfgmod
+    from nestor.services import sessions, usage as u
     cfg = cfgmod.load()
     cfg.providers["g"] = cfgmod.ProviderCfg(type="openai", base_url="https://x/v1", model="gemini-2.5-flash", price_in=1.0, price_out=2.0)
     sid = sessions.create("x")
@@ -413,8 +413,8 @@ def test_session_usage_totals_cost_and_remaining_context(tmp_env):
 def test_session_usage_endpoint(tmp_env):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
-    from argus.services import sessions
+    from nestor.main import app
+    from nestor.services import sessions
     c = TestClient(app)
     assert c.get("/api/sessions/khong-co/usage").status_code == 404
     sid = sessions.create("x")
@@ -433,22 +433,22 @@ What's contributing to your usage?
 
 
 def test_parse_claude_usage_lines():
-    from argus.services import limits
+    from nestor.services import limits
     w = limits.parse_claude_usage(CLAUDE_USAGE)
     assert [(x["kind"], x["used"]) for x in w] == [("session", 14), ("week", 25), ("week", 3)]
     assert w[0]["resets"] == "Nov 4, 10:29pm (Asia/Bangkok)" and w[2]["model"] == "Opus" and w[2]["resets"] == "" and w[1]["model"] == "all models"
     assert limits.parse_claude_usage("không có gì") == []
 
 
-def test_limits_endpoint_uses_claude_usage_and_argus_windows(tmp_env, monkeypatch):
+def test_limits_endpoint_uses_claude_usage_and_nestor_windows(tmp_env, monkeypatch):
     import subprocess
     import types
 
     from fastapi.testclient import TestClient
 
-    from argus.core import config as cfgmod
-    from argus.main import app
-    from argus.services import limits, sessions, usage
+    from nestor.core import config as cfgmod
+    from nestor.main import app
+    from nestor.services import limits, sessions, usage
     cfg = cfgmod.load()
     cfg.providers["cc"] = cfgmod.ProviderCfg(type="cli", cli="claude", model="sonnet")
     cfg.providers["g"] = cfgmod.ProviderCfg(type="openai", base_url="https://x/v1", model="gemini-2.5-flash")
@@ -466,7 +466,7 @@ def test_limits_endpoint_uses_claude_usage_and_argus_windows(tmp_env, monkeypatc
     c.get("/api/providers/cc/limits", params={"refresh": True})
     assert len(calls) == 2
     g = c.get("/api/providers/g/limits").json()
-    assert g["official"] is False and g["limits"] is None and g["argus"]["h5"] == {"calls": 1, "tokens": 1500, "share": 1.0}
+    assert g["official"] is False and g["limits"] is None and g["nestor"]["h5"] == {"calls": 1, "tokens": 1500, "share": 1.0}
     assert c.get("/api/providers/khong-co/limits").status_code == 404
 
 
@@ -486,7 +486,7 @@ def test_empty_reply_after_tool_is_retried(llm):
 
 def test_read_document_pptx_and_offset(tmp_env, tmp_path):
     import zipfile
-    from argus.services import tools
+    from nestor.services import tools
     pp = tmp_path / "d.pptx"
     with zipfile.ZipFile(pp, "w") as z:
         z.writestr("ppt/slides/slide1.xml", '<p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:t>Hello slide</a:t></p>')

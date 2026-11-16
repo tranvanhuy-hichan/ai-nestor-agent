@@ -1,7 +1,7 @@
 import pytest
 
-from argus.core import config as cfgmod
-from argus.services import auth, compaction, workfiles
+from nestor.core import config as cfgmod
+from nestor.services import auth, compaction, workfiles
 
 
 def test_secrets_masked_and_restored():
@@ -66,7 +66,7 @@ def test_compaction_plan_keeps_recent_turns_and_cuts_at_user_boundary():
 
 
 def test_memory_search_is_diacritics_insensitive_and_scoped(tmp_env):
-    from argus.services import sessions
+    from nestor.services import sessions
     a = sessions.create("Du an Da Nang")
     b = sessions.create("Chuyen khac")
     sessions.add_message(a, {"role": "user", "content": "Tôi muốn đi Đà Nẵng vào tháng 12"})
@@ -79,7 +79,7 @@ def test_memory_search_is_diacritics_insensitive_and_scoped(tmp_env):
 
 
 def test_truncate_resets_summary_and_removes_later_messages(tmp_env):
-    from argus.services import sessions
+    from nestor.services import sessions
     sid = sessions.create("t")
     for i in range(4):
         sessions.add_message(sid, {"role": "user" if i % 2 == 0 else "assistant", "content": f"m{i}"})
@@ -92,6 +92,6 @@ def test_truncate_resets_summary_and_removes_later_messages(tmp_env):
 
 
 def test_excerpt_highlights_whole_word_not_substring():
-    from argus.services.sessions import _excerpt
+    from nestor.services.sessions import _excerpt
     out = _excerpt("Tôi đang lên kế hoạch du lịch Đà Nẵng", ["da", "nang"])
     assert "[Đà]" in out and "[đa" not in out

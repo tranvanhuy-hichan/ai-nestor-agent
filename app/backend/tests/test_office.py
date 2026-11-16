@@ -1,7 +1,7 @@
 import json
 
-from argus.services import tools
-from argus.services.tools import ToolContext
+from nestor.services import tools
+from nestor.services.tools import ToolContext
 
 
 def ctx(tmp_path):
@@ -88,7 +88,7 @@ def test_review_accepts_placeholder_signature(tmp_path):
 
 def test_ask_user_form_and_single(tmp_path):
     import json
-    from argus.services.tools import ToolContext
+    from nestor.services.tools import ToolContext
     seen = {}
     def asker(q, o, form=None):
         seen.update(q=q, o=o, form=form)

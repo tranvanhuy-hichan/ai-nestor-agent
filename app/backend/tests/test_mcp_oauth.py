@@ -8,10 +8,10 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.core.db import db
-from argus.services import mcp_oauth
-from argus.services.mcp_client import manager
+from nestor.core import config as cfgmod
+from nestor.core.db import db
+from nestor.services import mcp_oauth
+from nestor.services.mcp_client import manager
 
 
 class Fake(BaseHTTPRequestHandler):

@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from argus.core.config import ProviderCfg
-from argus.services import providers, tools
+from nestor.core.config import ProviderCfg
+from nestor.services import providers, tools
 
 
 def ctx(tmp_path, approver=lambda k, d: False):
@@ -131,7 +131,7 @@ def test_read_document_xlsx_csv_docx(tmp_path):
 
 
 # ---------- che do quyen cua hoi thoai (readonly / guarded / full)
-from argus.services import agent as agent_mod  # noqa: E402
+from nestor.services import agent as agent_mod  # noqa: E402
 
 
 def test_readonly_hides_every_mutating_tool(tmp_path):

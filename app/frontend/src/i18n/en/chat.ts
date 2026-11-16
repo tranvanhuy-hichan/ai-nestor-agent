@@ -26,7 +26,7 @@ const dict: Record<string, string> = {
   'lỗi': 'error',
   'xong': 'done',
   'Mở file': 'Open file',
-  'Đang khởi động Argus…': 'Starting Argus…',
+  'Đang khởi động Nestor…': 'Starting Nestor…',
   'Xem màn hình chào': 'Play the welcome screen',
   'Tải file gốc': 'Download original file',
   '(không có nội dung)': '(no content)',

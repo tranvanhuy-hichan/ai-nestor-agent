@@ -58,8 +58,8 @@ export function ApiTab({ addSignal = 0 }: { addSignal?: number }) {
   const tok = fresh ?? t('agt_TOKEN_CỦA_BẠN')
   const curl = `curl -s ${base}/v1/run \\\n  -H "Authorization: Bearer ${tok}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"prompt": "${t('Tóm tắt thư mục workspace')}", "exec_policy": "deny"}'`
   const py = `import requests\n\nr = requests.post("${base}/v1/run",\n    headers={"Authorization": "Bearer ${tok}"},\n    json={"prompt": "${t('Xin chào')}", "timeout": 120},\n).json()\nprint(r["output"])`
-  const claude = `claude mcp add argus -e ARGUS_TOKEN=${tok} -- "${info.data.python}" "${info.data.mcp_server_script}"`
-  const generic = JSON.stringify({ mcpServers: { argus: { command: info.data.python, args: [info.data.mcp_server_script], env: { ARGUS_TOKEN: tok, ARGUS_URL: base } } } }, null, 2)
+  const claude = `claude mcp add nestor -e NESTOR_TOKEN=${tok} -- "${info.data.python}" "${info.data.mcp_server_script}"`
+  const generic = JSON.stringify({ mcpServers: { nestor: { command: info.data.python, args: [info.data.mcp_server_script], env: { NESTOR_TOKEN: tok, NESTOR_URL: base } } } }, null, 2)
 
   return (
     <div className="space-y-4">
@@ -100,7 +100,7 @@ export function ApiTab({ addSignal = 0 }: { addSignal?: number }) {
             </ul>
           </Section>
           <Section title={t('Dùng từ máy khác')}>
-            <p className="text-sm text-muted"><T k="Khởi động với {cmd}. Chỉ các đường {v1} (có token) nhận kết nối từ xa, còn giao diện web và {api} vẫn chỉ mở cho localhost. Nên đặt sau HTTPS (reverse proxy) khi đi qua mạng không tin cậy." v={{ cmd: <code className="font-mono text-fg">argus start --host 0.0.0.0</code>, v1: <code className="font-mono">/v1/*</code>, api: <code className="font-mono">/api</code> }} /></p>
+            <p className="text-sm text-muted"><T k="Khởi động với {cmd}. Chỉ các đường {v1} (có token) nhận kết nối từ xa, còn giao diện web và {api} vẫn chỉ mở cho localhost. Nên đặt sau HTTPS (reverse proxy) khi đi qua mạng không tin cậy." v={{ cmd: <code className="font-mono text-fg">nestor start --host 0.0.0.0</code>, v1: <code className="font-mono">/v1/*</code>, api: <code className="font-mono">/api</code> }} /></p>
           </Section>
         </div>
       </Card>

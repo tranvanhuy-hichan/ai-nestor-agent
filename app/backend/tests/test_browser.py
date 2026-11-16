@@ -4,10 +4,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.services import tools
-from argus.services.browser import find_chromium, manager
-from argus.services.tools_browser import validate_url
+from nestor.core import config as cfgmod
+from nestor.services import tools
+from nestor.services.browser import find_chromium, manager
+from nestor.services.tools_browser import validate_url
 
 PAGE1 = b"""<!doctype html><html><head><title>Trang thu</title></head><body>
 <h1>Dang nhap</h1>

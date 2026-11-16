@@ -27,7 +27,7 @@ const RISK: Record<ToolInfo['risk'], { label: string; tone: 'ok' | 'info' | 'war
 
 function SecretsCard({ s }: { s?: SecretsStatus }) {
   if (!s) return null
-  const where = { env: t('biến môi trường ARGUS_MASTER_KEY'), keychain: t('keychain của hệ điều hành'), file: 'data/master.key', none: t('chưa có') }[s.source]
+  const where = { env: t('biến môi trường NESTOR_MASTER_KEY'), keychain: t('keychain của hệ điều hành'), file: 'data/master.key', none: t('chưa có') }[s.source]
   return (
     <Card>
       <CardHeader title={t('Mã hóa khóa bí mật')} />
@@ -35,10 +35,10 @@ function SecretsCard({ s }: { s?: SecretsStatus }) {
         <div className="flex items-center justify-between"><span className="text-muted">{t('Khóa đã mã hóa')}</span><Badge tone="ok">{s.encrypted}</Badge></div>
         <div className="flex items-center justify-between"><span className="text-muted">{t('Khóa còn chữ thường')}</span><Badge tone={s.plaintext ? 'warn' : 'neutral'}>{s.plaintext}</Badge></div>
         <div className="flex items-center justify-between"><span className="text-muted">{t('Nơi giữ khóa chủ')}</span><span className="font-mono text-xs">{where}</span></div>
-        {!s.enabled && <p className="text-warn">{t('Mã hóa đã tắt (ARGUS_ENCRYPT=0).')}</p>}
+        {!s.enabled && <p className="text-warn">{t('Mã hóa đã tắt (NESTOR_ENCRYPT=0).')}</p>}
         {s.failed.length > 0 && <p className="rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-bad">{t('{n} khóa không giải mã được (mất hoặc sai khóa chủ). Hãy nhập lại trong giao diện hoặc khôi phục khóa chủ.', { n: s.failed.length })}</p>}
-        {s.enabled && s.plaintext > 0 && <p className="text-warn">{t('Còn khóa chưa mã hóa. Chạy: argus secrets encrypt')}</p>}
-        {s.source === 'file' && <p className="text-xs text-muted">{t('Hãy sao lưu khóa chủ (argus backup --include-key --encrypt): mất nó thì không giải mã lại được các khóa.')}</p>}
+        {s.enabled && s.plaintext > 0 && <p className="text-warn">{t('Còn khóa chưa mã hóa. Chạy: nestor secrets encrypt')}</p>}
+        {s.source === 'file' && <p className="text-xs text-muted">{t('Hãy sao lưu khóa chủ (nestor backup --include-key --encrypt): mất nó thì không giải mã lại được các khóa.')}</p>}
       </div>
     </Card>
   )

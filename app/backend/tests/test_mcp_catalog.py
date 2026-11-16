@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from argus.services import mcp_catalog, mcp_probe, mcp_registry
+from nestor.services import mcp_catalog, mcp_probe, mcp_registry
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,30}$")
 
@@ -121,7 +121,7 @@ def test_probe_unreachable_host_is_down():
 def client(tmp_env):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
+    from nestor.main import app
     return TestClient(app)
 
 

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.services import embeddings, memory, memory_index, providers, sessions, tools, tools_memory, vectorstore
+from nestor.core import config as cfgmod
+from nestor.services import embeddings, memory, memory_index, providers, sessions, tools, tools_memory, vectorstore
 
 
 def _cfg(mode="hash", **kw):

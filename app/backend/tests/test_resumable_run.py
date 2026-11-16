@@ -2,7 +2,7 @@
 import threading
 import time
 
-from argus.services import chat_runner, tools
+from nestor.services import chat_runner, tools
 
 
 def _fake_turn(release: threading.Event):
@@ -70,8 +70,8 @@ def test_grep_and_glob(tmp_path, tmp_env):
 def test_toggle_project_on_existing_session(tmp_env, tmp_path):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
-    from argus.services import sessions
+    from nestor.main import app
+    from nestor.services import sessions
     c = TestClient(app)
     sid = sessions.create("x")
     r = c.post(f"/api/sessions/{sid}/project", json={"path": str(tmp_path)})

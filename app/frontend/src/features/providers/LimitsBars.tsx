@@ -19,7 +19,7 @@ function Bar({ label, value, pct, color, title }: { label: string; value: string
   )
 }
 
-/** Hạn mức một model dạng thanh đo: phiên 5 giờ và tuần của gói thuê bao (nếu có), cùng phần Argus đã dùng. */
+/** Hạn mức một model dạng thanh đo: phiên 5 giờ và tuần của gói thuê bao (nếu có), cùng phần Nestor đã dùng. */
 export function LimitsBars({ name, compact = false, enabled = true }: { name: string; compact?: boolean; enabled?: boolean }) {
   const q = useQuery({ queryKey: ['limits', name], queryFn: () => api.get<ProviderLimits>(`/api/providers/${name}/limits`), enabled, staleTime: 60_000, refetchInterval: 120_000 })
   const d = q.data
@@ -27,12 +27,12 @@ export function LimitsBars({ name, compact = false, enabled = true }: { name: st
   if (!d) return null
   const wins = d.official ? (d.limits?.windows ?? []) : []
   const off = [wins.find((w) => w.kind === 'session'), wins.find((w) => w.kind !== 'session' && (!w.model || w.model === 'all models')) ?? wins.find((w) => w.kind !== 'session')]
-  const rows = [[t('5 giờ'), d.argus.h5, off[0]], [t('7 ngày'), d.argus.d7, off[1]]] as const
+  const rows = [[t('5 giờ'), d.nestor.h5, off[0]], [t('7 ngày'), d.nestor.d7, off[1]]] as const
   return (
     <div className={cn('space-y-2.5', compact ? 'text-[11px]' : 'text-xs')}>
       {rows.map(([label, u, w]) => {
-        const own = t('{n} lượt, {p}% tổng token của Argus', { n: u.calls, p: Math.round(u.share * 100) })
-        if (w) return <Bar key={label} label={label} value={t('{u}% đã dùng', { u: w.used })} pct={w.used} color={tone(w.used)} title={[w.resets ? t('Làm mới {when}', { when: noZone(w.resets) }) : '', `Argus: ${fmtNum(u.tokens)} token`].filter(Boolean).join(' · ')} />
+        const own = t('{n} lượt, {p}% tổng token của Nestor', { n: u.calls, p: Math.round(u.share * 100) })
+        if (w) return <Bar key={label} label={label} value={t('{u}% đã dùng', { u: w.used })} pct={w.used} color={tone(w.used)} title={[w.resets ? t('Làm mới {when}', { when: noZone(w.resets) }) : '', `Nestor: ${fmtNum(u.tokens)} token`].filter(Boolean).join(' · ')} />
         return <Bar key={label} label={label} value={`${fmtNum(u.tokens)} token`} pct={u.share * 100} color="bg-info" title={own} />
       })}
     </div>

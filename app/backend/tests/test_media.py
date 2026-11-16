@@ -7,9 +7,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.services import tools, tools_media
-from argus.services.tools import DENIED, ToolContext
+from nestor.core import config as cfgmod
+from nestor.services import tools, tools_media
+from nestor.services.tools import DENIED, ToolContext
 
 
 def make_png() -> bytes:

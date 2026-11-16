@@ -5,8 +5,8 @@ import pytest
 from docx import Document
 from openpyxl import Workbook, load_workbook
 
-from argus.services import tools
-from argus.services.tools import ToolContext
+from nestor.services import tools
+from nestor.services.tools import ToolContext
 
 
 @pytest.fixture
@@ -146,7 +146,7 @@ def test_convert_to_pdf(c, tmp_path, monkeypatch):
     if shutil.which("soffice") or shutil.which("libreoffice"):
         out, ok = call(c, "convert_to_pdf", path="v.docx")
         assert ok and (tmp_path / "v.pdf").exists() and (tmp_path / "v.pdf").read_bytes().startswith(b"%PDF"), out
-    monkeypatch.setattr("argus.services.tools_docs.shutil.which", lambda n: None)
+    monkeypatch.setattr("nestor.services.tools_docs.shutil.which", lambda n: None)
     out, ok = call(c, "convert_to_pdf", path="v.docx")
     assert not ok and "LibreOffice" in out
     out, ok = call(c, "convert_to_pdf", path="x.txt")

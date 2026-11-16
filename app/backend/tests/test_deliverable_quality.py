@@ -1,6 +1,6 @@
 from docx import Document
 from openpyxl import Workbook
-from argus.services.deliverable_quality import inspect_file, snapshot, changed_issues
+from nestor.services.deliverable_quality import inspect_file, snapshot, changed_issues
 
 
 def test_docx_stub_and_missing_sections_fail(tmp_path):
@@ -40,8 +40,8 @@ def test_unreadable_artifact_is_not_reported_complete(tmp_path):
 
 
 def test_agent_requests_repair_before_accepting_a_stub(tmp_env, monkeypatch):
-    from argus.services import agent, sessions, assistants, workfiles
-    from argus.core import config
+    from nestor.services import agent, sessions, assistants, workfiles
+    from nestor.core import config
     stage = {'n':0}
     class Fake:
         def stream(self,messages,tool_defs,effort=None):

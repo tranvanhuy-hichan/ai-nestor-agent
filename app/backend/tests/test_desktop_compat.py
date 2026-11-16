@@ -1,9 +1,9 @@
 """Tương thích Windows và bản đóng gói desktop (logic chạy được kiểm trên Linux bằng cách giả lập nền tảng)."""
 import sys
 
-from argus import desktop_server
-from argus.core import paths
-from argus.services import browser, tools
+from nestor import desktop_server
+from nestor.core import paths
+from nestor.services import browser, tools
 
 
 def test_shell_is_bash_on_linux_and_note_is_empty():
@@ -50,7 +50,7 @@ def test_frozen_layout_points_to_bundle(monkeypatch, tmp_path):
     import importlib
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
-    monkeypatch.setenv("ARGUS_HOME", str(tmp_path / "data-home"))
+    monkeypatch.setenv("NESTOR_HOME", str(tmp_path / "data-home"))
     try:
         reloaded = importlib.reload(paths)
         assert reloaded.CODE_ROOT == tmp_path and reloaded.DIST == tmp_path / "frontend" / "dist" and reloaded.ROOT == (tmp_path / "data-home").resolve()

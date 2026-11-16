@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "argus-agent"
-version = "0.3.0"
-description = "Argus Agent: personal AI agent gateway with web UI, CLI, skills, MCP and Telegram"
+name = "nestor-agent"
+version = "0.4.0"
+description = "Nestor Agent: personal AI agent gateway with web UI, CLI, skills, MCP and Telegram"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "tranvanhuy-hichan"}]
 requires-python = ">=3.11"
@@ -31,15 +31,15 @@ dev = ["pytest>=8"]
 keyring = ["keyring>=24"]  # luu khoa chu vao keychain cua he dieu hanh
 
 [project.scripts]
-argus = "argus.cli:main"
+nestor = "nestor.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["argus*"]
+include = ["nestor*"]
 
 [tool.setuptools.package-data]
-"argus" = ["cv_templates/*.mjs"]
-"argus.services.vanban" = ["references/*.json"]
-"argus.bundled_skills" = ["**/*", "*.md"]
+"nestor" = ["cv_templates/*.mjs"]
+"nestor.services.vanban" = ["references/*.json"]
+"nestor.bundled_skills" = ["**/*", "*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

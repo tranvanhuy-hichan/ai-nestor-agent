@@ -6,8 +6,8 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from argus.api import live_translate as live
-from argus.core.config import ProviderCfg
+from nestor.api import live_translate as live
+from nestor.core.config import ProviderCfg
 
 
 def body(**kwargs):

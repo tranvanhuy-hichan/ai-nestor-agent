@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.core import secrets
-from argus.services import backup, sessions
+from nestor.core import config as cfgmod
+from nestor.core import secrets
+from nestor.services import backup, sessions
 
 
 @pytest.fixture
@@ -133,7 +133,7 @@ def test_encrypted_backup_rejects_wrong_passphrase_tampering_and_truncation(home
 def _evil_tar(tmp_path, build) -> Path:
     p = tmp_path / "evil.tar.gz"
     with tarfile.open(p, "w:gz") as tar:
-        manifest = json.dumps({"app": "argus-agent", "version": "x", "created": "t", "files": {}}).encode()
+        manifest = json.dumps({"app": "nestor-agent", "version": "x", "created": "t", "files": {}}).encode()
         info = tarfile.TarInfo("manifest.json")
         info.size = len(manifest)
         tar.addfile(info, io.BytesIO(manifest))

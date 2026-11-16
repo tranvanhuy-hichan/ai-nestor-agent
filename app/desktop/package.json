@@ -1,7 +1,7 @@
 {
-  "name": "argus-agent-desktop",
-  "version": "0.3.0",
-  "description": "Argus Agent: trợ lý AI cá nhân chạy trên máy bạn",
+  "name": "nestor-agent-desktop",
+  "version": "0.4.0",
+  "description": "Nestor Agent: trợ lý AI cá nhân chạy trên máy bạn",
   "author": "tranvanhuy-hichan <tranvanhuy064206@gmail.com>",
   "license": "AGPL-3.0-or-later",
   "main": "main.js",
@@ -15,9 +15,9 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "io.github.tranvanhuy.argus",
-    "productName": "Argus Agent",
-    "executableName": "argus-agent",
+    "appId": "io.github.tranvanhuy.nestor",
+    "productName": "Nestor Agent",
+    "executableName": "nestor-agent",
     "copyright": "AGPL-3.0-or-later",
     "directories": {
       "output": "dist",
@@ -27,13 +27,13 @@
       "main.js",
       "package.json",
       "assets/icon.png",
-      "assets/argus-mark.png",
-      "assets/argus-mark-light.png",
-      "assets/argus-wordmark.png"
+      "assets/nestor-mark.png",
+      "assets/nestor-mark-light.png",
+      "assets/nestor-wordmark.png"
     ],
     "extraResources": [
       {
-        "from": "build/argus-server",
+        "from": "build/nestor-server",
         "to": "server"
       }
     ],
@@ -62,9 +62,9 @@
       "oneClick": true,
       "perMachine": false,
       "deleteAppDataOnUninstall": false,
-      "shortcutName": "Argus Agent"
+      "shortcutName": "Nestor Agent"
     },
-    "artifactName": "Argus-Agent-${version}-${os}-${arch}.${ext}"
+    "artifactName": "Nestor-Agent-${version}-${os}-${arch}.${ext}"
   },
-  "homepage": "https://github.com/tranvanhuy-hichan/argus-agent"
+  "homepage": "https://github.com/tranvanhuy-hichan/nestor-agent"
 }
