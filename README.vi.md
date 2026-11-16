@@ -14,6 +14,21 @@
 
 Trợ lý AI cá nhân **mã nguồn mở**, chạy trên máy bạn, dữ liệu nằm ở máy bạn: gateway chạy nền, giao diện web, **CLI `nestor`**, skill dạng `SKILL.md`, bộ nhớ bằng markdown, tool, MCP, Telegram và automations.
 
+## Ảnh chụp màn hình
+
+<p align="center"><img src="docs/assets/screenshots/01-chat-cited-answer.png" alt="Câu trả lời có trích dẫn nguồn, tạo bởi model chạy cục bộ" width="880"></p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/screenshots/02-documents-rag.png" alt="Tài liệu: file của bạn, lập chỉ mục tại máy"><br><sub><b>Tài liệu: file của bạn, lập chỉ mục tại máy</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/03-ai-models.png" alt="Mô hình AI: chạy cục bộ (Ollama) hoặc đám mây"><br><sub><b>Mô hình AI: chạy cục bộ (Ollama) hoặc đám mây</b></sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/screenshots/04-plugins-mcp.png" alt="Plugin: dịch vụ MCP bật bằng một cú nhấp"><br><sub><b>Plugin: dịch vụ MCP bật bằng một cú nhấp</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/05-dashboard.png" alt="Trang chủ"><br><sub><b>Trang chủ</b></sub></td>
+  </tr>
+</table>
+
 ## Tính năng
 
 - **Model**: Ollama và server local (LM Studio, vLLM), Gemini, Claude, OpenAI, OpenRouter, DeepSeek (DeepSeek-R1, V3), Mistral, xAI, Groq, Cerebras, Together, Fireworks, Qwen và mọi API tương thích OpenAI. Có fallback, tự thử lại khi lỗi 429/503, ước tính chi phí. Trình duyệt và chọn mô hình local trực quan.
