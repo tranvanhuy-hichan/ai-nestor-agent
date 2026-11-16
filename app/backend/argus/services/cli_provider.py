@@ -119,6 +119,7 @@ def _agy_feed(d, run):
 def _codex_cmd(cfg, exe, prompt, run):
     # Chua kiem chung voi ban Codex that (may chua cai): flag theo tai lieu `codex exec`; ket qua cuoi con duoc doc tu file -o
     run.out_file = str(Path(dbmod.DATA) / "cli-run" / f"codex-{uuid.uuid4().hex[:8]}.txt")
+    Path(run.out_file).parent.mkdir(parents=True, exist_ok=True)
     cmd = exe + ["exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only", "-o", run.out_file] + (["--model", cfg.model] if cfg.model else []) + [prompt]
     return cmd, None
 
