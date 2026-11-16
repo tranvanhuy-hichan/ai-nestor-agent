@@ -1,6 +1,7 @@
 """API trang kieu Notion (file markdown trong workspace/pages)."""
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from ..services import pages
 
@@ -46,6 +47,20 @@ def search_pages(q: str = ""):
 @router.post("/pages")
 def create_page(b: NewPage):
     return _guard(pages.create, b.title, b.parent, b.content, b.icon)
+
+
+class ImageUpload(BaseModel):
+    data: str = Field(max_length=14_000_000)
+
+
+@router.post("/pages/assets")
+def upload_image(b: ImageUpload):
+    return {"url": _guard(pages.save_image, b.data)}
+
+
+@router.get("/pages/assets/{name}")
+def get_image(name: str):
+    return FileResponse(_guard(pages.image_path, name), headers={"X-Content-Type-Options": "nosniff"})
 
 
 @router.get("/pages/{pid}")
