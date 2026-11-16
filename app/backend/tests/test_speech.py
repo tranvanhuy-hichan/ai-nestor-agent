@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from argus.api import speech
+from nestor.api import speech
 
 
 def client():

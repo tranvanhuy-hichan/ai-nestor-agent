@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from argus.assistant_defs.forms import form_for
-from argus.services.tools import ToolContext, call
-from argus.services import tools_cv
+from nestor.assistant_defs.forms import form_for
+from nestor.services.tools import ToolContext, call
+from nestor.services import tools_cv
 
 RENDERER = Path(tools_cv.__file__).resolve().parents[1] / 'cv_templates' / 'render.mjs'
 
@@ -101,7 +101,7 @@ def test_long_cv_is_not_silently_truncated():
 
 
 def test_incomplete_edit_is_rejected_instead_of_silently_printing_raw_input():
-    from argus.services.cv_content import preserve_profile, IncompleteCvError
+    from nestor.services.cv_content import preserve_profile, IncompleteCvError
     profile = {'template': 'modern', 'skipped_sections': [], 'data': {'name': 'An',
         'projects': [{'id': 'p1', 'name': 'One', 'desc': 'Built 12 integrations.'}, {'id': 'p2', 'name': 'Two', 'desc': 'Developed a dashboard.'}]}}
     with pytest.raises(IncompleteCvError, match='CHƯA xuất file'):
@@ -111,7 +111,7 @@ def test_incomplete_edit_is_rejected_instead_of_silently_printing_raw_input():
 
 
 def test_concise_rewrite_and_skill_corrections_are_not_replaced_with_raw_text():
-    from argus.services.cv_content import preserve_profile
+    from nestor.services.cv_content import preserve_profile
     original = 'I worked on developing and implementing ' + 'customer integration features ' * 12 + 'for 12 customer systems.'
     profile = {'template': 'modern', 'skipped_sections': [], 'data': {'name': 'An',
         'experience': [{'id': 'e1', 'role': 'Engineer', 'company': 'ACME', 'desc': original}],
@@ -131,7 +131,7 @@ def test_no_photo_portfolio_does_not_render_oversized_initials_placeholder():
 
 
 def test_editor_can_improve_wording_and_reorder_without_reassigning_entries():
-    from argus.services.cv_content import preserve_profile
+    from nestor.services.cv_content import preserve_profile
     profile = {'template': 'modern', 'skipped_sections': [], 'data': {'name': 'An', 'projects': [
         {'id': 'p1', 'name': 'One', 'desc': 'Built 12 integrations.'}, {'id': 'p2', 'name': 'Two', 'desc': 'Built a customer dashboard.'}]}}
     output, _ = preserve_profile(profile, {'projects': [
@@ -142,7 +142,7 @@ def test_editor_can_improve_wording_and_reorder_without_reassigning_entries():
 
 
 def test_original_profile_is_read_from_user_history_not_model_generated_data():
-    from argus.services.cv_content import profile_from_messages
+    from nestor.services.cv_content import profile_from_messages
     source = {'template': 'modern', 'data': {'name': 'An', 'projects': [{'name': 'Keep me'}]}, 'skipped_sections': []}
     messages = [{'role': 'user', 'content': '- Profile: ' + json.dumps(source)},
                 {'role': 'assistant', 'content': '- Profile: ' + json.dumps({**source, 'data': {'name': 'Wrong'}})},

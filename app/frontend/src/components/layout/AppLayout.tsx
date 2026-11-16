@@ -159,7 +159,7 @@ export function AppLayout() {
           <>
             {/* Owl icon: thu nhỏ khi collapsed, trở lại kích thước bình thường khi hover */}
             <AgentOwl className={cn('shrink-0 transition-all duration-200', exp ? 'h-9 opacity-100' : 'h-6 opacity-60')} />
-            {/* Chữ ARGUS: fade + slide in khi expanded */}
+            {/* Chữ NESTOR: fade + slide in khi expanded */}
             <span className={cn('overflow-hidden whitespace-nowrap transition-all duration-200', exp ? 'max-w-[9rem] opacity-100' : 'max-w-0 opacity-0')}>
               <AgentLogo className="[&>span:first-child]:hidden" />
             </span>

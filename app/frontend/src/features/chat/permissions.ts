@@ -21,7 +21,7 @@ export const EFFORTS: { id: Effort; label: string }[] = [
 ]
 
 /** Quyền đã chọn được nhớ theo từng phiên (không bị đặt lại khi đổi phiên/đổi trang). '__new' là lựa chọn cho hội thoại chưa có id. */
-const KEY = 'argus-perm:'
+const KEY = 'nestor-perm:'
 const VALID = new Set<string>(['default', 'readonly', 'guarded', 'full', 'plan'])
 export const permStore = {
   get(sid: string | null): Permission | null {

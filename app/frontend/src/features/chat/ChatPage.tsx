@@ -52,7 +52,7 @@ function exportMarkdown(items: Item[]): string {
 
 function exportJson(items: Item[], sessionTitle?: string): string {
   const data = {
-    title: sessionTitle || 'Hội thoại Argus',
+    title: sessionTitle || 'Hội thoại Nestor',
     exported_at: new Date().toISOString(),
     messages: items.map((i) => {
       if (i.kind === 'tool') {
@@ -395,7 +395,7 @@ export function ChatPage() {
               <div className="flex flex-col items-center pt-[10vh] text-center">
                 {isDocs ? <FileSearch className="mb-4 size-12 text-accent" /> : <AgentLogoStacked large className="mb-5" />}
                 <h2 className="text-xl font-semibold">{isDocs ? t('Hỏi đáp trên tài liệu của bạn') : t('Mình có thể giúp gì cho bạn?')}</h2>
-                {isDocs && <p className="mt-1 text-sm text-muted">{t('Argus chỉ trả lời dựa trên tài liệu bạn đã thêm và ghi rõ nguồn.')}</p>}
+                {isDocs && <p className="mt-1 text-sm text-muted">{t('Nestor chỉ trả lời dựa trên tài liệu bạn đã thêm và ghi rõ nguồn.')}</p>}
                 <div className="mt-6 grid w-full max-w-xl gap-2 sm:grid-cols-2">
                   {(isDocs ? DOC_SUGGESTIONS : SUGGESTIONS).map((s) => <button key={s} onClick={() => { stick.current = true; void chat.send(t(s), active) }} className="rounded-xl border border-line bg-panel px-3.5 py-3 text-left text-sm text-muted transition hover:border-accent/60 hover:text-fg">{t(s)}</button>)}
                 </div>

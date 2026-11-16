@@ -129,7 +129,7 @@ const dict: Record<string, string> = {
   'Cách cài công cụ này': 'How to install this tool',
   'Xem hướng dẫn ở trang chủ': 'See the install guide on its website',
   'Không hỗ trợ': 'Not supported',
-  'Chạy lệnh trong Terminal (PowerShell trên Windows), rồi khởi động lại Argus để nhận lệnh mới.': 'Run the command in a Terminal (PowerShell on Windows), then restart Argus so it finds the new command.',
+  'Chạy lệnh trong Terminal (PowerShell trên Windows), rồi khởi động lại Nestor để nhận lệnh mới.': 'Run the command in a Terminal (PowerShell on Windows), then restart Nestor so it finds the new command.',
   'Chỉ macOS': 'macOS only',
   'Chỉ Linux': 'Linux only',
   'Chọn lọc từ các skill được tải nhiều nhất trên ClawHub, hợp với công việc và đời sống hằng ngày. Bấm vào một skill để xem nội dung trước khi cài.': 'Hand-picked from the most downloaded skills on ClawHub, useful for everyday work and life. Click a skill to read it before installing.',

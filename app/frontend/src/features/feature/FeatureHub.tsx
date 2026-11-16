@@ -16,7 +16,7 @@ export function FeatureHub() {
   const shown = list.filter((a) => (!group || a.group === group) && searchableText([t(a.name), t(a.description), ...a.starters, ...(a.form?.flows.map((f) => t(f.label)) ?? [])].join(' ')).includes(searchableText(q.trim())))
   return <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 py-5 sm:px-6 lg:px-8">
     <header className="mb-5 flex shrink-0 flex-wrap items-end justify-between gap-4">
-      <div><p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.16em] text-accent">ARGUS WORKSPACE</p><h1 className="text-2xl font-semibold tracking-tight">{t('Công cụ')}</h1><p className="mt-1.5 text-sm text-muted">{t('Chọn công việc. Cung cấp thông tin. Nhận kết quả hoàn chỉnh.')}</p></div>
+      <div><p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.16em] text-accent">NESTOR WORKSPACE</p><h1 className="text-2xl font-semibold tracking-tight">{t('Công cụ')}</h1><p className="mt-1.5 text-sm text-muted">{t('Chọn công việc. Cung cấp thông tin. Nhận kết quả hoàn chỉnh.')}</p></div>
       <div className="w-full sm:w-80 [&>div]:!w-full"><SearchBox value={q} onChange={setQ} placeholder={t('Tìm công cụ hoặc công việc…')} label={t('Tìm công cụ')} /></div>
     </header>
     <nav aria-label={t('Nhóm công cụ')} className="mb-4 flex shrink-0 gap-2 overflow-x-auto pb-2">

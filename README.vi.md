@@ -1,6 +1,6 @@
-<p align="center"><img src="docs/assets/argus-logo.png" alt="Argus" width="320"></p>
+<p align="center"><img src="docs/assets/nestor-logo.png" alt="Nestor" width="320"></p>
 
-# Argus Agent
+# Nestor Agent
 
 <p align="center">
   <b>🇻🇳 Tiếng Việt</b> · <a href="README.md">🇬🇧 English</a>
@@ -12,7 +12,7 @@
   <img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen">
 </p>
 
-Trợ lý AI cá nhân **mã nguồn mở**, chạy trên máy bạn, dữ liệu nằm ở máy bạn: gateway chạy nền, giao diện web, **CLI `argus`**, skill dạng `SKILL.md`, bộ nhớ bằng markdown, tool, MCP, Telegram và automations.
+Trợ lý AI cá nhân **mã nguồn mở**, chạy trên máy bạn, dữ liệu nằm ở máy bạn: gateway chạy nền, giao diện web, **CLI `nestor`**, skill dạng `SKILL.md`, bộ nhớ bằng markdown, tool, MCP, Telegram và automations.
 
 ## Tính năng
 
@@ -36,7 +36,7 @@ Trợ lý AI cá nhân **mã nguồn mở**, chạy trên máy bạn, dữ liệ
 ## Tài liệu
 
 - [Hướng dẫn sử dụng](docs/huong-dan-su-dung.md): dành cho mọi người dùng
-- [Tài liệu dòng lệnh `argus`](docs/cli.md)
+- [Tài liệu dòng lệnh `nestor`](docs/cli.md)
 - [Kiến trúc hệ thống](docs/kien-truc.md): dành cho lập trình viên
 
 ## Cài đặt
@@ -44,43 +44,43 @@ Trợ lý AI cá nhân **mã nguồn mở**, chạy trên máy bạn, dữ liệ
 Cần Python 3.11+ (và Node 20+ nếu muốn tự build giao diện).
 
 ```bash
-git clone https://github.com/tranvanhuy-hichan/argus-agent.git && cd argus-agent
+git clone https://github.com/tranvanhuy-hichan/nestor-agent.git && cd nestor-agent
 python3 -m venv .venv && .venv/bin/pip install -e app/backend
 (cd app/frontend && npm install && npm run build)     # giao diện web
-.venv/bin/argus onboard                           # trình hướng dẫn: model, an toàn, Telegram, khởi động
+.venv/bin/nestor onboard                           # trình hướng dẫn: model, an toàn, Telegram, khởi động
 ```
 
-Thêm `.venv/bin` vào `PATH` (hoặc `source .venv/bin/activate`) để gõ ngắn `argus ...`.
+Thêm `.venv/bin` vào `PATH` (hoặc `source .venv/bin/activate`) để gõ ngắn `nestor ...`.
 
-## CLI `argus`
+## CLI `nestor`
 
 | Lệnh | Việc |
 |---|---|
-| `argus onboard` | Cài đặt lần đầu: menu chọn bằng **↑/↓, Space (tick), Enter**, nút Có/Không đổi bằng ←/→. Khi không có terminal thật (pipe, CI, Windows) tự dùng kiểu gõ số; `--non-interactive` + cờ để tự động hóa |
-| `argus start` / `stop` / `restart` / `status` | Quản lý server nền (`start -f` chạy foreground, `--host 0.0.0.0` để mở cho máy khác) |
-| `argus logs -f` | Xem log |
-| `argus open` | Mở giao diện web |
-| `argus doctor` | Chẩn đoán (`--fix` tự sửa việc an toàn, `--offline`, `--json`) |
-| `argus chat` | Trò chuyện ngay trong terminal (hỏi `y/N` khi cần phê duyệt; `/help` xem lệnh) |
-| `argus run "việc cần làm"` | Chạy một lần rồi thoát: `--json`, `--exec-policy deny\|allow\|allowlist`, `--allow "git status"`, `--ask`, `--permission readonly`, `-` để đọc stdin |
-| `argus token create\|list\|revoke` | API token cho `/v1/run` và MCP server |
-| `argus skills list\|search\|install\|remove\|update` | Skill từ ClawHub |
-| `argus service install\|uninstall\|start\|stop\|status` | Chạy cùng máy (systemd trên Linux, launchd trên macOS; `install --dry-run` để xem trước) |
-| `argus backup` / `restore` | Sao lưu và khôi phục cấu hình, cơ sở dữ liệu, workspace. `--encrypt` mã hóa bằng mật khẩu, `--include-key` kèm khóa chủ, `restore --force` tự sao lưu bản hiện tại trước |
-| `argus secrets status\|encrypt\|decrypt\|keychain\|file\|rotate` | Quản lý việc mã hóa khóa bí mật trong `config.json` |
-| `argus config path\|show` | Xem cấu hình (API key được che) |
+| `nestor onboard` | Cài đặt lần đầu: menu chọn bằng **↑/↓, Space (tick), Enter**, nút Có/Không đổi bằng ←/→. Khi không có terminal thật (pipe, CI, Windows) tự dùng kiểu gõ số; `--non-interactive` + cờ để tự động hóa |
+| `nestor start` / `stop` / `restart` / `status` | Quản lý server nền (`start -f` chạy foreground, `--host 0.0.0.0` để mở cho máy khác) |
+| `nestor logs -f` | Xem log |
+| `nestor open` | Mở giao diện web |
+| `nestor doctor` | Chẩn đoán (`--fix` tự sửa việc an toàn, `--offline`, `--json`) |
+| `nestor chat` | Trò chuyện ngay trong terminal (hỏi `y/N` khi cần phê duyệt; `/help` xem lệnh) |
+| `nestor run "việc cần làm"` | Chạy một lần rồi thoát: `--json`, `--exec-policy deny\|allow\|allowlist`, `--allow "git status"`, `--ask`, `--permission readonly`, `-` để đọc stdin |
+| `nestor token create\|list\|revoke` | API token cho `/v1/run` và MCP server |
+| `nestor skills list\|search\|install\|remove\|update` | Skill từ ClawHub |
+| `nestor service install\|uninstall\|start\|stop\|status` | Chạy cùng máy (systemd trên Linux, launchd trên macOS; `install --dry-run` để xem trước) |
+| `nestor backup` / `restore` | Sao lưu và khôi phục cấu hình, cơ sở dữ liệu, workspace. `--encrypt` mã hóa bằng mật khẩu, `--include-key` kèm khóa chủ, `restore --force` tự sao lưu bản hiện tại trước |
+| `nestor secrets status\|encrypt\|decrypt\|keychain\|file\|rotate` | Quản lý việc mã hóa khóa bí mật trong `config.json` |
+| `nestor config path\|show` | Xem cấu hình (API key được che) |
 
-`chat` và `run` chạy agent ngay trong tiến trình (không cần server đang chạy) và dùng chung cấu hình, skill, MCP, hội thoại với giao diện web. Đổi ngôn ngữ CLI: `--lang vi|en` hoặc `ARGUS_LANG`.
+`chat` và `run` chạy agent ngay trong tiến trình (không cần server đang chạy) và dùng chung cấu hình, skill, MCP, hội thoại với giao diện web. Đổi ngôn ngữ CLI: `--lang vi|en` hoặc `NESTOR_LANG`.
 
-Biến môi trường: `ARGUS_HOME` (thư mục dữ liệu), `ARGUS_PORT`, `ARGUS_HOST`, `ARGUS_CONFIG`, `ARGUS_ALLOWED_HOSTS`, `ARGUS_TOKEN`/`ARGUS_URL` (MCP server). Tên cũ `AGENT_*` vẫn được nhận.
+Biến môi trường: `NESTOR_HOME` (thư mục dữ liệu), `NESTOR_PORT`, `NESTOR_HOST`, `NESTOR_CONFIG`, `NESTOR_ALLOWED_HOSTS`, `NESTOR_TOKEN`/`NESTOR_URL` (MCP server). Tên cũ `AGENT_*` vẫn được nhận.
 
-`./run.sh` vẫn dùng được như lớp bọc mỏng quanh `argus`.
+`./run.sh` vẫn dùng được như lớp bọc mỏng quanh `nestor`.
 
 ## Docker, service, test
 
 ```bash
 docker compose up -d --build         # mở http://127.0.0.1:8787 (dữ liệu cá nhân ở ./user-data)
-argus service install                # chạy cùng máy, không cần Docker
+nestor service install                # chạy cùng máy, không cần Docker
 cd app/backend && pip install -e ".[dev]" && python -m pytest -q
 ```
 
@@ -88,9 +88,9 @@ Tìm Ollama trên máy chủ từ trong container: đặt Base URL là `http://h
 
 ## Đóng góp
 
-Argus là dự án mã nguồn mở và rất hoan nghênh đóng góp: báo lỗi, đề xuất tính năng, cải thiện tài liệu, bản dịch, skill mới, code.
+Nestor là dự án mã nguồn mở và rất hoan nghênh đóng góp: báo lỗi, đề xuất tính năng, cải thiện tài liệu, bản dịch, skill mới, code.
 
-1. Mở [issue](https://github.com/tranvanhuy-hichan/argus-agent/issues) để báo lỗi hoặc bàn ý tưởng trước khi làm việc lớn.
+1. Mở [issue](https://github.com/tranvanhuy-hichan/nestor-agent/issues) để báo lỗi hoặc bàn ý tưởng trước khi làm việc lớn.
 2. Fork repo, tạo nhánh từ `main` (ví dụ `feat/ten-tinh-nang`).
 3. Chạy kiểm tra trước khi gửi: `cd app/backend && python -m pytest -q` và `cd app/frontend && npm run i18n:check`.
 4. Gửi Pull Request mô tả rõ thay đổi và lý do. Commit theo kiểu `feat:`, `fix:`, `docs:`...
@@ -100,7 +100,7 @@ Báo lỗ hổng bảo mật: vui lòng không đăng công khai, hãy liên h�
 
 ## Giấy phép
 
-Argus Agent là phần mềm tự do theo giấy phép **GNU AGPL-3.0-or-later** (xem [LICENSE](LICENSE)). Nếu bạn sửa đổi và cung cấp nó như một dịch vụ qua mạng, bạn phải cung cấp mã nguồn bản sửa đổi cho người dùng dịch vụ đó.
+Nestor Agent là phần mềm tự do theo giấy phép **GNU AGPL-3.0-or-later** (xem [LICENSE](LICENSE)). Nếu bạn sửa đổi và cung cấp nó như một dịch vụ qua mạng, bạn phải cung cấp mã nguồn bản sửa đổi cho người dùng dịch vụ đó.
 
 Copyright (C) 2026 tranvanhuy-hichan
 
@@ -109,18 +109,18 @@ Copyright (C) 2026 tranvanhuy-hichan
 Dự án tách làm hai phần để không bao giờ nhầm lẫn mã nguồn với dữ liệu của bạn:
 
 ```
-argus-agent/
+nestor-agent/
 ├── app/                  # MÃ NGUỒN CỐ ĐỊNH: có thể xóa/cài lại bất cứ lúc nào mà không mất gì của bạn
-│   ├── backend/argus/
+│   ├── backend/nestor/
 │   │   ├── api/          # router FastAPI: chat, skills, providers, tích hợp, API ngoài (/v1)
 │   │   ├── services/     # agent loop, providers, tools, skills, MCP, Telegram, scheduler, trình duyệt…
 │   │   ├── core/         # cấu hình, SQLite, đường dẫn
-│   │   └── cli/          # lệnh `argus` (start, doctor, onboard, chat, run, tasks, memory…)
+│   │   └── cli/          # lệnh `nestor` (start, doctor, onboard, chat, run, tasks, memory…)
 │   ├── frontend/src/     # React + TypeScript + Tailwind (features/ theo từng trang, i18n/)
 │   ├── templates/workspace/   # SOUL.md và skill mẫu, dùng để tạo workspace lần đầu
 │   ├── deploy/           # file systemd mẫu
 │   └── examples/         # MCP server mẫu để thử tích hợp
-├── user-data/            # DỮ LIỆU CÁ NHÂN CỦA BẠN: đừng xóa, hãy sao lưu (`argus backup`)
+├── user-data/            # DỮ LIỆU CÁ NHÂN CỦA BẠN: đừng xóa, hãy sao lưu (`nestor backup`)
 │   ├── config.json       # cấu hình (API key đã mã hóa)
 │   ├── data/             # cơ sở dữ liệu, khóa chủ (master.key), log
 │   ├── workspace/        # SOUL.md, USER.md, MEMORY.md, skills/, sessions/ (tính cách, bộ nhớ, file của agent)
@@ -128,10 +128,10 @@ argus-agent/
 ├── Dockerfile, docker-compose.yml, run.sh, .github/, LICENSE, README.md
 ```
 
-Muốn để dữ liệu ở nơi khác (ổ khác, thư mục được đồng bộ…): đặt biến môi trường `ARGUS_HOME=/duong/dan`. Nếu bạn cài từ phiên bản cũ (dữ liệu nằm ngay ở thư mục gốc), Argus vẫn dùng chỗ đó cho tới khi bạn chuyển `config.json`, `data/`, `workspace/`, `backups/` vào `user-data/`.
+Muốn để dữ liệu ở nơi khác (ổ khác, thư mục được đồng bộ…): đặt biến môi trường `NESTOR_HOME=/duong/dan`. Nếu bạn cài từ phiên bản cũ (dữ liệu nằm ngay ở thư mục gốc), Nestor vẫn dùng chỗ đó cho tới khi bạn chuyển `config.json`, `data/`, `workspace/`, `backups/` vào `user-data/`.
 
 ## Lưu ý bảo mật
 
 - Skill tải từ internet chỉ là hướng dẫn, nhưng có thể bảo agent chạy lệnh. Đọc `SKILL.md` trước khi cài và giữ xác nhận lệnh shell luôn bật.
 - MCP server stdio chạy lệnh bạn khai báo với quyền của chính bạn. Chỉ thêm server bạn tin tưởng.
-- `user-data/config.json` (cả thư mục `user-data/` đã nằm trong `.gitignore`). Mọi khóa bí mật trong đó (API key, token Telegram, biến môi trường/header MCP, khóa skill) được **mã hóa** bằng khóa chủ lấy từ `ARGUS_MASTER_KEY`, keychain hệ điều hành (`pip install keyring` rồi `argus secrets keychain`) hoặc `user-data/data/master.key` (quyền 600). Việc này bảo vệ khi file config bị lộ riêng lẻ (gửi kèm báo lỗi, đẩy nhầm lên git, sao lưu rời khóa chủ); **không** bảo vệ khi kẻ tấn công có cả hai file hoặc đang chạy trên máy của bạn. Hãy sao lưu khóa chủ (`argus backup --include-key --encrypt`): mất nó thì không giải mã lại được. `argus doctor` kiểm tra tình trạng này.
+- `user-data/config.json` (cả thư mục `user-data/` đã nằm trong `.gitignore`). Mọi khóa bí mật trong đó (API key, token Telegram, biến môi trường/header MCP, khóa skill) được **mã hóa** bằng khóa chủ lấy từ `NESTOR_MASTER_KEY`, keychain hệ điều hành (`pip install keyring` rồi `nestor secrets keychain`) hoặc `user-data/data/master.key` (quyền 600). Việc này bảo vệ khi file config bị lộ riêng lẻ (gửi kèm báo lỗi, đẩy nhầm lên git, sao lưu rời khóa chủ); **không** bảo vệ khi kẻ tấn công có cả hai file hoặc đang chạy trên máy của bạn. Hãy sao lưu khóa chủ (`nestor backup --include-key --encrypt`): mất nó thì không giải mã lại được. `nestor doctor` kiểm tra tình trạng này.

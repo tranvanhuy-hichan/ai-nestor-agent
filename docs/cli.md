@@ -1,6 +1,6 @@
-# Tài liệu dòng lệnh `argus`
+# Tài liệu dòng lệnh `nestor`
 
-Tất cả những gì làm được trên giao diện web đều làm được bằng dòng lệnh. Tài liệu này liệt kê từng lệnh, tùy chọn và ví dụ. Bạn cũng xem được trợ giúp ngay trong terminal bằng `argus <lệnh> --help`.
+Tất cả những gì làm được trên giao diện web đều làm được bằng dòng lệnh. Tài liệu này liệt kê từng lệnh, tùy chọn và ví dụ. Bạn cũng xem được trợ giúp ngay trong terminal bằng `nestor <lệnh> --help`.
 
 Xem thêm: [Hướng dẫn sử dụng](huong-dan-su-dung.md) · [Kiến trúc hệ thống](kien-truc.md).
 
@@ -23,29 +23,29 @@ Xem thêm: [Hướng dẫn sử dụng](huong-dan-su-dung.md) · [Kiến trúc h
 ## Tùy chọn chung
 
 ```
-argus [-h] [--version] [--lang {vi,en}] <lệnh> ...
+nestor [-h] [--version] [--lang {vi,en}] <lệnh> ...
 ```
 
 | Tùy chọn | Ý nghĩa |
 |---|---|
 | `-h`, `--help` | Hiện trợ giúp (dùng được ở mọi lệnh con) |
 | `--version` | Hiện phiên bản |
-| `--lang {vi,en}` | Ngôn ngữ của CLI. Mặc định theo cấu hình hoặc hệ thống. Có thể đặt bằng biến `ARGUS_LANG` |
+| `--lang {vi,en}` | Ngôn ngữ của CLI. Mặc định theo cấu hình hoặc hệ thống. Có thể đặt bằng biến `NESTOR_LANG` |
 
-`--lang` đứng **trước** tên lệnh: `argus --lang en doctor`.
+`--lang` đứng **trước** tên lệnh: `nestor --lang en doctor`.
 
-Cài đặt lệnh `argus`: `.venv/bin/pip install -e app/backend`, rồi thêm `.venv/bin` vào `PATH`. Nếu chưa muốn thêm vào `PATH`, gọi `.venv/bin/argus ...` hoặc `.venv/bin/python -m argus ...`.
+Cài đặt lệnh `nestor`: `.venv/bin/pip install -e app/backend`, rồi thêm `.venv/bin` vào `PATH`. Nếu chưa muốn thêm vào `PATH`, gọi `.venv/bin/nestor ...` hoặc `.venv/bin/python -m nestor ...`.
 
 ---
 
 ## Vận hành server
 
-### `argus start`
+### `nestor start`
 
 Khởi động server ở nền (daemon). Lần đầu, nếu giao diện web chưa build và máy có Node.js, lệnh tự build (khoảng 1 phút).
 
 ```
-argus start [--host HOST] [--port PORT] [-f] [--no-build]
+nestor start [--host HOST] [--port PORT] [-f] [--no-build]
 ```
 
 | Tùy chọn | Ý nghĩa |
@@ -56,33 +56,33 @@ argus start [--host HOST] [--port PORT] [-f] [--no-build]
 | `--no-build` | Không tự build giao diện |
 
 ```bash
-argus start                  # chạy nền ở 127.0.0.1:8787
-argus start -f               # chạy foreground, Ctrl+C để dừng
-argus start --port 9000
+nestor start                  # chạy nền ở 127.0.0.1:8787
+nestor start -f               # chạy foreground, Ctrl+C để dừng
+nestor start --port 9000
 ```
 
-### `argus stop`
+### `nestor stop`
 
 Dừng server đang chạy nền.
 
-### `argus restart`
+### `nestor restart`
 
 Dừng rồi khởi động lại. Nhận `--host` và `--port` như `start`. Dùng sau khi cập nhật mã nguồn.
 
-### `argus status`
+### `nestor status`
 
 Hiện trạng thái: server có chạy không, địa chỉ, phiên bản, mô hình mặc định, số kỹ năng, Telegram, heartbeat, mật khẩu, sandbox, thư mục dữ liệu.
 
 ```
-argus status [--json]
+nestor status [--json]
 ```
 
 `--json` in dạng JSON để dùng trong script.
 
-### `argus logs`
+### `nestor logs`
 
 ```
-argus logs [-f] [-n N]
+nestor logs [-f] [-n N]
 ```
 
 | Tùy chọn | Ý nghĩa |
@@ -92,28 +92,28 @@ argus logs [-f] [-n N]
 
 Log nằm ở `user-data/data/server.log`.
 
-### `argus open`
+### `nestor open`
 
 Mở giao diện web bằng trình duyệt mặc định. Nhận `--host` và `--port`.
 
-### `argus dev`
+### `nestor dev`
 
 Chế độ phát triển: chạy backend tự nạp lại khi sửa code cùng máy chủ phát triển của giao diện. Cần Node.js và thư mục `app/frontend/`.
 
 ```
-argus dev [--port PORT]
+nestor dev [--port PORT]
 ```
 
 ---
 
 ## Cài đặt và chẩn đoán
 
-### `argus onboard`
+### `nestor onboard`
 
 Trình hướng dẫn cài đặt lần đầu. Ở chế độ tương tác, dùng **mũi tên lên/xuống** để di chuyển, **Space** để đánh dấu, **Enter** để chọn. Nó hỏi: ngôn ngữ, tên, mô hình AI (có thử kết nối), tùy chọn an toàn (sandbox Docker, mật khẩu), Telegram, heartbeat và dịch vụ tự khởi động.
 
 ```
-argus onboard [--non-interactive] [--language {vi,en}] [--name NAME]
+nestor onboard [--non-interactive] [--language {vi,en}] [--name NAME]
               [--provider PROVIDER] [--model MODEL] [--base-url BASE_URL]
               [--api-key-env API_KEY_ENV] [--api-key-stdin] [--skip-test]
               [--sandbox {none,docker}] [--password-env PASSWORD_ENV]
@@ -142,25 +142,25 @@ argus onboard [--non-interactive] [--language {vi,en}] [--name NAME]
 ```bash
 # Cài tự động với Gemini, khóa lấy từ biến môi trường
 export GEMINI_API_KEY=...
-argus onboard --non-interactive --language vi --name Huy \
+nestor onboard --non-interactive --language vi --name Huy \
   --provider gemini --api-key-env GEMINI_API_KEY --start
 
 # Cài với Antigravity (hoặc codex, claude-code) đã đăng nhập sẵn, không cần API key
-argus onboard --non-interactive --provider antigravity --start
+nestor onboard --non-interactive --provider antigravity --start
 
 # Cài với Ollama chạy sẵn trên máy
-argus onboard --non-interactive --provider ollama --model qwen2.5:3b --start
+nestor onboard --non-interactive --provider ollama --model qwen2.5:3b --start
 
 # Truyền khóa qua stdin
-echo "$KEY" | argus onboard --non-interactive --provider openai --api-key-stdin
+echo "$KEY" | nestor onboard --non-interactive --provider openai --api-key-stdin
 ```
 
-### `argus doctor`
+### `nestor doctor`
 
 Chẩn đoán toàn bộ hệ thống và gợi ý cách sửa. Chia theo nhóm: **Environment** (Python, gói, Node, giao diện đã build), **Data** (thư mục dữ liệu, dung lượng trống, config, quyền file, khóa bí mật, sao lưu, cơ sở dữ liệu, FTS5, workspace), **Server**, **Models** (kết nối từng mô hình), **Tools & integrations** (Docker, MCP, Telegram, kỹ năng) và **Extended features** (trình duyệt, trí nhớ ngữ nghĩa, tạo ảnh, xem ảnh, điều khiển máy tính, và các module công cụ nạp lỗi).
 
 ```
-argus doctor [--fix] [--offline] [--json]
+nestor doctor [--fix] [--offline] [--json]
 ```
 
 | Tùy chọn | Ý nghĩa |
@@ -171,23 +171,23 @@ argus doctor [--fix] [--offline] [--json]
 
 Với mô hình dùng CLI, doctor chỉ kiểm tra lệnh (`claude`…) có trong `PATH` chứ không gọi mô hình (tránh tốn lượt dùng). Mỗi dòng có biểu tượng: `✓` ổn, `!` cảnh báo, `✗` lỗi, `·` thông tin. Mã thoát là 1 nếu có lỗi (`✗`).
 
-### `argus config`
+### `nestor config`
 
 ```
-argus config path        # in đường dẫn file config.json
-argus config show        # in cấu hình (API key bị che)
+nestor config path        # in đường dẫn file config.json
+nestor config show        # in cấu hình (API key bị che)
 ```
 
 ---
 
 ## Dùng agent
 
-### `argus chat`
+### `nestor chat`
 
 Trò chuyện với agent ngay trong terminal.
 
 ```
-argus chat [-s SESSION] [-p PROVIDER] [--permission {default,readonly,guarded,full}]
+nestor chat [-s SESSION] [-p PROVIDER] [--permission {default,readonly,guarded,full}]
            [--effort {auto,low,medium,high}]
 ```
 
@@ -215,12 +215,12 @@ Lệnh gạch chéo trong phiên chat:
 
 Khi agent cần xin phép (ví dụ chạy lệnh), terminal hỏi `y/N` và hiện đúng lệnh sẽ chạy.
 
-### `argus run`
+### `nestor run`
 
 Chạy **một yêu cầu rồi thoát**, hợp cho script, cron, CI. Mặc định **không có người duyệt**, nên mọi lệnh shell bị từ chối trừ khi bạn nói khác.
 
 ```
-argus run [-s SESSION] [-p PROVIDER] [--permission MODE] [--effort LEVEL]
+nestor run [-s SESSION] [-p PROVIDER] [--permission MODE] [--effort LEVEL]
           [--exec-policy {deny,allow,allowlist}] [--allow CMD] [--ask]
           [--tools TOOLS] [--timeout SECONDS] [--json] [-v]
           prompt
@@ -242,28 +242,28 @@ argus run [-s SESSION] [-p PROVIDER] [--permission MODE] [--effort LEVEL]
 | `-v`, `--verbose` | In thêm các bước công cụ ra stderr |
 
 ```bash
-argus run "Tóm tắt file notes.md trong 5 gạch đầu dòng"
+nestor run "Tóm tắt file notes.md trong 5 gạch đầu dòng"
 
 # Đọc yêu cầu từ stdin, chỉ cho phép vài công cụ, kết quả JSON
-cat yeu-cau.txt | argus run - --tools read,list_dir,web_search --json
+cat yeu-cau.txt | nestor run - --tools read,list_dir,web_search --json
 
 # Cho phép riêng lệnh git status và git log
-argus run "Cho tôi biết repo này gần đây đổi gì" \
+nestor run "Cho tôi biết repo này gần đây đổi gì" \
   --exec-policy allowlist --allow "git status" --allow "git log"
 
 # Chạy trong ngữ cảnh một hội thoại cũ
-argus run "Làm tiếp bước 2" -s 9dbf1f77
+nestor run "Làm tiếp bước 2" -s 9dbf1f77
 ```
 
-### `argus tasks`
+### `nestor tasks`
 
 Việc chạy nền và agent con (giống trang **Tác vụ** trên web).
 
 ```
-argus tasks list   [--status S] [--kind K] [--limit N] [--json]
-argus tasks show   <id> [--json]
-argus tasks cancel <id>
-argus tasks run    <mục tiêu> [--role ROLE] [--permission MODE] [--provider NAME]
+nestor tasks list   [--status S] [--kind K] [--limit N] [--json]
+nestor tasks show   <id> [--json]
+nestor tasks cancel <id>
+nestor tasks run    <mục tiêu> [--role ROLE] [--permission MODE] [--provider NAME]
 ```
 
 | Lệnh | Ý nghĩa |
@@ -276,10 +276,10 @@ argus tasks run    <mục tiêu> [--role ROLE] [--permission MODE] [--provider N
 Với `run`: `--role` là `general` hoặc tên vai trò (`researcher`, `coder`, `reviewer`, hoặc vai trò bạn tự thêm). `--permission` là `readonly`, `default` (mặc định: tạo file trong thư mục làm việc, từ chối việc nguy hiểm), `guarded` hoặc `full`. Lưu ý `guarded` hỏi cả khi ghi file, mà việc nền không có người duyệt nên mọi lần ghi sẽ bị từ chối.
 
 ```bash
-argus tasks run "Tìm 3 bài báo mới nhất về RAG và viết tóm tắt vào report.md" --role researcher
-argus tasks list --status running
-argus tasks show 7a1c93e0
-argus tasks cancel 7a1c93e0
+nestor tasks run "Tìm 3 bài báo mới nhất về RAG và viết tóm tắt vào report.md" --role researcher
+nestor tasks list --status running
+nestor tasks show 7a1c93e0
+nestor tasks cancel 7a1c93e0
 ```
 
 ---
@@ -289,11 +289,11 @@ argus tasks cancel 7a1c93e0
 Quản lý kỹ năng, gồm cài từ **ClawHub**.
 
 ```
-argus skills list   [--json]
-argus skills search <từ khóa> [-n LIMIT] [--json]
-argus skills install <chủ>/<tên> [-y] [--overwrite]
-argus skills remove  <tên> [-y]
-argus skills update  [tên]
+nestor skills list   [--json]
+nestor skills search <từ khóa> [-n LIMIT] [--json]
+nestor skills install <chủ>/<tên> [-y] [--overwrite]
+nestor skills remove  <tên> [-y]
+nestor skills update  [tên]
 ```
 
 | Lệnh | Ý nghĩa |
@@ -305,9 +305,9 @@ argus skills update  [tên]
 | `update [tên]` | Cập nhật kỹ năng cài từ ClawHub (một cái hoặc tất cả) |
 
 ```bash
-argus skills search "pdf"
-argus skills install someowner/pdf-reader
-argus skills update
+nestor skills search "pdf"
+nestor skills install someowner/pdf-reader
+nestor skills update
 ```
 
 > Đọc `SKILL.md` của kỹ năng trước khi cài. Kỹ năng có thể bảo agent chạy lệnh.
@@ -319,10 +319,10 @@ argus skills update
 Trí nhớ theo nghĩa và dọn `MEMORY.md` bằng AI.
 
 ```
-argus memory status  [--json]
-argus memory search  <từ khóa...> [-n LIMIT]
-argus memory reindex
-argus memory curate  [--apply] [--provider NAME]
+nestor memory status  [--json]
+nestor memory search  <từ khóa...> [-n LIMIT]
+nestor memory reindex
+nestor memory curate  [--apply] [--provider NAME]
 ```
 
 | Lệnh | Ý nghĩa |
@@ -335,24 +335,24 @@ argus memory curate  [--apply] [--provider NAME]
 Backend embedding chọn trong `config.json` mục `memory` hoặc ở giao diện (Cài đặt → Tính năng). Chế độ `hash` chỉ khớp theo từ gần giống; muốn hiểu nghĩa thật hãy dùng `openai` (Gemini/OpenAI) hoặc một model embedding trên Ollama.
 
 ```bash
-argus memory status
-argus memory search "người tôi hay họp cùng"
-argus memory curate                # xem trước
-argus memory curate --apply        # áp dụng
+nestor memory status
+nestor memory search "người tôi hay họp cùng"
+nestor memory curate                # xem trước
+nestor memory curate --apply        # áp dụng
 ```
 
 ---
 
 ## Tích hợp
 
-### `argus token`
+### `nestor token`
 
 Quản lý API token cho ứng dụng ngoài gọi `/v1/*`.
 
 ```
-argus token create <tên> [--allow-exec] [--json]
-argus token list
-argus token revoke <id>
+nestor token create <tên> [--allow-exec] [--json]
+nestor token list
+nestor token revoke <id>
 ```
 
 | Tùy chọn | Ý nghĩa |
@@ -364,17 +364,17 @@ argus token revoke <id>
 | `revoke <id>` | Thu hồi |
 
 ```bash
-argus token create ci-bot --json
+nestor token create ci-bot --json
 curl -s http://127.0.0.1:8787/v1/status -H "Authorization: Bearer agt_xxxxxxxx"
 ```
 
-### `argus service`
+### `nestor service`
 
-Chạy Argus như dịch vụ tự khởi động cùng máy: **systemd** (user service) trên Linux, **launchd** trên macOS.
+Chạy Nestor như dịch vụ tự khởi động cùng máy: **systemd** (user service) trên Linux, **launchd** trên macOS.
 
 ```
-argus service install [--host HOST] [--port PORT] [--dry-run]
-argus service uninstall | start | stop | restart | status
+nestor service install [--host HOST] [--port PORT] [--dry-run]
+nestor service uninstall | start | stop | restart | status
 ```
 
 `install` tự sinh file dịch vụ với đúng đường dẫn trên máy bạn rồi bật nó. `--dry-run` chỉ in file sẽ tạo mà không cài. Để dịch vụ chạy cả khi bạn chưa đăng nhập (Linux): `loginctl enable-linger $USER`.
@@ -388,27 +388,27 @@ argus service uninstall | start | stop | restart | status
 Sao lưu cấu hình, cơ sở dữ liệu và workspace thành một file `.tar.gz`.
 
 ```
-argus backup [-o FILE] [--include-key] [--no-sessions] [--encrypt] [--passphrase-env NAME]
+nestor backup [-o FILE] [--include-key] [--no-sessions] [--encrypt] [--passphrase-env NAME]
 ```
 
 | Tùy chọn | Ý nghĩa |
 |---|---|
-| `-o`, `--output FILE` | File đích. Mặc định `user-data/backups/argus-backup-<giờ>.tar.gz` |
+| `-o`, `--output FILE` | File đích. Mặc định `user-data/backups/nestor-backup-<giờ>.tar.gz` |
 | `--include-key` | Đưa cả **khóa chủ** vào bản sao lưu để khôi phục được trên máy khác. **Luôn dùng cùng `--encrypt`** |
 | `--no-sessions` | Bỏ file của từng hội thoại (`workspace/sessions`) cho nhẹ |
 | `--encrypt` | Mã hóa bản sao lưu bằng mật khẩu (AES-GCM) |
 | `--passphrase-env NAME` | Đọc mật khẩu từ biến môi trường thay vì hỏi |
 
 ```bash
-argus backup                                   # nhanh, giữ ở máy
-argus backup --include-key --encrypt           # đầy đủ, mang sang máy khác
-BK_PASS=... argus backup --encrypt --passphrase-env BK_PASS -o /mnt/usb/argus.tar.gz.enc
+nestor backup                                   # nhanh, giữ ở máy
+nestor backup --include-key --encrypt           # đầy đủ, mang sang máy khác
+BK_PASS=... nestor backup --encrypt --passphrase-env BK_PASS -o /mnt/usb/nestor.tar.gz.enc
 ```
 
 ### restore
 
 ```
-argus restore <file> [--force] [--passphrase-env NAME] [--master-key-file FILE]
+nestor restore <file> [--force] [--passphrase-env NAME] [--master-key-file FILE]
 ```
 
 | Tùy chọn | Ý nghĩa |
@@ -425,7 +425,7 @@ Khôi phục kiểm tra kỹ nội dung (chặn đường dẫn thoát ra ngoài
 Mã hóa các khóa bí mật (API key, token Telegram, biến môi trường/header MCP, khóa kỹ năng) trong `config.json`. Việc mã hóa được bật sẵn; nhóm lệnh này để kiểm tra và quản lý khóa chủ.
 
 ```
-argus secrets status | encrypt | decrypt | keychain | file | rotate
+nestor secrets status | encrypt | decrypt | keychain | file | rotate
 ```
 
 | Lệnh | Ý nghĩa |
@@ -437,27 +437,27 @@ argus secrets status | encrypt | decrypt | keychain | file | rotate
 | `file` | Chuyển khóa chủ về file `user-data/data/master.key` (quyền 600) |
 | `rotate` | Đổi khóa chủ và mã hóa lại tất cả |
 
-Khóa chủ được lấy theo thứ tự: biến môi trường `ARGUS_MASTER_KEY` → keychain → file `master.key`.
+Khóa chủ được lấy theo thứ tự: biến môi trường `NESTOR_MASTER_KEY` → keychain → file `master.key`.
 
 ---
 
 ## Biến môi trường
 
-Mọi biến đều có tiền tố `ARGUS_`. Tiền tố cũ `AGENT_` vẫn được nhận để không làm hỏng cấu hình đã có.
+Mọi biến đều có tiền tố `NESTOR_`. Tiền tố cũ `AGENT_` vẫn được nhận để không làm hỏng cấu hình đã có.
 
 | Biến | Ý nghĩa |
 |---|---|
-| `ARGUS_HOME` | Thư mục dữ liệu cá nhân. Mặc định `<repo>/user-data` |
-| `ARGUS_CONFIG` | Đường dẫn tới `config.json` (Docker đặt là `/app/data/config.json`) |
-| `ARGUS_TEMPLATE` | Thư mục workspace mẫu dùng để tạo workspace lần đầu |
-| `ARGUS_MASTER_KEY` | Khóa chủ để giải mã khóa bí mật (ưu tiên cao nhất) |
-| `ARGUS_ENCRYPT` | Đặt `0` để tắt mã hóa khóa bí mật |
-| `ARGUS_LANG` | Ngôn ngữ CLI (`vi` hoặc `en`) |
-| `ARGUS_URL` | Địa chỉ server cho `app/backend/argus/mcp_server.py` (mặc định `http://127.0.0.1:8787`) |
-| `ARGUS_TOKEN` | API token cho `mcp_server.py` |
-| `ARGUS_ALLOWED_HOSTS` | Danh sách tên máy chủ (cách nhau bằng dấu phẩy) được phép truy cập, ngoài `127.0.0.1` và `localhost`. Cần khi đặt sau proxy hoặc dùng tên miền |
-| `ARGUS_DEV_ORIGINS` | Danh sách origin được phép ở chế độ phát triển |
-| `ARGUS_DEBUG` | Bật ghi log chi tiết |
+| `NESTOR_HOME` | Thư mục dữ liệu cá nhân. Mặc định `<repo>/user-data` |
+| `NESTOR_CONFIG` | Đường dẫn tới `config.json` (Docker đặt là `/app/data/config.json`) |
+| `NESTOR_TEMPLATE` | Thư mục workspace mẫu dùng để tạo workspace lần đầu |
+| `NESTOR_MASTER_KEY` | Khóa chủ để giải mã khóa bí mật (ưu tiên cao nhất) |
+| `NESTOR_ENCRYPT` | Đặt `0` để tắt mã hóa khóa bí mật |
+| `NESTOR_LANG` | Ngôn ngữ CLI (`vi` hoặc `en`) |
+| `NESTOR_URL` | Địa chỉ server cho `app/backend/nestor/mcp_server.py` (mặc định `http://127.0.0.1:8787`) |
+| `NESTOR_TOKEN` | API token cho `mcp_server.py` |
+| `NESTOR_ALLOWED_HOSTS` | Danh sách tên máy chủ (cách nhau bằng dấu phẩy) được phép truy cập, ngoài `127.0.0.1` và `localhost`. Cần khi đặt sau proxy hoặc dùng tên miền |
+| `NESTOR_DEV_ORIGINS` | Danh sách origin được phép ở chế độ phát triển |
+| `NESTOR_DEBUG` | Bật ghi log chi tiết |
 
 ---
 
@@ -466,7 +466,7 @@ Mọi biến đều có tiền tố `ARGUS_`. Tiền tố cũ `AGENT_` vẫn đ�
 | Mã | Ý nghĩa |
 |---|---|
 | `0` | Thành công |
-| `1` | Lỗi khi chạy (ví dụ `argus run` gặp lỗi từ mô hình, `argus doctor` thấy lỗi, không tìm thấy việc cần xem) |
+| `1` | Lỗi khi chạy (ví dụ `nestor run` gặp lỗi từ mô hình, `nestor doctor` thấy lỗi, không tìm thấy việc cần xem) |
 | `2` | Dùng sai (thiếu yêu cầu, tùy chọn không hợp lệ, `--ask` khi không có terminal, chính sách lệnh không được phép) |
 
 ---
@@ -479,29 +479,29 @@ Mọi biến đều có tiền tố `ARGUS_`. Tiền tố cũ `AGENT_` vẫn đ�
 python3 -m venv .venv && .venv/bin/pip install -e app/backend
 (cd app/frontend && npm ci && npm run build)
 export GEMINI_API_KEY=...
-.venv/bin/argus onboard --non-interactive --provider gemini --api-key-env GEMINI_API_KEY --start --service
+.venv/bin/nestor onboard --non-interactive --provider gemini --api-key-env GEMINI_API_KEY --start --service
 ```
 
 **Chạy một việc theo lịch bằng cron của hệ điều hành** (ngoài việc dùng trang Tự động hóa):
 
 ```cron
-0 8 * * *  /đường/dẫn/.venv/bin/argus run "Tóm tắt tin công nghệ hôm nay" --tools web_search,web_fetch > /tmp/tin.txt
+0 8 * * *  /đường/dẫn/.venv/bin/nestor run "Tóm tắt tin công nghệ hôm nay" --tools web_search,web_fetch > /tmp/tin.txt
 ```
 
 **Gọi agent từ script khác và lấy kết quả JSON:**
 
 ```bash
-argus run "Liệt kê 3 việc cần làm hôm nay từ MEMORY.md" --tools read,memory_search --json | jq -r .output
+nestor run "Liệt kê 3 việc cần làm hôm nay từ MEMORY.md" --tools read,memory_search --json | jq -r .output
 ```
 
 **Kiểm tra sức khỏe trước khi triển khai:**
 
 ```bash
-argus doctor --offline --json | jq '[.[] | select(.status=="fail")]'
+nestor doctor --offline --json | jq '[.[] | select(.status=="fail")]'
 ```
 
 **Sao lưu hằng đêm, mã hóa, kèm khóa chủ:**
 
 ```bash
-BK_PASS="$(cat ~/.bk-pass)" argus backup --include-key --encrypt --passphrase-env BK_PASS -o ~/backups/argus-$(date +%F).tar.gz.enc
+BK_PASS="$(cat ~/.bk-pass)" nestor backup --include-key --encrypt --passphrase-env BK_PASS -o ~/backups/nestor-$(date +%F).tar.gz.enc
 ```

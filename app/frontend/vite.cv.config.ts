@@ -9,7 +9,7 @@ export default defineConfig({
   ssr: { noExternal: true },
   build: {
     ssr: 'scripts/render-cv.tsx',
-    outDir: '../backend/argus/cv_templates',
+    outDir: '../backend/nestor/cv_templates',
     emptyOutDir: false,
     rollupOptions: { output: { entryFileNames: 'render.mjs' } },
   },

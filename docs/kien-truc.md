@@ -1,6 +1,6 @@
-# Kiến trúc hệ thống Argus Agent
+# Kiến trúc hệ thống Nestor Agent
 
-Tài liệu này dành cho người muốn hiểu cách Argus hoạt động bên trong hoặc muốn sửa và mở rộng nó. Người dùng cuối nên đọc [Hướng dẫn sử dụng](huong-dan-su-dung.md); danh sách lệnh nằm ở [cli.md](cli.md).
+Tài liệu này dành cho người muốn hiểu cách Nestor hoạt động bên trong hoặc muốn sửa và mở rộng nó. Người dùng cuối nên đọc [Hướng dẫn sử dụng](huong-dan-su-dung.md); danh sách lệnh nằm ở [cli.md](cli.md).
 
 ## Mục lục
 
@@ -23,19 +23,19 @@ Tài liệu này dành cho người muốn hiểu cách Argus hoạt động bê
 
 ## 1. Tổng quan
 
-Argus Agent là một ứng dụng web chạy cục bộ gồm một **backend Python (FastAPI)**, một **giao diện React**, và một **CLI `argus`**. Cả ba dùng chung một lõi dịch vụ (services), nên làm gì trên giao diện cũng làm được bằng dòng lệnh hoặc API.
+Nestor Agent là một ứng dụng web chạy cục bộ gồm một **backend Python (FastAPI)**, một **giao diện React**, và một **CLI `nestor`**. Cả ba dùng chung một lõi dịch vụ (services), nên làm gì trên giao diện cũng làm được bằng dòng lệnh hoặc API.
 
 ```mermaid
 flowchart LR
   subgraph Clients
     WEB[Giao diện web<br/>React + SSE]
-    CLI[CLI argus]
+    CLI[CLI nestor]
     TG[Telegram bot]
     EXT[Ứng dụng ngoài<br/>/v1 + Bearer token]
     MCPS[mcp_server.py<br/>agent như một tool MCP]
   end
 
-  subgraph Backend["Backend FastAPI (app/backend/argus)"]
+  subgraph Backend["Backend FastAPI (app/backend/nestor)"]
     API[api/*<br/>router REST + SSE]
     CR[chat_runner<br/>thread + queue + phê duyệt]
     AG[agent.run_turn<br/>vòng lặp agent]
@@ -93,8 +93,8 @@ Bảng `kb_docs`, `kb_chunks`, `kb_fts` (FTS5 trên chữ đã bỏ dấu) và `
 
 Dành cho người dùng không chuyên. Gồm hai lớp:
 
-1. **Server đóng gói** (`argus-server.spec`, PyInstaller): toàn bộ backend, giao diện web đã build (`frontend/dist`) và mẫu workspace trong một thư mục tự chứa. Điểm vào là `argus/desktop_server.py` (`server_entry.py`): chọn cổng (ưu tiên 18787 cố định để đăng nhập OAuth của MCP còn hiệu lực, bận thì lấy cổng trống), in `ARGUS_READY <cổng>` khi sẵn sàng. `core/paths.py` nhận biết bản đóng băng (`sys.frozen`, `sys._MEIPASS`) để tìm `frontend/dist` và `templates`. Chạy ở chế độ UTF-8 vì Windows mặc định cp1252.
-2. **Vỏ Electron** (`main.js`): khoá một bản chạy, chạy server với `ARGUS_HOME` là thư mục dữ liệu người dùng, đợi dòng sẵn sàng rồi mở `BrowserWindow` trỏ vào `http://127.0.0.1:<cổng>`. Liên kết ra ngoài mở bằng trình duyệt hệ thống. Thoát app thì dừng cả cây tiến trình server.
+1. **Server đóng gói** (`nestor-server.spec`, PyInstaller): toàn bộ backend, giao diện web đã build (`frontend/dist`) và mẫu workspace trong một thư mục tự chứa. Điểm vào là `nestor/desktop_server.py` (`server_entry.py`): chọn cổng (ưu tiên 18787 cố định để đăng nhập OAuth của MCP còn hiệu lực, bận thì lấy cổng trống), in `NESTOR_READY <cổng>` khi sẵn sàng. `core/paths.py` nhận biết bản đóng băng (`sys.frozen`, `sys._MEIPASS`) để tìm `frontend/dist` và `templates`. Chạy ở chế độ UTF-8 vì Windows mặc định cp1252.
+2. **Vỏ Electron** (`main.js`): khoá một bản chạy, chạy server với `NESTOR_HOME` là thư mục dữ liệu người dùng, đợi dòng sẵn sàng rồi mở `BrowserWindow` trỏ vào `http://127.0.0.1:<cổng>`. Liên kết ra ngoài mở bằng trình duyệt hệ thống. Thoát app thì dừng cả cây tiến trình server.
 
 `electron-builder` tạo AppImage và deb (Linux), trình cài đặt NSIS (Windows). Workflow `.github/workflows/desktop.yml` dựng cả hai khi có tag `v*`, chạy `smoke_test.py` trên bản server đóng gói trước khi đóng app.
 
@@ -103,24 +103,24 @@ Tương thích Windows ở backend: lệnh `exec` dùng bash nếu có (Git Bash
 ## 2. Cấu trúc thư mục
 
 ```
-argus-agent/
+nestor-agent/
 ├── app/                          MÃ NGUỒN CỐ ĐỊNH (có thể xóa/cài lại, không mất dữ liệu)
 │   ├── backend/
 │   │   ├── pyproject.toml        khai báo gói, phụ thuộc, extras (dev, keyring)
-│   │   ├── argus/
+│   │   ├── nestor/
 │   │   │   ├── main.py           tạo app FastAPI, middleware bảo vệ, nạp router, vòng đời
 │   │   │   ├── mcp_server.py     MCP server (stdio) đưa agent ra ngoài như một tool
 │   │   │   ├── api/              router HTTP (mỗi file một nhóm chức năng)
 │   │   │   ├── services/         logic nghiệp vụ: agent, công cụ, nhà cung cấp, MCP, bộ nhớ…
 │   │   │   ├── core/             cấu hình, SQLite, đường dẫn, mã hóa khóa, workspace mẫu
-│   │   │   └── cli/              các lệnh argus
+│   │   │   └── cli/              các lệnh nestor
 │   │   └── tests/                pytest
 │   ├── frontend/
 │   │   ├── src/                  React + TypeScript + Tailwind
 │   │   ├── scripts/              check-i18n.mjs
 │   │   └── dist/                 giao diện đã build (không commit)
 │   ├── templates/workspace/      SOUL.md và skill mẫu để tạo workspace lần đầu
-│   ├── deploy/argus.service      file systemd mẫu
+│   ├── deploy/nestor.service      file systemd mẫu
 │   └── examples/                 MCP server mẫu
 ├── user-data/                    DỮ LIỆU CÁ NHÂN (không commit, không xóa)
 │   ├── config.json
@@ -137,9 +137,9 @@ argus-agent/
 | Hằng số | Giá trị | Ý nghĩa |
 |---|---|---|
 | `CODE_ROOT` | `<repo>/app` | Mã nguồn cố định |
-| `ROOT` | `ARGUS_HOME` hoặc `<repo>/user-data` | Dữ liệu cá nhân |
+| `ROOT` | `NESTOR_HOME` hoặc `<repo>/user-data` | Dữ liệu cá nhân |
 | `DATA` | `ROOT/data` | Cơ sở dữ liệu, khóa, log |
-| `CONFIG_PATH` | `ARGUS_CONFIG` hoặc `ROOT/config.json` | Cấu hình |
+| `CONFIG_PATH` | `NESTOR_CONFIG` hoặc `ROOT/config.json` | Cấu hình |
 | `DIST` | `CODE_ROOT/frontend/dist` | Giao diện đã build |
 
 Tương thích bố cục cũ: nếu `user-data/` chưa có nhưng `config.json` hoặc `data/agent.db` còn nằm ở thư mục gốc repo, `ROOT` là thư mục gốc đó để không mất dữ liệu.
@@ -159,7 +159,7 @@ Quy tắc phụ thuộc: `api` và `cli` → `services` → `core`. `services` k
 
 ### 3.2 `main.py`
 
-- Tạo `FastAPI(title="Argus Agent")` với `lifespan` khởi động: `db.init()`, `ensure_workspace()`, `jobs.recover_interrupted()` (đánh dấu việc nền bị gián đoạn), `scheduler.start()`, kết nối MCP, `telegram.apply()`, `heartbeat.start()`; dừng chúng khi tắt.
+- Tạo `FastAPI(title="Nestor Agent")` với `lifespan` khởi động: `db.init()`, `ensure_workspace()`, `jobs.recover_interrupted()` (đánh dấu việc nền bị gián đoạn), `scheduler.start()`, kết nối MCP, `telegram.apply()`, `heartbeat.start()`; dừng chúng khi tắt.
 - **Middleware `guard`** (xem [mục 11](#11-bảo-mật)): chặn host lạ, yêu cầu đăng nhập nếu có mật khẩu, chặn origin lạ với request ghi.
 - Nạp router: một danh sách cố định (`system, chat, skills, dashboard, integrations, files, activity, channels`) dưới tiền tố `/api`, router `external` dưới `/v1`, và **tự nạp** mọi `api/*.py` có `AUTO = True` (hiện là `tasks`, `memory`).
 - Phục vụ giao diện build sẵn từ `DIST`; mọi đường dẫn khác trả `index.html` (SPA).
@@ -203,7 +203,7 @@ Quy tắc phụ thuộc: `api` và `cli` → `services` → `core`. `services` k
 | `workspace.py` | Tạo workspace lần đầu từ mẫu |
 | `presets.py` | Mẫu dịch vụ cho `onboard` |
 | `text.py` | `fold()`: chuẩn hóa chữ (bỏ dấu, `đ`→`d`) để tìm kiếm tiếng Việt |
-| `env.py` | `getenv("X")` đọc `ARGUS_X` (nhận cả `AGENT_X` cũ) |
+| `env.py` | `getenv("X")` đọc `NESTOR_X` (nhận cả `AGENT_X` cũ) |
 
 ## 4. Vòng lặp agent
 
@@ -264,8 +264,8 @@ Thông điệp hướng người dùng do backend sinh ra đều là **mẫu ti�
 | Nguồn | Người duyệt | Ghi chú |
 |---|---|---|
 | `chat` (web) | Người dùng, qua SSE `approval` và `POST /api/approvals/{id}` | Chờ tối đa 300 giây, hết giờ coi như từ chối |
-| `cli` (`argus chat`) | Hỏi `y/N` trong terminal | |
-| `cli` (`argus run`) | Theo `--exec-policy` | Mặc định từ chối |
+| `cli` (`nestor chat`) | Hỏi `y/N` trong terminal | |
+| `cli` (`nestor run`) | Theo `--exec-policy` | Mặc định từ chối |
 | `api` (`/v1/run`) | Theo `exec_policy` và quyền của token | Mặc định từ chối |
 | `telegram` | Nút Cho phép/Từ chối trong Telegram | Tin nhắn mới hoặc `/stop` tự từ chối phê duyệt đang chờ |
 | `automation`, `heartbeat` | Không có → từ chối | Mọi thao tác cần phê duyệt bị từ chối |
@@ -285,7 +285,7 @@ def read_file(ctx, path):
 
 - Tham số có kiểu `string`, `integer`, `boolean`, `array` (phần tử chuỗi); schema JSON sinh tự động cho mô hình.
 - `risk` là một trong `safe`, `file`, `network`, `exec` (và `mcp` cho công cụ của máy chủ MCP). Trang Cài đặt → Công cụ dựa vào đó để gắn nhãn.
-- Các module `tools_plan`, `tools_agents`, `tools_browser`, `tools_memory`, `tools_media`, `tools_computer` được nạp tùy chọn ở cuối `tools.py`. Nếu một module lỗi khi nạp thì hệ thống vẫn chạy, lỗi được ghi vào `tools.LOAD_ERRORS` và `argus doctor` báo ra.
+- Các module `tools_plan`, `tools_agents`, `tools_browser`, `tools_memory`, `tools_media`, `tools_computer` được nạp tùy chọn ở cuối `tools.py`. Nếu một module lỗi khi nạp thì hệ thống vẫn chạy, lỗi được ghi vào `tools.LOAD_ERRORS` và `nestor doctor` báo ra.
 
 ### 5.2 `ToolContext`
 
@@ -337,7 +337,7 @@ Hai bộ chuyển đổi: `OpenAICompat` (OpenAI, Gemini, Ollama, LM Studio, vLL
 | `codex` | `codex exec --json --skip-git-repo-check --sandbox read-only -o <file> [--model m] <lời nhắc>` | tham số | **Chưa kiểm chứng với bản thật**: đọc sự kiện `item.completed` (agent_message) và `turn.completed`, dự phòng đọc file `-o`; gỡ `CODEX_API_KEY`/`OPENAI_API_KEY` |
 | `custom` | lệnh tự khai báo | stdin | Đầu ra văn bản thuần |
 
-Mỗi bước chạy một tiến trình trong thư mục trống `data/cli-run/` (để CLI không đọc dự án nào). Công cụ của Argus được mô tả trong prompt và model gọi bằng khối `<tool_call>{"name": …, "arguments": {…}}</tool_call>`. Bộ lọc luồng chỉ cho phần văn bản đứng trước khối này hiện ra, `parse_calls` tách các lời gọi, rồi vòng lặp agent chạy công cụ như mọi nhà cung cấp khác (giữ nguyên phê duyệt, kế hoạch, nhật ký). Lịch sử được gửi lại dạng bản ghi văn bản mỗi bước (không dùng phiên của CLI). `argus doctor` chỉ kiểm tra lệnh có tồn tại (không gọi mạng). Đã chạy thật với `claude` và `agy`; `codex` mới được kiểm thử bằng CLI giả theo tài liệu.
+Mỗi bước chạy một tiến trình trong thư mục trống `data/cli-run/` (để CLI không đọc dự án nào). Công cụ của Nestor được mô tả trong prompt và model gọi bằng khối `<tool_call>{"name": …, "arguments": {…}}</tool_call>`. Bộ lọc luồng chỉ cho phần văn bản đứng trước khối này hiện ra, `parse_calls` tách các lời gọi, rồi vòng lặp agent chạy công cụ như mọi nhà cung cấp khác (giữ nguyên phê duyệt, kế hoạch, nhật ký). Lịch sử được gửi lại dạng bản ghi văn bản mỗi bước (không dùng phiên của CLI). `nestor doctor` chỉ kiểm tra lệnh có tồn tại (không gọi mạng). Đã chạy thật với `claude` và `agy`; `codex` mới được kiểm thử bằng CLI giả theo tài liệu.
 
 ### 6.2 Kỹ năng (`skills.py`, `clawhub.py`)
 
@@ -346,8 +346,8 @@ Một kỹ năng là thư mục có `SKILL.md` (đầu file là YAML frontmatter
 ### 6.3 MCP
 
 - **Client** (`mcp_client.py`): kết nối máy chủ MCP theo `stdio`, `http` (Streamable HTTP) hoặc `sse`; chạy trong thread riêng với vòng lặp asyncio; liệt kê công cụ và đăng ký thành công cụ `server__tool` với `risk="mcp"`; tự kết nối lại; trạng thái hiển thị ở trang Kết nối.
-- **OAuth** (`mcp_oauth.py`): MCP từ xa của Notion, Canva, Linear, Atlassian, Asana… yêu cầu OAuth 2.1. `OAuthClientProvider` của SDK lo giao thức (khám phá máy chủ cấp quyền, **đăng ký client động**, PKCE S256, đổi mã lấy token, làm mới token); Argus cung cấp ba mảnh:
-  - `Store`: lưu client và token vào bảng `kv` (khóa `mcp_oauth:<tên>`) dưới dạng JSON **mã hóa Fernet** bằng khóa chủ. Client đăng ký gắn với `redirect_uri`; đổi địa chỉ/cổng Argus thì xóa client và token cũ để đăng ký lại.
+- **OAuth** (`mcp_oauth.py`): MCP từ xa của Notion, Canva, Linear, Atlassian, Asana… yêu cầu OAuth 2.1. `OAuthClientProvider` của SDK lo giao thức (khám phá máy chủ cấp quyền, **đăng ký client động**, PKCE S256, đổi mã lấy token, làm mới token); Nestor cung cấp ba mảnh:
+  - `Store`: lưu client và token vào bảng `kv` (khóa `mcp_oauth:<tên>`) dưới dạng JSON **mã hóa Fernet** bằng khóa chủ. Client đăng ký gắn với `redirect_uri`; đổi địa chỉ/cổng Nestor thì xóa client và token cũ để đăng ký lại.
   - `Flow`: `redirect_handler` ghi URL cấp quyền vào trạng thái của server (`status="needs_auth"`, `auth_url`), `callback_handler` chờ một `Future` (tối đa 300 giây) cho tới khi `GET /api/mcp/oauth/callback?code&state` gọi `complete()`. Ở chế độ không tương tác (lúc khởi động, kết nối lại) `redirect_handler` ném `NeedsAuth` nên không bao giờ chờ.
   - Quy trình: server bật `oauth` mà chưa có token thì không thử kết nối (không đăng ký client vô ích) và ở trạng thái `needs_auth`. `POST /api/mcp/{name}/oauth/start` chạy lại kết nối ở chế độ tương tác với địa chỉ gọi lại lấy từ chính request, trả `auth_url` để giao diện mở trong tab mới. Sau khi người dùng cho phép, kết nối hoàn tất, các lần khởi động sau dùng token đã lưu (SDK tự làm mới). `POST /api/mcp/{name}/oauth/logout` xóa token.
   - Kiểm chứng: test đi qua toàn bộ luồng với máy chủ MCP + máy chủ cấp quyền giả; đã chạy khám phá và đăng ký client thật với Notion, Linear, Canva, Atlassian và Asana (Figma từ chối đăng ký động nên không có mẫu). Phần người dùng bấm "Cho phép" và đổi mã trên dịch vụ thật chưa được thử.
@@ -358,7 +358,7 @@ Một kỹ năng là thư mục có `SKILL.md` (đầu file là YAML frontmatter
   - `mcp_probe.py`: `POST /api/mcp/probe` gửi `initialize` không kèm xác thực rồi đọc phản hồi để phân loại `oauth` / `oauth-manual` / `token` / `open` / `down` (đi theo `WWW-Authenticate`, metadata tài nguyên và máy chủ cấp quyền, kiểm tra có `registration_endpoint`). API chặn địa chỉ nội bộ (`_check_url`). Kết quả thăm dò chỉ là gợi ý; luồng đăng nhập thật của SDK mới là phép thử cuối (Figma công bố đăng ký động nhưng trả 403).
   - Cờ `service` trong cấu hình server MCP đánh dấu server thêm từ tab dịch vụ (cả OAuth, token lẫn mở), để tab `MCP truyền thống` không hiển thị lẫn.
 - **Giao diện Kết nối**: tab `MCP server` (`McpTab`, server không dùng OAuth và không có cờ `service`) và mục **Tiện ích** (plugin) riêng ở thanh bên, route `/plugins` (`PluginsPage` bọc `ServicesTab`; `/integrations?tab=services` chuyển hướng sang đó) (`ServicesTab`: ô tìm kiếm, danh mục theo nhóm với logo (`ServiceLogo`: `simple-icons`, vài SVG riêng, chữ cái đầu cho dịch vụ chưa có logo), hộp thoại token, kết quả thư viện với cảnh báo). Nút Dùng lưu cấu hình rồi gọi `POST /api/mcp/{name}/oauth/start` (kiểu OAuth).
-- **Server** (`mcp_server.py`): chạy độc lập qua stdio, chỉ gọi HTTP `/v1/*` của agent đang chạy nên không phụ thuộc phần còn lại của mã. Cho phép Claude Code, Cursor… giao việc cho agent. Cần `ARGUS_TOKEN`.
+- **Server** (`mcp_server.py`): chạy độc lập qua stdio, chỉ gọi HTTP `/v1/*` của agent đang chạy nên không phụ thuộc phần còn lại của mã. Cho phép Claude Code, Cursor… giao việc cho agent. Cần `NESTOR_TOKEN`.
 
 ### 6.4 Kế hoạch, việc nền và agent con
 
@@ -389,7 +389,7 @@ Ba lớp, đều tìm qua công cụ `memory_search`:
 
 ### 6.6 Trình duyệt (`browser.py`, `tools_browser.py`)
 
-Playwright (API đồng bộ) chạy trong **một thread riêng** cho mỗi hội thoại, điều khiển Chromium hệ thống (`find_chromium` tự tìm, hoặc `browser.executable`). Trang được biểu diễn bằng văn bản gồm tiêu đề, nội dung chính và danh sách phần tử tương tác kèm **ref `[eN]`** (gắn bằng thuộc tính `data-argus-ref`), để mô hình bấm/gõ bằng ref thay vì tọa độ. Hồ sơ trình duyệt nằm ở `user-data/data/browser/profile/` (thư mục không ẩn vì Chromium dạng snap không ghi được vào thư mục ẩn). Có chặn địa chỉ nội bộ, tự đóng sau `idle_minutes`, và đóng khi tắt server.
+Playwright (API đồng bộ) chạy trong **một thread riêng** cho mỗi hội thoại, điều khiển Chromium hệ thống (`find_chromium` tự tìm, hoặc `browser.executable`). Trang được biểu diễn bằng văn bản gồm tiêu đề, nội dung chính và danh sách phần tử tương tác kèm **ref `[eN]`** (gắn bằng thuộc tính `data-nestor-ref`), để mô hình bấm/gõ bằng ref thay vì tọa độ. Hồ sơ trình duyệt nằm ở `user-data/data/browser/profile/` (thư mục không ẩn vì Chromium dạng snap không ghi được vào thư mục ẩn). Có chặn địa chỉ nội bộ, tự đóng sau `idle_minutes`, và đóng khi tắt server.
 
 ### 6.7 Đa phương thức (`tools_media.py`)
 
@@ -400,7 +400,7 @@ Playwright (API đồng bộ) chạy trong **một thread riêng** cho mỗi h�
 
 ### 6.8 Điều khiển máy tính (`tools_computer.py`)
 
-Mặc định **tắt** (`computer.enabled`) và **luôn hỏi phê duyệt** trừ chế độ Toàn quyền. Có lớp backend theo nền tảng: X11 (`xdotool`, chụp bằng `scrot`/`import`/`gnome-screenshot`), Wayland (`ydotool` + `wtype`, chụp bằng `grim`), macOS (`cliclick`/`osascript`, `screencapture`). Tọa độ dùng pixel của ảnh chụp trả về. `status()` cho `argus doctor` biết thiếu công cụ nào.
+Mặc định **tắt** (`computer.enabled`) và **luôn hỏi phê duyệt** trừ chế độ Toàn quyền. Có lớp backend theo nền tảng: X11 (`xdotool`, chụp bằng `scrot`/`import`/`gnome-screenshot`), Wayland (`ydotool` + `wtype`, chụp bằng `grim`), macOS (`cliclick`/`osascript`, `screencapture`). Tọa độ dùng pixel của ảnh chụp trả về. `status()` cho `nestor doctor` biết thiếu công cụ nào.
 
 ### 6.9 Tự động hóa, heartbeat, thông báo
 
@@ -451,7 +451,7 @@ Mô hình pydantic `Config`. Các khóa cấp cao:
 | `browser`, `memory`, `media`, `computer`, `agents` | Các tính năng nâng cao |
 | `clawhub_url`, `language` | Địa chỉ ClawHub, ngôn ngữ |
 
-File có quyền `600`. Các trường bí mật (khóa API, token Telegram, `env`/`headers` của MCP, khóa kỹ năng) được mã hóa **Fernet** khi lưu, có tiền tố `enc:v1:`, và giải mã khi `load()`; `masked()` thay chúng bằng `***` khi gửi ra giao diện, và `merge_secrets` giữ lại giá trị cũ khi giao diện gửi lại `***`. **Khóa chủ** lấy theo thứ tự `ARGUS_MASTER_KEY` → keychain hệ điều hành → `data/master.key`. Khóa không giải mã được (mất khóa chủ) được liệt kê trong `secrets.failures` và hiển thị ở Cài đặt → An toàn.
+File có quyền `600`. Các trường bí mật (khóa API, token Telegram, `env`/`headers` của MCP, khóa kỹ năng) được mã hóa **Fernet** khi lưu, có tiền tố `enc:v1:`, và giải mã khi `load()`; `masked()` thay chúng bằng `***` khi gửi ra giao diện, và `merge_secrets` giữ lại giá trị cũ khi giao diện gửi lại `***`. **Khóa chủ** lấy theo thứ tự `NESTOR_MASTER_KEY` → keychain hệ điều hành → `data/master.key`. Khóa không giải mã được (mất khóa chủ) được liệt kê trong `secrets.failures` và hiển thị ở Cài đặt → An toàn.
 
 ### 7.3 Workspace (`user-data/workspace/`)
 
@@ -461,11 +461,11 @@ skills/<tên>/SKILL.md
 sessions/<sid>/            thư mục làm việc từng hội thoại (file agent tạo, file đính kèm, media/)
 ```
 
-`SOUL.md`, `USER.md`, `MEMORY.md` được nạp vào system prompt mỗi lượt. Nếu thư mục workspace trống (ví dụ Docker mount volume rỗng), `ensure_workspace` tạo lại từ `app/templates/workspace/` (hoặc `ARGUS_TEMPLATE`).
+`SOUL.md`, `USER.md`, `MEMORY.md` được nạp vào system prompt mỗi lượt. Nếu thư mục workspace trống (ví dụ Docker mount volume rỗng), `ensure_workspace` tạo lại từ `app/templates/workspace/` (hoặc `NESTOR_TEMPLATE`).
 
 ## 8. API bên ngoài
 
-Tiền tố `/v1`, xác thực bằng `Authorization: Bearer agt_…` (không dùng cookie nên không dính CSRF). Token tạo ở trang Kết nối hoặc `argus token create`; chỉ lưu băm.
+Tiền tố `/v1`, xác thực bằng `Authorization: Bearer agt_…` (không dùng cookie nên không dính CSRF). Token tạo ở trang Kết nối hoặc `nestor token create`; chỉ lưu băm.
 
 | Phương thức | Đường dẫn | Mô tả |
 |---|---|---|
@@ -551,13 +551,13 @@ Khóa dịch là **chính câu tiếng Việt gốc**. Mã viết `t('câu tiế
 
 ### Xây dựng
 
-`npm run build` chạy `tsc -b` rồi Vite, xuất ra `app/frontend/dist/`. Server phục vụ thư mục này. Ở chế độ phát triển, `argus dev` chạy cả hai và Vite proxy `/api` sang backend (đặt `ARGUS_DEV_ORIGINS` cho CORS).
+`npm run build` chạy `tsc -b` rồi Vite, xuất ra `app/frontend/dist/`. Server phục vụ thư mục này. Ở chế độ phát triển, `nestor dev` chạy cả hai và Vite proxy `/api` sang backend (đặt `NESTOR_DEV_ORIGINS` cho CORS).
 
 ## 11. Bảo mật
 
 | Lớp | Cơ chế |
 |---|---|
-| Mạng | Mặc định nghe `127.0.0.1`. Middleware từ chối host không nằm trong `ALLOWED_HOSTS` (`127.0.0.1`, `localhost`, `[::1]` + `ARGUS_ALLOWED_HOSTS`): chống DNS-rebinding |
+| Mạng | Mặc định nghe `127.0.0.1`. Middleware từ chối host không nằm trong `ALLOWED_HOSTS` (`127.0.0.1`, `localhost`, `[::1]` + `NESTOR_ALLOWED_HOSTS`): chống DNS-rebinding |
 | Origin | Request ghi (không phải GET) có header `Origin` khác host bị 403: chống CSRF |
 | Đăng nhập | Nếu đặt mật khẩu: băm + salt trong config, cookie phiên; mọi `/api/*` (trừ health và auth) yêu cầu cookie |
 | API ngoài | Bearer token `agt_…`, chỉ lưu băm; quyền chạy lệnh là quyền riêng của token; mặc định `exec_policy=deny` |
@@ -569,13 +569,13 @@ Khóa dịch là **chính câu tiếng Việt gốc**. Mã viết `t('câu tiế
 | Kỹ năng | Quét metadata, cảnh báo nếu ClawHub đánh dấu đáng ngờ; giới hạn số file/dung lượng khi cài |
 | Sao lưu | Mã hóa AES-GCM tùy chọn; khôi phục chặn đường dẫn và liên kết độc hại |
 
-Mô hình đe dọa tóm tắt: Argus **chạy với quyền của người dùng** và có thể chạy lệnh. Nó bảo vệ bạn khỏi (1) nội dung web hoặc kỹ năng độc hại khiến agent làm điều không được phép (qua cổng phê duyệt và chế độ quyền), (2) trang web truy cập server từ trình duyệt của bạn (host/origin/mật khẩu), (3) lộ khóa khi file config bị lộ riêng lẻ (mã hóa). Nó **không** bảo vệ khỏi kẻ đã chạy được mã trên máy bạn, hay người cho phép ở chế độ Toàn quyền.
+Mô hình đe dọa tóm tắt: Nestor **chạy với quyền của người dùng** và có thể chạy lệnh. Nó bảo vệ bạn khỏi (1) nội dung web hoặc kỹ năng độc hại khiến agent làm điều không được phép (qua cổng phê duyệt và chế độ quyền), (2) trang web truy cập server từ trình duyệt của bạn (host/origin/mật khẩu), (3) lộ khóa khi file config bị lộ riêng lẻ (mã hóa). Nó **không** bảo vệ khỏi kẻ đã chạy được mã trên máy bạn, hay người cho phép ở chế độ Toàn quyền.
 
 ## 12. Mở rộng hệ thống
 
 ### 12.1 Thêm một công cụ
 
-Tạo `app/backend/argus/services/tools_<tên>.py`:
+Tạo `app/backend/nestor/services/tools_<tên>.py`:
 
 ```python
 from .tools import tool
@@ -589,7 +589,7 @@ Rồi thêm tên module vào danh sách nạp tùy chọn ở cuối `services/t
 
 ### 12.2 Thêm một router API
 
-Tạo `app/backend/argus/api/<tên>.py`:
+Tạo `app/backend/nestor/api/<tên>.py`:
 
 ```python
 from fastapi import APIRouter
@@ -606,7 +606,7 @@ def hello():
 
 ### 12.3 Thêm một lệnh CLI
 
-Tạo `app/backend/argus/cli/cmd_<tên>.py` có hàm `register(sub)`:
+Tạo `app/backend/nestor/cli/cmd_<tên>.py` có hàm `register(sub)`:
 
 ```python
 def _run(args) -> int:
@@ -630,7 +630,7 @@ Quy ước bố cục: trang chiếm **toàn bề ngang** (không đặt `max-w`
 
 ### 12.5 Thêm một mẫu dịch vụ mô hình
 
-Thêm vào `PRESETS` và `SERVICES` trong `features/providers/ProvidersPage.tsx` (và logo trong `components/ui/BrandIcon.tsx` nếu có), cùng mẫu trong `core/presets.py` cho `argus onboard`.
+Thêm vào `PRESETS` và `SERVICES` trong `features/providers/ProvidersPage.tsx` (và logo trong `components/ui/BrandIcon.tsx` nếu có), cùng mẫu trong `core/presets.py` cho `nestor onboard`.
 
 ### 12.6 Quy ước viết mã
 
@@ -658,15 +658,15 @@ Thêm vào `PRESETS` và `SERVICES` trong `features/providers/ProvidersPage.tsx`
 
 ### Chạy cục bộ
 
-`argus start` (nền) hoặc `argus start -f` (foreground), `argus service install` để tự khởi động cùng máy (systemd user service trên Linux, launchd trên macOS). File mẫu: `app/deploy/argus.service`. Server là một tiến trình uvicorn duy nhất; các thread nền (scheduler, heartbeat, Telegram, MCP, lập chỉ mục) nằm trong tiến trình đó.
+`nestor start` (nền) hoặc `nestor start -f` (foreground), `nestor service install` để tự khởi động cùng máy (systemd user service trên Linux, launchd trên macOS). File mẫu: `app/deploy/nestor.service`. Server là một tiến trình uvicorn duy nhất; các thread nền (scheduler, heartbeat, Telegram, MCP, lập chỉ mục) nằm trong tiến trình đó.
 
 ### Docker
 
-Dockerfile nhiều giai đoạn: build giao diện bằng Node, rồi image Python cài `app/backend` và chép giao diện đã build. Biến môi trường trong image: `ARGUS_HOME=/app`, `ARGUS_CONFIG=/app/data/config.json`, `ARGUS_TEMPLATE=/app/template/workspace`. Hai volume `/app/data` và `/app/workspace` ánh xạ ra `./user-data/data` và `./user-data/workspace` (xem `docker-compose.yml`). Container chạy bằng UID của người dùng (`ARGUS_UID`) để file không thuộc về root. Cổng mặc định chỉ publish ra `127.0.0.1:8787`. Để gọi Ollama trên máy chủ, dùng `http://host.docker.internal:11434/v1`.
+Dockerfile nhiều giai đoạn: build giao diện bằng Node, rồi image Python cài `app/backend` và chép giao diện đã build. Biến môi trường trong image: `NESTOR_HOME=/app`, `NESTOR_CONFIG=/app/data/config.json`, `NESTOR_TEMPLATE=/app/template/workspace`. Hai volume `/app/data` và `/app/workspace` ánh xạ ra `./user-data/data` và `./user-data/workspace` (xem `docker-compose.yml`). Container chạy bằng UID của người dùng (`NESTOR_UID`) để file không thuộc về root. Cổng mặc định chỉ publish ra `127.0.0.1:8787`. Để gọi Ollama trên máy chủ, dùng `http://host.docker.internal:11434/v1`.
 
 ### Cập nhật
 
-Mã cố định nằm riêng trong `app/`, nên cập nhật là `git pull`, cài lại gói (`pip install -e app/backend`), build lại giao diện (`npm run build`) và `argus restart`. Dữ liệu trong `user-data/` không bị đụng tới; các thay đổi schema được áp dụng khi khởi động (`db.init()` thêm bảng và cột còn thiếu).
+Mã cố định nằm riêng trong `app/`, nên cập nhật là `git pull`, cài lại gói (`pip install -e app/backend`), build lại giao diện (`npm run build`) và `nestor restart`. Dữ liệu trong `user-data/` không bị đụng tới; các thay đổi schema được áp dụng khi khởi động (`db.init()` thêm bảng và cột còn thiếu).
 
 - **Trợ lý chuyên trách "thật"** (`services/assistants.py`, `assistant_defs/`, `bundled_skills/`): định nghĩa gộp từ `assistant_defs/*.py`; `prompt_for` = persona + toàn văn skill đi kèm + cổng chất lượng (done_criteria, deliverables); `tool_allow` ép allowlist trong `agent.run_turn(tool_allow=...)`; trợ lý lưu ở `sessions.assistant`. `skills.discover` nạp thêm `bundled_skills` (chỉ đọc, workspace thắng, không vào danh sách skill chung). Chi tiết và giới hạn: `docs/api-assistants.md`.
 

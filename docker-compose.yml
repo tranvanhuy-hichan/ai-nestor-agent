@@ -1,7 +1,7 @@
 services:
-  argus:
+  nestor:
     build: .
-    user: "${ARGUS_UID:-1000}:${ARGUS_GID:-1000}"   # de file trong ./user-data thuoc ve ban, khong phai root (dat ARGUS_UID=$(id -u) neu khac 1000)
+    user: "${NESTOR_UID:-1000}:${NESTOR_GID:-1000}"   # de file trong ./user-data thuoc ve ban, khong phai root (dat NESTOR_UID=$(id -u) neu khac 1000)
     ports:
       - "127.0.0.1:8787:8787"   # chi mo cho may nay; doi neu can dung tu may khac (va dat mat khau + HTTPS)
     volumes:

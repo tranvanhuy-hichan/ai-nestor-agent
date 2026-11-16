@@ -1,8 +1,8 @@
 """Gemini 3: thought_signature cua loi goi ham phai duoc luu va gui lai o luot sau, neu khong API tra HTTP 400."""
 import json
 
-from argus.core import config as cfgmod
-from argus.services import providers
+from nestor.core import config as cfgmod
+from nestor.services import providers
 
 GEMINI = "https://generativelanguage.googleapis.com/v1beta/openai/"
 

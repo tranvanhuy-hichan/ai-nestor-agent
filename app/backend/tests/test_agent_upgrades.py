@@ -2,7 +2,7 @@
 import threading
 import time
 
-from argus.services import agent, chat_runner, checkpoints, tools
+from nestor.services import agent, chat_runner, checkpoints, tools
 
 
 def _ctx(tmp_path, sid="s1", **kw):
@@ -96,7 +96,7 @@ def test_exec_still_returns_output_and_exit_code(tmp_path):
 
 
 def test_stop_interrupts_model_stream(tmp_env, monkeypatch):
-    from argus.services import sessions
+    from nestor.services import sessions
 
     class Slow:
         def stream(self, messages, tools, **k):

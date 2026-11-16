@@ -5,10 +5,10 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 
-from argus.core import config as cfgmod
-from argus.main import app
-from argus.services import assistants, brief, distill, jobs, rules, scheduler, sessions, teams, tools, tools_agents, zalo_channel
-from argus.services.tools import ToolContext
+from nestor.core import config as cfgmod
+from nestor.main import app
+from nestor.services import assistants, brief, distill, jobs, rules, scheduler, sessions, teams, tools, tools_agents, zalo_channel
+from nestor.services.tools import ToolContext
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def test_chat_passes_assistant_prompt(client, monkeypatch):
     def fake(*a, **kw):
         seen.update(kw)
         yield {"type": "done"}
-    from argus.services import chat_runner
+    from nestor.services import chat_runner
     monkeypatch.setattr(chat_runner, "stream_chat", fake)
     client.post("/api/chat", json={"text": "hi", "assistant": "ke-toan"})
     assert "kế toán" in seen["system_extra"].lower()
@@ -113,7 +113,7 @@ def test_zalo_webhook_auth_and_pairing_and_reply(client, monkeypatch):
 
 def test_zalo_run_replies_with_agent_text(tmp_env, monkeypatch):
     _zalo_cfg(users=["u1"])
-    from argus.services import chat_runner
+    from nestor.services import chat_runner
     monkeypatch.setattr(chat_runner, "stream_chat", lambda sid, text, prov, **kw: iter([{"type": "assistant", "content": "Xin chào [[src:a|Doc|tr.2]]"}, {"type": "done"}]))
     ch = zalo_channel.ZaloChannel()
     out = []
@@ -168,7 +168,7 @@ def test_distill_skill_and_rule(client, monkeypatch):
     r = client.post(f"/api/sessions/{sid}/distill", json={"kind": "rule"}).json()
     assert r["text"].startswith("Văn bản của phòng")
     assert client.get("/api/rules").json() == [{"id": 0, "text": r["text"]}]
-    from argus.services import agent
+    from nestor.services import agent
     sp = agent.build_system_prompt(cfgmod.load(), {}, "/tmp")
     assert "ký thừa lệnh" in sp
     assert client.delete("/api/rules/0").status_code == 200 and client.get("/api/rules").json() == []

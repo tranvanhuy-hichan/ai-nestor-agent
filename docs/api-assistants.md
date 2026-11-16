@@ -35,7 +35,7 @@ Mọi đường dẫn có tiền tố `/api`. Lỗi nghiệp vụ trả `400 {"d
 
 ## Chức năng: mỗi trợ lý một trang riêng
 
-Mỗi trợ lý là một trang trên thanh bên (mục **Chức năng**, route `/f` và `/f/<id>`). Form của từng trợ lý khai báo trong `argus/assistant_defs/forms.py`
+Mỗi trợ lý là một trang trên thanh bên (mục **Chức năng**, route `/f` và `/f/<id>`). Form của từng trợ lý khai báo trong `nestor/assistant_defs/forms.py`
 (`FORMS[id]`), `GET /api/assistants` trả thêm trường `form`:
 
 `{intro, flows: [{id, label, desc, steps: [{id, label, goal, task, fields[], review[], produces[], submit, optional}]}], panels: []}`
@@ -49,7 +49,7 @@ Mỗi trợ lý là một trang trên thanh bên (mục **Chức năng**, route 
 
 ## Trợ lý "thật": kỹ năng, cổng chất lượng, allowlist, lưu theo phiên
 
-Định nghĩa trợ lý dựng sẵn nằm ở `argus/assistant_defs/gov_biz.py` và `edu_personal.py` (mỗi file có `DEFS`), skill đi kèm ở `argus/bundled_skills/<slug>/SKILL.md`.
+Định nghĩa trợ lý dựng sẵn nằm ở `nestor/assistant_defs/gov_biz.py` và `edu_personal.py` (mỗi file có `DEFS`), skill đi kèm ở `nestor/bundled_skills/<slug>/SKILL.md`.
 Trợ lý cũ viết thẳng trong `services/assistants.py` (`LEGACY`) chỉ còn là dự phòng: id trùng thì bản trong `assistant_defs` thắng.
 
 Một định nghĩa: `{id, name, icon, group, description, prompt, starters[>=3], skills[], tools|null, done_criteria[>=3], deliverables[]}`.

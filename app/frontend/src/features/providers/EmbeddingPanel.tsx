@@ -121,7 +121,7 @@ export function EmbeddingPanel({ memory, onChange, providerInfo, isDirty }: { me
 
   return (
     <Card>
-      <CardHeader title={t('Tìm kiếm theo nghĩa (embedding)')} hint={t('Giúp Argus hiểu ý câu hỏi thay vì chỉ tìm đúng từ khóa, dùng cho tài liệu và trí nhớ.')}
+      <CardHeader title={t('Tìm kiếm theo nghĩa (embedding)')} hint={t('Giúp Nestor hiểu ý câu hỏi thay vì chỉ tìm đúng từ khóa, dùng cho tài liệu và trí nhớ.')}
         action={<Switch checked={on} onChange={(v) => (v ? (tab === 'api' ? pickApi() : pickLocal()) : onChange({ embeddings: 'off' }))} label={t('Bật tìm kiếm theo nghĩa')} />} />
       {on && (
         <div className="space-y-4 p-5">

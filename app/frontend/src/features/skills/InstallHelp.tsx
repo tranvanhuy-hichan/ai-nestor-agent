@@ -51,7 +51,7 @@ export function InstallHelp({ bins, defaultOpen = false }: { bins: string[]; def
               </div>
             )
           })}
-          <p className="text-[11px] text-muted">{t('Chạy lệnh trong Terminal (PowerShell trên Windows), rồi khởi động lại Argus để nhận lệnh mới.')}</p>
+          <p className="text-[11px] text-muted">{t('Chạy lệnh trong Terminal (PowerShell trên Windows), rồi khởi động lại Nestor để nhận lệnh mới.')}</p>
         </div>
       )}
     </div>

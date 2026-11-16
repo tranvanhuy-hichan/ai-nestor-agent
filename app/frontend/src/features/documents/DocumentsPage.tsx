@@ -271,7 +271,7 @@ export function DocumentsPage() {
           <Field label={t('Bạn muốn phân tích điều gì? (không bắt buộc)')}>
             <Textarea rows={3} value={focus} onChange={(e) => setFocus(e.target.value)} placeholder={t('Ví dụ: Phân tích rủi ro và đề xuất phương án thực hiện trong 90 ngày.')} />
           </Field>
-          <p className="text-sm text-muted">{t('Argus đọc kỹ các tài liệu, rồi viết báo cáo gồm: tóm tắt, yêu cầu chính, rủi ro, các phương án, khuyến nghị và các bước thực hiện, kèm nguồn. Việc này chạy nền (có thể mất vài phút); kết quả xem ở trang Tác vụ.')}</p>
+          <p className="text-sm text-muted">{t('Nestor đọc kỹ các tài liệu, rồi viết báo cáo gồm: tóm tắt, yêu cầu chính, rủi ro, các phương án, khuyến nghị và các bước thực hiện, kèm nguồn. Việc này chạy nền (có thể mất vài phút); kết quả xem ở trang Tác vụ.')}</p>
         </div>
       </Modal>
     </Page>

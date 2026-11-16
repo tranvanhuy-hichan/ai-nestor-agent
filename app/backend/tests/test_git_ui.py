@@ -3,14 +3,14 @@ import subprocess
 
 import pytest
 
-from argus.services import sessions
+from nestor.services import sessions
 
 
 @pytest.fixture
 def setup(tmp_env, tmp_path):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
+    from nestor.main import app
     remote = tmp_path / "remote.git"
     repo = tmp_path / "proj"
     repo.mkdir()

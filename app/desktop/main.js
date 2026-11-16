@@ -1,4 +1,4 @@
-// Ứng dụng desktop Argus Agent: mở một cửa sổ riêng, bên trong là giao diện web do server Argus (đóng gói sẵn) phục vụ.
+// Ứng dụng desktop Nestor Agent: mở một cửa sổ riêng, bên trong là giao diện web do server Nestor (đóng gói sẵn) phục vụ.
 // Người dùng không cần biết server, cổng hay dòng lệnh: bấm mở là dùng được. Dữ liệu nằm ở thư mục dữ liệu của người dùng.
 const { app, BrowserWindow, Menu, dialog, nativeTheme, shell } = require('electron')
 const { spawn, execFileSync } = require('node:child_process')
@@ -26,24 +26,24 @@ process.on('uncaughtException', (e) => { log(`uncaughtException: ${e.stack || e}
 process.on('unhandledRejection', (e) => { log(`unhandledRejection: ${e && e.stack ? e.stack : e}`) })
 
 function serverCommand() {
-  const exe = process.platform === 'win32' ? 'argus-server.exe' : 'argus-server'
+  const exe = process.platform === 'win32' ? 'nestor-server.exe' : 'nestor-server'
   const packed = path.join(process.resourcesPath, 'server', exe)
   if (fs.existsSync(packed)) return { cmd: packed, args: [], cwd: path.dirname(packed) }
-  if (process.env.ARGUS_SERVER) return { cmd: process.env.ARGUS_SERVER, args: [], cwd: undefined }
+  if (process.env.NESTOR_SERVER) return { cmd: process.env.NESTOR_SERVER, args: [], cwd: undefined }
   // chạy từ mã nguồn (npm start): dùng Python của repo
   const backend = path.resolve(__dirname, '..', 'backend')
-  const py = process.env.ARGUS_PYTHON || path.resolve(__dirname, '..', '..', '.venv', 'bin', 'python')
-  return { cmd: fs.existsSync(py) ? py : 'python3', args: ['-m', 'argus.desktop_server'], cwd: backend }
+  const py = process.env.NESTOR_PYTHON || path.resolve(__dirname, '..', '..', '.venv', 'bin', 'python')
+  return { cmd: fs.existsSync(py) ? py : 'python3', args: ['-m', 'nestor.desktop_server'], cwd: backend }
 }
 
 function startServer() {
-  const dataDir = process.env.ARGUS_HOME || path.join(app.getPath('userData'), 'data')
+  const dataDir = process.env.NESTOR_HOME || path.join(app.getPath('userData'), 'data')
   fs.mkdirSync(dataDir, { recursive: true })
   const { cmd, args, cwd } = serverCommand()
   log(`starting server: ${cmd} ${args.join(' ')} (data: ${dataDir})`)
   server = spawn(cmd, [...args, '--port', String(PREFERRED_PORT)], {
     cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ARGUS_HOME: dataDir, PYTHONUTF8: '1', PYTHONUNBUFFERED: '1' },
+    env: { ...process.env, NESTOR_HOME: dataDir, PYTHONUTF8: '1', PYTHONUNBUFFERED: '1' },
   })
   server.stderr.on('data', (d) => logStream.write(d))
   return new Promise((resolve, reject) => {
@@ -52,7 +52,7 @@ function startServer() {
     server.stdout.on('data', (d) => {
       logStream.write(d)
       buf += d.toString()
-      const m = buf.match(/ARGUS_READY (\d+)/)
+      const m = buf.match(/NESTOR_READY (\d+)/)
       if (m) { clearTimeout(timer); resolve(Number(m[1])) }
     })
     server.on('error', (e) => { clearTimeout(timer); reject(e) })
@@ -75,7 +75,7 @@ function stopServer() {
 async function onServerCrashed(code) {
   const r = await dialog.showMessageBox(win ?? undefined, {
     type: 'error', buttons: [L('Khởi động lại', 'Restart'), L('Thoát', 'Quit')], defaultId: 0, cancelId: 1,
-    message: L('Argus đã dừng đột ngột', 'Argus stopped unexpectedly'),
+    message: L('Nestor đã dừng đột ngột', 'Nestor stopped unexpectedly'),
     detail: L(`Mã thoát: ${code}. Nhật ký: ${path.join(app.getPath('userData'), 'server.log')}`, `Exit code: ${code}. Log: ${path.join(app.getPath('userData'), 'server.log')}`),
   })
   if (r.response === 0) { app.relaunch(); }
@@ -91,10 +91,10 @@ const splash = (msg) => {
   const bg = dark ? '#0c0c0e' : '#ffffff'
   const fg = dark ? '#eef0f6' : '#14213d'
   const muted = dark ? '#9a9aa5' : '#5b6475'
-  const mark = img(dark ? 'argus-mark.png' : 'argus-mark-light.png')
-  const word = img('argus-wordmark.png')
+  const mark = img(dark ? 'nestor-mark.png' : 'nestor-mark-light.png')
+  const word = img('nestor-wordmark.png')
   const slogan = 'Intelligence that works the way you do.'  // luôn bằng tiếng Anh
-  return 'data:text/html;charset=utf-8,' + encodeURIComponent(`<!doctype html><meta charset="utf-8"><title>Argus</title><style>
+  return 'data:text/html;charset=utf-8,' + encodeURIComponent(`<!doctype html><meta charset="utf-8"><title>Nestor</title><style>
 body{margin:0;height:100vh;display:grid;place-items:center;background:${bg};color:${muted};font:16px system-ui,sans-serif;overflow:hidden}
 .c{display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 24px}
 .mark{height:min(30vh,150px)}
@@ -109,7 +109,7 @@ body{margin:0;height:100vh;display:grid;place-items:center;background:${bg};colo
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1360, height: 880, minWidth: 900, minHeight: 600, show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#0c0c0e' : '#ffffff', title: 'Argus Agent',
+    width: 1360, height: 880, minWidth: 900, minHeight: 600, show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#0c0c0e' : '#ffffff', title: 'Nestor Agent',
     icon: path.join(__dirname, 'assets', 'icon.png'), autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
   })
@@ -118,7 +118,7 @@ function createWindow() {
   // liên kết ra ngoài mở bằng trình duyệt hệ thống, không mở trong cửa sổ app
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' } })
   win.webContents.on('will-navigate', (e, url) => { if (origin && !url.startsWith(origin)) { e.preventDefault(); if (/^https?:/i.test(url)) shell.openExternal(url) } })
-  void win.loadURL(splash(L('Đang khởi động Argus…', 'Starting Argus…')))
+  void win.loadURL(splash(L('Đang khởi động Nestor…', 'Starting Nestor…')))
 }
 
 function buildMenu() {
@@ -152,7 +152,7 @@ if (!app.requestSingleInstanceLock()) {
     } catch (e) {
       log(`start failed: ${e.stack || e}`)
       stopServer()
-      await dialog.showMessageBox({ type: 'error', message: L('Không khởi động được Argus', 'Argus could not start'),
+      await dialog.showMessageBox({ type: 'error', message: L('Không khởi động được Nestor', 'Nestor could not start'),
         detail: `${e.message}\n\n${L('Nhật ký', 'Log')}: ${path.join(app.getPath('userData'), 'server.log')}` })
       quitting = true
       app.quit()

@@ -3,8 +3,8 @@ import zipfile
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.services import knowledge, tools
+from nestor.core import config as cfgmod
+from nestor.services import knowledge, tools
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
@@ -112,7 +112,7 @@ def test_tool_hidden_when_empty_and_cites_sources(tmp_path):
     make_docx(tmp_path / "tt.docx"); knowledge.add_file(tmp_path / "tt.docx", "tt.docx")
     out = tools.call(ctx, "kb_search", {"query": "thanh toán trong bao nhiêu ngày"})[0]
     assert "[[src:" in out and "|tt.docx|" in out and "30 ngày" in out
-    from argus.services import agent
+    from nestor.services import agent
     assert "kb_search" in agent.knowledge_note() and "tt" not in agent.knowledge_note()[:0]
 
 
@@ -127,7 +127,7 @@ def test_folder_import_skips_hidden_and_unsupported(tmp_path):
 def test_api_upload_search_download_delete(tmp_path):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
+    from nestor.main import app
     c = TestClient(app)
     r = c.post("/api/knowledge/upload", params={"name": "chinh-sach.txt"}, content="Nhân viên được nghỉ phép 12 ngày mỗi năm.".encode())
     assert r.status_code == 200, r.text
@@ -142,8 +142,8 @@ def test_api_upload_search_download_delete(tmp_path):
 
 
 def test_ask_from_documents_option_restricts_tools_and_requires_sources(tmp_path, monkeypatch):
-    from argus.services import agent as agent_mod
-    from argus.services import sessions
+    from nestor.services import agent as agent_mod
+    from nestor.services import sessions
     seen = {}
 
     class Fake:
@@ -168,8 +168,8 @@ def test_ask_from_documents_option_restricts_tools_and_requires_sources(tmp_path
 def test_chat_api_accepts_docs_flag(monkeypatch):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
-    from argus.services import chat_runner
+    from nestor.main import app
+    from nestor.services import chat_runner
     got = {}
     monkeypatch.setattr(chat_runner, "stream_chat", lambda *a, **k: iter([got.update(k) or {"type": "done"}]))
     r = TestClient(app).post("/api/chat", json={"text": "hi", "docs": True})
@@ -190,8 +190,8 @@ def test_ensure_vectors_after_enabling_embeddings_enables_semantic_hits(tmp_path
 def ext(tmp_env):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
-    from argus.services import tokens
+    from nestor.main import app
+    from nestor.services import tokens
     c = TestClient(app)
     _, read = tokens.create("chi-doc", False)
     _, write = tokens.create("ghi", False, True)
@@ -218,7 +218,7 @@ def test_v1_ask_returns_answer_with_plain_sources(ext, tmp_path, monkeypatch):
     assert c.post("/v1/documents/ask", json={"question": "hỏi"}, headers=r_hdr).status_code == 400  # kho trống
     (tmp_path / "bh.txt").write_text("Thời gian bảo hành là 24 tháng.", encoding="utf-8")
     d = knowledge.add_file(tmp_path / "bh.txt", "bh.txt")
-    from argus.services import agent as agent_mod
+    from nestor.services import agent as agent_mod
     tag = f"[[src:{d['id']}|bh.txt|dòng 1-1]]"
 
     class Fake:
@@ -234,7 +234,7 @@ def test_v1_ask_returns_answer_with_plain_sources(ext, tmp_path, monkeypatch):
 def test_mcp_tools_call_the_rest_api(monkeypatch, tmp_path):
     import json
 
-    import argus.mcp_server as m
+    import nestor.mcp_server as m
     calls = []
     monkeypatch.setattr(m, "_call", lambda method, path, body=None, timeout=0, **kw: calls.append((method, path, body, kw)) or {"ok": True, "answer": "a", "sources": [{"name": "f.pdf", "loc": "trang 2"}], "session": "s"})
     f = tmp_path / "bao-cao.txt"; f.write_text("nội dung", encoding="utf-8")
@@ -251,9 +251,9 @@ def test_mcp_tools_call_the_rest_api(monkeypatch, tmp_path):
 def test_analysis_job_uses_only_documents_and_gets_overview(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from argus.main import app
-    from argus.services import agent as agent_mod
-    from argus.services import jobs
+    from nestor.main import app
+    from nestor.services import agent as agent_mod
+    from nestor.services import jobs
     c = TestClient(app)
     assert c.post("/api/knowledge/analyze", json={}).status_code == 400
     (tmp_path / "dc.txt").write_text("Dự án cải tạo nhà văn hóa. Thời hạn 90 ngày. Kinh phí 500 triệu đồng.", encoding="utf-8")
@@ -275,12 +275,12 @@ def test_analysis_job_uses_only_documents_and_gets_overview(tmp_path, monkeypatc
 
 def test_passage_returns_only_that_chunk_text(tmp_env, tmp_path):
     from fastapi.testclient import TestClient
-    from argus.main import app
-    from argus.services import knowledge
+    from nestor.main import app
+    from nestor.services import knowledge
     f = tmp_path / "note.txt"
     f.write_text("Alpha paragraph about budgets.\n\nBeta paragraph about schedules.")
     doc = knowledge.add_file(f, "note.txt")
-    from argus.core.db import db
+    from nestor.core.db import db
     with db() as c:
         loc = c.execute("SELECT loc FROM kb_chunks WHERE doc_id=? ORDER BY ord LIMIT 1", (doc["id"],)).fetchone()["loc"]
     r = TestClient(app).get(f"/api/knowledge/{doc['id']}/passage", params={"loc": loc})
@@ -289,6 +289,6 @@ def test_passage_returns_only_that_chunk_text(tmp_env, tmp_path):
 
 
 def test_telegram_reply_sources_become_footer():
-    from argus.services.telegram_channel import clean_reply
+    from nestor.services.telegram_channel import clean_reply
     out = clean_reply("Cần có ngân sách. [[src:ab12|bao-cao.docx|đoạn 1-32]] Và tiến độ. [[src:ab12|bao-cao.docx|đoạn 1-32]]")
     assert "[[" not in out and out.endswith("Nguồn: bao-cao.docx (đoạn 1-32)") and out.startswith("Cần có ngân sách. Và tiến độ.")

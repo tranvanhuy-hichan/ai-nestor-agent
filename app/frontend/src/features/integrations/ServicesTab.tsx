@@ -149,7 +149,7 @@ export function ServicesTab({ q }: { q: string }) {
     } })
   }
   const chooseRegistry = (i: RegistryItem) => {
-    const warn = i.community ? t('Server do cộng đồng đăng, Argus không kiểm duyệt. Công cụ của nó vẫn phải qua bước xin phép, nhưng nội dung nó trả về là dữ liệu bên ngoài. Chỉ dùng nếu bạn tin nguồn này.') : t('Thêm "{name}"?', { name: i.name })
+    const warn = i.community ? t('Server do cộng đồng đăng, Nestor không kiểm duyệt. Công cụ của nó vẫn phải qua bước xin phép, nhưng nội dung nó trả về là dữ liệu bên ngoài. Chỉ dùng nếu bạn tin nguồn này.') : t('Thêm "{name}"?', { name: i.name })
     if (!confirm(`${i.name}\n${i.url}\n\n${warn}`)) return
     run.mutate({ key: i.id, login: false, fn: async () => {
       const p = await api.post<Probe>('/api/mcp/probe', { url: i.url })
@@ -207,7 +207,7 @@ export function ServicesTab({ q }: { q: string }) {
       {dq.length >= 2 && (
         <section>
           <h3 className="text-sm font-semibold">{t('Từ thư viện MCP chính thức')}</h3>
-          <p className="mb-2 mt-0.5 flex items-start gap-1.5 text-xs text-warn"><ShieldAlert className="mt-0.5 size-3.5 shrink-0" />{t('Thư viện này do cộng đồng đăng, Argus không kiểm duyệt từng mục. Nguồn có nhãn “Cộng đồng” chưa được xác minh thương hiệu.')}</p>
+          <p className="mb-2 mt-0.5 flex items-start gap-1.5 text-xs text-warn"><ShieldAlert className="mt-0.5 size-3.5 shrink-0" />{t('Thư viện này do cộng đồng đăng, Nestor không kiểm duyệt từng mục. Nguồn có nhãn “Cộng đồng” chưa được xác minh thương hiệu.')}</p>
           {registry.isLoading ? <Loading /> : registry.error ? <ErrorNote error={registry.error} /> : registryItems.length === 0 ? <p className="rounded-xl border border-dashed border-line px-4 py-5 text-center text-sm text-muted">{t('Không tìm thấy dịch vụ từ xa nào khớp “{q}”.', { q: dq })}</p> : (
             <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
               {registryItems.map((i) => {

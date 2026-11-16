@@ -49,7 +49,7 @@ def main():
     if isinstance(events, dict):
         events = [events]
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Argus//Skills//EN", "CALSCALE:GREGORIAN"]
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nestor//Skills//EN", "CALSCALE:GREGORIAN"]
     for e in events:
         all_day = bool(e.get("all_day"))
         start = parse(e["start"], all_day)
@@ -57,7 +57,7 @@ def main():
             end = parse(e["end"], all_day)
         else:
             end = start + (timedelta(days=1) if all_day else timedelta(minutes=int(e.get("duration_min", 60))))
-        lines += ["BEGIN:VEVENT", f"UID:{uuid.uuid4()}@argus", f"DTSTAMP:{stamp}"]
+        lines += ["BEGIN:VEVENT", f"UID:{uuid.uuid4()}@nestor", f"DTSTAMP:{stamp}"]
         lines.append(f"DTSTART;VALUE=DATE:{fmt(start, True)}" if all_day else f"DTSTART:{fmt(start, False)}")
         lines.append(f"DTEND;VALUE=DATE:{fmt(end, True)}" if all_day else f"DTEND:{fmt(end, False)}")
         lines.append(f"SUMMARY:{esc(e['title'])}")

@@ -3,9 +3,9 @@ import subprocess
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.services import tools, tools_computer as tc
-from argus.services.tools import DENIED, ToolContext
+from nestor.core import config as cfgmod
+from nestor.services import tools, tools_computer as tc
+from nestor.services.tools import DENIED, ToolContext
 
 
 @pytest.fixture(autouse=True)

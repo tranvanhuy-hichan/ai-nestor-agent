@@ -1,4 +1,4 @@
-from argus.services import agent, commands
+from nestor.services import agent, commands
 
 
 def test_expand_commands():

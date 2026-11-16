@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from argus.core import config as cfgmod
-from argus.core import secrets
+from nestor.core import config as cfgmod
+from nestor.core import secrets
 
 
 def full_cfg() -> cfgmod.Config:
@@ -57,14 +57,14 @@ def test_missing_key_file_is_reported_not_crashing(tmp_env):
 
 def test_env_master_key_overrides_file(tmp_env, monkeypatch):
     key = secrets.Fernet.generate_key().decode()
-    monkeypatch.setenv("ARGUS_MASTER_KEY", key)
+    monkeypatch.setenv("NESTOR_MASTER_KEY", key)
     cfgmod.save(full_cfg())
     assert not (tmp_env / "master.key").exists()  # khong tao file khi da co khoa trong env
     assert secrets.source() == "env" and cfgmod.load().providers["local"].api_key == "sk-provider-secret"
 
 
 def test_encryption_can_be_disabled(tmp_env, monkeypatch):
-    monkeypatch.setenv("ARGUS_ENCRYPT", "0")
+    monkeypatch.setenv("NESTOR_ENCRYPT", "0")
     cfgmod.save(full_cfg())
     assert "sk-provider-secret" in (tmp_env / "config.json").read_text()
 

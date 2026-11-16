@@ -1,5 +1,5 @@
-from argus.assistant_defs.experience import CONTRACTS
-from argus.assistant_defs.forms import FORMS, form_for, validate_form
+from nestor.assistant_defs.experience import CONTRACTS
+from nestor.assistant_defs.forms import FORMS, form_for, validate_form
 
 
 def test_curated_workflows_have_domain_intake_and_handoff_without_mutating_source():

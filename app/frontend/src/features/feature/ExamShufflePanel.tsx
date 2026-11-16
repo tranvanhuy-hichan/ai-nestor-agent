@@ -19,7 +19,7 @@ async function shuffle(f: { file: File; versions: number; start: number; keep: b
   fd.append('strip_marks', String(f.strip))
   if (f.answers.trim()) fd.append('answers', f.answers.trim())
   const r = await fetch('/api/exam/shuffle', { method: 'POST', body: fd })
-  if (r.status === 404) throw new Error(t('Máy chủ chưa hỗ trợ tính năng này, hãy khởi động lại Argus.'))
+  if (r.status === 404) throw new Error(t('Máy chủ chưa hỗ trợ tính năng này, hãy khởi động lại Nestor.'))
   if (r.status === 401) { window.dispatchEvent(new Event('auth-required')); throw new Error(t('Cần đăng nhập lại.')) }
   const body = await r.json().catch(() => null)
   if (!r.ok) throw new Error(typeof body?.detail === 'string' ? body.detail : t('Không xáo được đề. Hãy kiểm tra file đúng định dạng .docx rồi thử lại.'))

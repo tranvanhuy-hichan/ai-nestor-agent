@@ -1,9 +1,9 @@
 """Giam token: rut gon ket qua cong cu cu va an cong cu khong dung duoc."""
 import json
 
-from argus.core import config as cfgmod
-from argus.services import agent as agent_mod
-from argus.services import tools
+from nestor.core import config as cfgmod
+from nestor.services import agent as agent_mod
+from nestor.services import tools
 
 
 def _msgs():
@@ -46,7 +46,7 @@ def test_disabled_features_hide_their_tool_schemas(tmp_env, monkeypatch):
             yield {"type": "final", "content": "ok", "tool_calls": [], "usage": {"prompt": 1, "completion": 1}}
 
     monkeypatch.setattr(agent_mod, "make_provider", Fake)
-    from argus.services import sessions
+    from nestor.services import sessions
 
     sid = sessions.create("x")
     agent_mod.run_turn(sid, "hi", None, lambda k, d: True, lambda e: None)

@@ -129,6 +129,6 @@ export interface ProviderLimits {
   provider: string
   official: boolean
   limits: { windows?: LimitWindow[]; error?: string; note?: string } | null
-  argus: { h5: { calls: number; tokens: number; share: number }; d1: { calls: number; tokens: number; share: number }; d7: { calls: number; tokens: number; share: number } }
+  nestor: { h5: { calls: number; tokens: number; share: number }; d1: { calls: number; tokens: number; share: number }; d7: { calls: number; tokens: number; share: number } }
   fetched: number
 }

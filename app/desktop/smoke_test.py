@@ -1,6 +1,6 @@
 """Chạy thử bản server đã đóng gói: khởi động, gọi /api/health và trang chủ, rồi tắt. Dùng trong CI và khi build tay.
 
-  python app/desktop/smoke_test.py app/desktop/build/argus-server
+  python app/desktop/smoke_test.py app/desktop/build/nestor-server
 """
 import os
 import re
@@ -12,13 +12,20 @@ import urllib.request
 from pathlib import Path
 
 
+for _s in (sys.stdout, sys.stderr):  # Windows CI: console mac dinh cp1252 khong in duoc tieng Viet
+    try:
+        _s.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+
 def main(folder: str) -> int:
-    exe = Path(folder) / ("argus-server.exe" if os.name == "nt" else "argus-server")
+    exe = Path(folder) / ("nestor-server.exe" if os.name == "nt" else "nestor-server")
     if not exe.exists():
         print(f"không thấy {exe}")
         return 1
     with tempfile.TemporaryDirectory() as home:
-        proc = subprocess.Popen([str(exe), "--port", "0"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env={**os.environ, "ARGUS_HOME": home})
+        proc = subprocess.Popen([str(exe), "--port", "0"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env={**os.environ, "NESTOR_HOME": home})
         try:
             port, deadline, log = None, time.time() + 90, []
             while time.time() < deadline and port is None:
@@ -26,7 +33,7 @@ def main(folder: str) -> int:
                 if not line and proc.poll() is not None:
                     break
                 log.append(line)
-                if m := re.search(r"ARGUS_READY (\d+)", line):
+                if m := re.search(r"NESTOR_READY (\d+)", line):
                     port = int(m.group(1))
             if port is None:
                 print("server không báo sẵn sàng:\n" + "".join(log)[-3000:])
@@ -46,4 +53,4 @@ def main(folder: str) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else "app/desktop/build/argus-server"))
+    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else "app/desktop/build/nestor-server"))

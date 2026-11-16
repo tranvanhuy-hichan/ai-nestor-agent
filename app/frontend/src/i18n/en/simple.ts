@@ -17,7 +17,7 @@ const dict: Record<string, string> = {
 "Ví dụ: bổ sung phân tích, sửa bố cục hoặc làm rõ một mục…":"For example: add analysis, improve layout, or clarify a section\u2026",
 
   'Kế hoạch sẽ xuất hiện khi trợ lý lập các bước thực hiện.': 'The plan will appear when the assistant outlines the steps.',
-  'Argus đang làm việc': 'Argus is working',
+  'Nestor đang làm việc': 'Nestor is working',
   'Đang chuẩn bị nội dung…': 'Preparing your content…',
   'Kết quả sẽ xuất hiện tại đây': 'Your results will appear here',
 "Đã tải lên, sẽ dùng lại":"Uploaded, will be reused",
@@ -189,7 +189,7 @@ const dict: Record<string, string> = {
   'Tạo nhiều mã đề từ một đề gốc': 'Make several exam versions from one original',
   'Xem tất cả {n} trợ lý': 'Show all {n} assistants',
   'Thu gọn': 'Show less',
-  'Máy chủ chưa hỗ trợ tính năng này, hãy khởi động lại Argus.': 'The server does not support this yet, please restart Argus.',
+  'Máy chủ chưa hỗ trợ tính năng này, hãy khởi động lại Nestor.': 'The server does not support this yet, please restart Nestor.',
   'Cần đăng nhập lại.': 'Please sign in again.',
   'Không xáo được đề. Hãy kiểm tra file đúng định dạng .docx rồi thử lại.': 'Could not shuffle the exam. Check the file is a .docx and try again.',
   'Chỉ nhận file Word .docx. Nếu đề là .doc hoặc PDF, hãy mở bằng Word và "Lưu thành" .docx trước.': 'Only Word .docx files are accepted. If your exam is .doc or PDF, open it in Word and "Save as" .docx first.',

@@ -65,11 +65,11 @@ def env_for(home: Path, lang: str) -> dict[str, str]:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
-    return {**os.environ, "ARGUS_HOME": str(home), "ARGUS_PORT": str(port), "ARGUS_LANG": lang, "PYTHONPATH": str(BACKEND), "TERM": "xterm-256color", "NO_COLOR": ""}
+    return {**os.environ, "NESTOR_HOME": str(home), "NESTOR_PORT": str(port), "NESTOR_LANG": lang, "PYTHONPATH": str(BACKEND), "TERM": "xterm-256color", "NO_COLOR": ""}
 
 
 def test_onboard_with_arrow_keys_space_and_enter(tmp_path):
-    p = Pty([sys.executable, "-m", "argus", "onboard"], env_for(tmp_path, "en"))
+    p = Pty([sys.executable, "-m", "nestor", "onboard"], env_for(tmp_path, "en"))
     p.read_until("Language / Ngôn ngữ")
     p.send(UP)                      # English (mac dinh) -> Tieng Viet
     p.send(b"\r")
@@ -83,7 +83,7 @@ def test_onboard_with_arrow_keys_space_and_enter(tmp_path):
     p.send(b" ")                    # bo tick 'Hoi xac nhan truoc khi chay lenh shell' (dang tick san)
     p.read_until("◻")               # o vuong rong xuat hien
     p.send(b"\r")
-    p.read_until("Chạy Argus Agent ngay bây giờ")
+    p.read_until("Chạy Nestor Agent ngay bây giờ")
     p.send(RIGHT)                   # Co -> Khong bang mui ten phai
     p.send(b"\r")
     assert p.finish() == 0
@@ -95,7 +95,7 @@ def test_onboard_with_arrow_keys_space_and_enter(tmp_path):
 
 def test_multiselect_all_with_a_key_then_confirm_exits_cleanly(tmp_path):
     """'a' chon het; chi kiem tra menu ve dung va phan hoi phim, roi Ctrl+C thoat gon (khong de terminal o che do la)."""
-    p = Pty([sys.executable, "-m", "argus", "onboard", "--language", "en"], env_for(tmp_path, "en"))
+    p = Pty([sys.executable, "-m", "nestor", "onboard", "--language", "en"], env_for(tmp_path, "en"))
     p.read_until("What is your name")
     p.send(b"\r")
     p.read_until("Choose a provider")
