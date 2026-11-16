@@ -2,7 +2,7 @@ import { coreFeatures } from '@/lib/featureCatalog'
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Bell, Blocks, Cable, FileSearch, Clock, Code2, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, LayoutGrid, ChevronDown, Sun, type LucideIcon } from 'lucide-react'
+import { NotebookText, Bell, Blocks, Cable, FileSearch, Clock, Code2, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, LayoutGrid, ChevronDown, Sun, type LucideIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { t, tk } from '@/lib/i18n.ts'
 import { AgentLogo, AgentOwl } from '@/components/ui/AgentMark'
@@ -23,6 +23,7 @@ const SIMPLE: NavItem[] = [
   { to: '/chat', label: tk('Trợ lý'), icon: Sparkles, hint: tk('Trò chuyện và giao việc cho trợ lý') },
   { to: '/tasks', label: tk('Việc đã làm'), icon: ListTodo, hint: tk('Các việc trợ lý làm ngầm và kết quả') },
   { to: '/automations', label: tk('Lịch tự động'), icon: Clock, hint: tk('Việc lặp lại theo giờ, theo ngày') },
+  { to: '/pages', label: tk('Trang'), icon: NotebookText, hint: tk('Ghi chú và tài liệu của bạn, agent đọc và viết được') },
   { to: '/documents', label: tk('Tài liệu'), icon: FileSearch, hint: tk('Hỏi đáp trên văn bản, quy chế của bạn') },
   { to: '/skills', label: tk('Kỹ năng của tôi'), icon: Puzzle, hint: tk('Những cách làm trợ lý đã học') },
   { to: '/settings', label: tk('Cài đặt'), icon: Settings, hint: tk('Ngôn ngữ, Zalo, tài khoản AI') },
@@ -37,6 +38,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   ] },
   { title: tk('Khả năng của agent'), items: [
     { to: '/skills', label: tk('Kỹ năng'), icon: Puzzle, hint: tk('Dạy agent làm thêm việc mới') },
+    { to: '/pages', label: tk('Trang'), icon: NotebookText, hint: tk('Ghi chú và tài liệu của bạn, agent đọc và viết được') },
     { to: '/documents', label: tk('Tài liệu'), icon: FileSearch, hint: tk('Hỏi đáp trên hợp đồng, báo cáo, bảng tính của bạn') },
     { to: '/plugins', label: tk('Tiện ích'), icon: Blocks, hint: tk('Nối GitHub, Notion, Canva… chỉ bằng một cú bấm') },
     { to: '/integrations', label: tk('Kết nối'), icon: Cable, hint: tk('Telegram, API, công cụ ngoài') },

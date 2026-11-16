@@ -172,7 +172,7 @@ def _images(workdir, names: list[str]) -> list[dict]:
 
 
 PERMISSIONS = ("default", "readonly", "guarded", "full", "plan")
-READONLY_BLOCKED = {"write", "edit", "remember", "http_request", "generate_image", "browser_click", "browser_type", "browser_press", "task_start"} | {
+READONLY_BLOCKED = {"write", "edit", "remember", "http_request", "generate_image", "browser_click", "browser_type", "browser_press", "task_start", "page_create", "page_update"} | {
     "computer_screenshot", "computer_click", "computer_type", "computer_key", "computer_move", "computer_scroll"}
 READONLY_NOTE = "Chế độ CHỈ ĐỌC: bạn không được ghi/sửa file, chạy lệnh shell hay thay đổi dữ liệu; các tool đó đã bị tắt. Hãy chỉ đọc và tra cứu."
 
@@ -359,6 +359,8 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
         ctx.enabled = {**ctx.enabled, "plan_submit": False}
     if tool_allow is not None:  # tro ly chuyen trach: chi cac tool trong allowlist duoc de xuat va duoc phep goi
         allowed = set(tool_allow) | {"plan_submit"}
+        if "canva_check" in allowed:  # tro ly co nhanh Canva: cho phep luon cong cu cua Canva MCP
+            allowed |= {n for n in ctx.extra if n.startswith("canva__")}
         lock = lambda en: {n: bool(en.get(n, True)) and n in allowed for n in [*tools.TOOLS, *ctx.extra]}  # noqa: E731
         ctx.enabled = lock(ctx.enabled)
         if ctx.plan_restore is not None:

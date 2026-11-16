@@ -1,3 +1,6 @@
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+import { openLogin } from '../integrations/ServicesTab'
 import { useUiMode } from '@/lib/uiMode'
 import { useState } from 'react'
 import { AgentMark } from '../../components/ui/AgentMark'
@@ -376,9 +379,43 @@ export function MessageView({ item, sid, onDecide, onOpenFile, isLastUser, isLas
       return <QuestionCard item={item} onAnswer={onAnswer ?? (() => undefined)} />
     case 'summary':
       return <SummaryCard item={item} onUndo={onUndo} canAct={canAct} />
+    case 'login':
+      return <ServiceLoginCard name={item.name} label={item.label} />
     case 'notice':
       return <p className="ml-10 flex items-center gap-1.5 text-xs text-muted"><Info className="size-3.5" />{item.text}</p>
     case 'error':
       return <p className="ml-10 flex items-start gap-1.5 rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-sm text-bad"><TriangleAlert className="mt-0.5 size-4 shrink-0" />{item.text}</p>
   }
+}
+
+/** Dich vu (vd Canva) can dang nhap de agent dung duoc: nut mo trang cap quyen, sau do tu kiem tra trang thai. */
+function ServiceLoginCard({ name, label }: { name: string; label: string }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'waiting'>('idle')
+  const [err, setErr] = useState('')
+  const status = useQuery({
+    queryKey: ['mcp-login', name], enabled: state === 'waiting', refetchInterval: 2000,
+    queryFn: async () => (await api.get<{ name: string; status: string; logged_in: boolean }[]>('/api/mcp')).find((s) => s.name === name),
+  })
+  const done = state === 'waiting' && status.data?.status === 'connected'
+  const start = async () => {
+    const w = window.open('', '_blank')
+    setState('busy'); setErr('')
+    try {
+      await openLogin(name, w)
+      setState('waiting')
+    } catch (e) { setState('idle'); setErr(e instanceof Error ? e.message : String(e)) }
+  }
+  return (
+    <div className="ml-10 flex flex-wrap items-center gap-3 rounded-xl border border-info/30 bg-info/10 px-4 py-3 text-sm">
+      <BrandIcon brand={detectBrand(label)} className="size-5" />
+      {done
+        ? <span className="flex items-center gap-1.5 text-ok"><Check className="size-4" />{t('Đã đăng nhập {name}. Nhắn "xong" để tiếp tục.', { name: label })}</span>
+        : <>
+            <span>{t('Đăng nhập {name} để làm slide đẹp hơn. Hoặc bỏ qua để tạo file .pptx offline.', { name: label })}</span>
+            <Button size="sm" onClick={start} disabled={state === 'busy'}>{state === 'waiting' ? t('Mở lại trang đăng nhập') : t('Đăng nhập {name}', { name: label })}</Button>
+            {state === 'waiting' && <span className="text-xs text-muted">{t('Đang chờ bạn cho phép ở tab vừa mở…')}</span>}
+            {err && <span className="text-xs text-bad">{err}</span>}
+          </>}
+    </div>
+  )
 }

@@ -67,7 +67,7 @@ function MathFormula({ source, display }: { source: string; display: boolean }) 
 }
 
 function inline(text: string): ReactNode[] {
-  const re = /(`[^`\n]+`|(?<!\\)\$\$[^\n]*?\$\$|\\\[[^\n]*?\\\]|\\\([^\n]*?\\\)|(?<![\\$])\$(?![\s$])(?:\\.|[^$\n\\])+?\$(?![\d$])|\*\*[^*\n]+\*\*|\[\[src:[^\]\n]+\]\]|\[\^?\d+\]|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|(?<![*\w])\*[^*\s][^*\n]*?\*(?![*\w]))/g
+  const re = /(`[^`\n]+`|(?<!\\)\$\$[^\n]*?\$\$|\\\[[^\n]*?\\\]|\\\([^\n]*?\\\)|(?<![\\$])\$(?![\s$])(?:\\.|[^$\n\\])+?\$(?![\d$])|\*\*[^*\n]+\*\*|\[\[src:[^\]\n]+\]\]|\[\^?\d+\]|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|(?<![\w(\]])https?:\/\/[^\s<>)\]]*[^\s<>)\].,;:!?'\"*]|(?<![*\w])\*[^*\s][^*\n]*?\*(?![*\w]))/g
   return text.split(re).map((part, i) => {
     if (part.startsWith('$$') && part.endsWith('$$') && part.length > 4) return <MathFormula key={i} source={part.slice(2, -2)} display />
     if ((part.startsWith('\\[') && part.endsWith('\\]')) || (part.startsWith('\\(') && part.endsWith('\\)'))) return <MathFormula key={i} source={part.slice(2, -2)} display={part.startsWith('\\[')} />
@@ -91,6 +91,7 @@ function inline(text: string): ReactNode[] {
     if (part.startsWith('**') && part.endsWith('**') && part.length > 4) return <strong key={i}>{inline(part.slice(2, -2))}</strong>
     const link = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(part)
     if (link) return <a key={i} href={link[2]} target="_blank" rel="noreferrer noopener" className="text-info underline underline-offset-2">{link[1]}</a>
+    if (/^https?:\/\/\S+$/.test(part)) return <a key={i} href={part} target="_blank" rel="noreferrer noopener" className="break-all text-info underline underline-offset-2">{part}</a>
     return <Fragment key={i}>{part}</Fragment>
   })
 }

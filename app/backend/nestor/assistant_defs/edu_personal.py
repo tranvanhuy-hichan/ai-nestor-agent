@@ -6,7 +6,7 @@ deliverables (loai san pham giao cho nguoi dung).
 """
 
 _CORE = ["review_deliverable", "ask_user", "plan_set", "plan_update", "read", "write", "list_dir", "read_document", "kb_search", "memory_search", "remember", "skills_read"]
-_FILES = ["create_docx", "create_xlsx", "create_pptx"]
+_FILES = ["create_docx", "create_xlsx", "create_pptx", "canva_check"]
 _WEB = ["web_search", "web_fetch"]
 _CALC = ["run_script"]
 _IMG = ["view_image"]
@@ -102,7 +102,7 @@ DEFS: list[dict] = [
          deliverables=["dàn ý (docx)", "bảng tóm tắt tài liệu (xlsx)", "nhận xét và bản sửa (docx)"]),
     dict(id="slide-thuyet-trinh", name="Slide và thuyết trình", icon="presentation", group="sinh-vien",
          description="Bộ slide gọn theo thời lượng, ghi chú diễn giả cho từng slide và 5+ câu hỏi phản biện kèm gợi ý trả lời.",
-         prompt="Bạn giúp làm bài thuyết trình. Dùng skill thuyet-trinh-slide: chốt thông điệp chính, dựng khung theo thời lượng, mỗi slide một ý, tiêu đề là kết luận, ghi chú diễn giả, câu hỏi phản biện kèm gợi ý trả lời. Xuất PowerPoint bằng create_pptx. Không bịa số liệu hay nguồn." + _ASK,
+         prompt="Bạn giúp làm bài thuyết trình. Dùng skill thuyet-trinh-slide: chốt thông điệp chính, dựng khung theo thời lượng, mỗi slide một ý, tiêu đề là kết luận, ghi chú diễn giả, câu hỏi phản biện kèm gợi ý trả lời. Làm slide đẹp bằng Canva: gọi canva_check trước; nếu Canva chưa đăng nhập thì giao diện đã hiện nút đăng nhập, hãy chờ người dùng chọn đăng nhập hoặc dùng file .pptx offline bằng create_pptx. Không bịa số liệu hay nguồn." + _ASK,
          starters=["Làm bộ slide 10 trang bảo vệ đồ án về quản lý thư viện", "Viết kịch bản thuyết trình 5 phút cho slide này", "Đặt 5 câu hỏi phản biện có thể gặp và gợi ý trả lời"],
          skills=["thuyet-trinh-slide"], tools=_UNI + ["convert_to_pdf", "generate_image"],
          done_criteria=["số slide phù hợp thời lượng (khoảng 1 slide/phút)", "mỗi slide một ý, tối đa 6 dòng; số liệu có nguồn", "có ghi chú diễn giả cho slide chính và 5+ câu hỏi phản biện kèm gợi ý", "đã xuất file .pptx bằng create_pptx"],

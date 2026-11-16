@@ -27,7 +27,7 @@ type Probe = { kind: 'oauth' | 'oauth-manual' | 'token' | 'open' | 'down'; note:
 type TokenAsk = { key: string; name: string; url: string; transport: 'http' | 'sse'; header: string; prefix: string; help?: string; hint?: string; editing?: string }
 
 /** Mo trang cap quyen o tab da mo san luc bam (de khong bi chan popup). */
-async function openLogin(name: string, w: Window | null): Promise<Started> {
+export async function openLogin(name: string, w: Window | null): Promise<Started> {
   const r = await api.post<Started>(`/api/mcp/${name}/oauth/start`)
   if (r.auth_url && w) { w.location.href = r.auth_url; return r }
   w?.close()

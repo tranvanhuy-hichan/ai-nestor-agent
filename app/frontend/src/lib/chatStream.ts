@@ -15,12 +15,13 @@ export type ChatEvent =
   | { type: 'approval_done'; id: string; ok: boolean }
   | { type: 'files' }
   | { type: 'plan'; items: PlanItem[] }
+  | { type: 'service_login'; name: string; label: string }
   | { type: 'notice'; message: string; tpl?: string; vars?: Record<string, string | number> }
   | { type: 'error'; message: string; tpl?: string; vars?: Record<string, string | number> }
   | { type: 'done' }
 
 export async function streamChat(
-  body: { text: string; session: string | null; provider: string | null; attachments?: string[]; permission?: string; effort?: string; assistant?: string },
+  body: { text: string; session: string | null; provider: string | null; attachments?: string[]; permission?: string; effort?: string; assistant?: string; context?: string },
   onEvent: (e: ChatEvent) => void,
   signal: AbortSignal,
 ) {
