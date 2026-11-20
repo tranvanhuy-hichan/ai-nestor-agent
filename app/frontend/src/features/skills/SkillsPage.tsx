@@ -4,6 +4,7 @@ import { Compass, PackagePlus, Plus, Puzzle, Settings2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState, ErrorNote, Loading, Page, PageHeader } from '@/components/ui/misc'
+import { paginate, Pagination } from '@/components/ui/Pagination'
 import { Switch } from '@/components/ui/Switch'
 import { SearchBox } from '@/components/ui/SearchBox'
 import { Tabs } from '@/components/ui/Tabs'
@@ -49,6 +50,8 @@ export function SkillsPage() {
   const [hubInput, setHubInput] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 20
 
   const toggle = (s: Skill, enabled: boolean) => {
     if (!cfg.data) return
@@ -58,6 +61,7 @@ export function SkillsPage() {
   }
 
   const list = (skills.data ?? []).filter((s) => !filter || `${s.name} ${s.description}`.toLowerCase().includes(filter.toLowerCase()))
+  const pageList = paginate(list, page, PAGE_SIZE)
 
   return (
     <Page>
@@ -69,7 +73,7 @@ export function SkillsPage() {
         right={<div className="flex flex-wrap items-center gap-2">
           {tab === 'discover'
             ? <SearchBox value={hubInput} onChange={setHubInput} placeholder={t('Tìm skill trên ClawHub (vd: weather, github, notion…)')} label={t('Tìm skill')} />
-            : <SearchBox value={filter} onChange={setFilter} placeholder={t('Lọc skill đã cài…')} label={t('Lọc skill')} />}
+            : <SearchBox value={filter} onChange={(v) => { setFilter(v); setPage(0) }} placeholder={t('Lọc skill đã cài…')} label={t('Lọc skill')} />}
           <Button variant="primary" onClick={() => setCreating(true)}><Plus className="size-4" />{t('Tạo skill')}</Button>
         </div>}
       />
@@ -88,7 +92,7 @@ export function SkillsPage() {
               <EmptyState icon={PackagePlus} title={t('Chưa có skill nào')} action={<Button onClick={() => setTab('picks')}><Compass className="size-4" />{t('Gợi ý cho bạn')}</Button>} />
             ) : (
               <div className="overflow-hidden rounded-xl border border-line bg-panel">
-                {list.map((s) => (
+                {pageList.map((s) => (
                   <div key={s.name} className="flex items-center gap-4 border-b border-line px-4 py-3.5 last:border-b-0">
                     <SkillIcon emoji={s.emoji} />
                     <div className="min-w-0 flex-1"><button onClick={() => setSelected(s.name)} className="w-full text-left">
@@ -108,6 +112,7 @@ export function SkillsPage() {
                     <Switch checked={s.enabled} onChange={(v) => toggle(s, v)} label={t('Bật {name}', { name: s.name })} />
                   </div>
                 ))}
+                <Pagination page={page} pageSize={PAGE_SIZE} total={list.length} onPageChange={setPage} />
               </div>
             )}
           </>

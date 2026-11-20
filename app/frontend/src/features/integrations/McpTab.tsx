@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState, ErrorNote, Loading } from '@/components/ui/misc'
+import { paginate, Pagination } from '@/components/ui/Pagination'
 import { Switch } from '@/components/ui/Switch'
 import { useToast } from '@/components/ui/Toast'
 import { api } from '@/lib/api'
@@ -30,6 +31,8 @@ export function McpTab({ addSignal = 0 }: { addSignal?: number }) {
   const [editing, setEditing] = useState<{ name: string | null; cfg: McpServerCfg } | null>(null)
   useEffect(() => { if (addSignal > 0) setEditing({ name: null, cfg: blankServer }) }, [addSignal])
   const [open, setOpen] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 20
 
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['mcp'] }) }
   const persist = (servers: Record<string, McpServerCfg>, tools?: Record<string, boolean>, msg?: string) => {
@@ -51,7 +54,7 @@ export function McpTab({ addSignal = 0 }: { addSignal?: number }) {
     <div className="space-y-4">
       {list.length === 0 ? (
         <Card><EmptyState icon={Cable} title={t('Chưa có MCP server nào')} action={<Button variant="primary" onClick={() => setEditing({ name: null, cfg: blankServer })}><Plus className="size-4" />{t('Thêm MCP server')}</Button>} /></Card>
-      ) : list.map((s) => {
+      ) : paginate(list, page, PAGE_SIZE).map((s) => {
         const st = STATUS[s.status]
         const expanded = open === s.name
         return (
@@ -78,6 +81,7 @@ export function McpTab({ addSignal = 0 }: { addSignal?: number }) {
           </Card>
         )
       })}
+      {list.length > 0 && <Pagination page={page} pageSize={PAGE_SIZE} total={list.length} onPageChange={setPage} />}
 
       <McpServerModal open={!!editing} name={editing?.name ?? null} initial={editing?.cfg ?? blankServer} onClose={() => setEditing(null)}
         onSave={(name, c) => { persist({ ...servers, [name]: c }, undefined, t('Đã lưu MCP server')); setEditing(null) }} />

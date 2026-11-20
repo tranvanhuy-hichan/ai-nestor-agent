@@ -78,6 +78,10 @@ const dict: Record<string, string> = {
   "Tải bản sao lưu (.tar.gz)": "Download backup (.tar.gz)",
   "Tổng hợp các điểm lưu ý pháp lý và rủi ro chính trong tài liệu đã tải lên": "Summarise the key legal points and risks in the uploaded documents",
   "Xem toàn màn hình": "View full screen",
+  "{from}–{to} / {total}": "{from}–{to} / {total}",
+  "Trang trước": "Previous page",
+  "Trang sau": "Next page",
+  "Trang {page} / {count}": "Page {page} / {count}",
 }
 
 export default dict
