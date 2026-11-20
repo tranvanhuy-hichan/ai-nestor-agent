@@ -56,13 +56,11 @@ def mcp_catalog_list():
 
 @router.get("/mcp/registry")
 def mcp_registry_search(q: str = "", cursor: str = ""):
-    """Tim trong thu vien MCP chinh thuc (chi muc co may chu tu xa). Noi dung do cong dong dang, Nestor khong kiem duyet."""
+    """Tim MCP server: uu tien kho ~2500 plugin cua Hermes co san trong app (luon chay, ca khi mat mang),
+    cong them thu vien MCP chinh thuc qua mang neu truy cap duoc. Noi dung do cong dong dang, Nestor khong kiem duyet."""
     if len(q.strip()) < 2:
         return {"items": [], "next": ""}
-    try:
-        return mcp_registry.search(q, cursor)
-    except mcp_registry.RegistryError as e:
-        raise HTTPException(502, str(e)) from e
+    return mcp_registry.search(q, cursor, limit=50)
 
 
 class ProbeBody(BaseModel):

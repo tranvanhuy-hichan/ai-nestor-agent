@@ -74,24 +74,29 @@ def search_hermes(q: str, limit: int = 10) -> list[dict]:
 
 
 def search(q: str, cursor: str = "", limit: int = 30) -> dict:
+    """Tra ve ket qua tu kho offline Hermes (uu tien, luon co du mang hay khong) ghep voi
+    registry chinh thuc qua mang (best-effort: loi mang khong duoc xoa mat phan offline)."""
+    seen, items = set(), []
+    if not cursor and q.strip():
+        for h in search_hermes(q, limit=max(1, min(limit, 50))):
+            if (h["id"], h["url"]) not in seen:
+                seen.add((h["id"], h["url"]))
+                items.append(h)
     params = {"search": q.strip(), "limit": max(1, min(limit, 50))}
     if cursor:
         params["cursor"] = cursor
+    next_cursor = ""
     try:
         r = httpx.get(URL, params=params, timeout=15)
         r.raise_for_status()
         data = r.json()
-    except (httpx.HTTPError, ValueError) as e:
-        raise RegistryError(f"không truy cập được thư viện MCP: {type(e).__name__}") from e
-    seen, items = set(), []
-    for entry in data.get("servers", []):
-        n = _normalize(entry)
-        if n and (n["id"], n["url"]) not in seen:
-            seen.add((n["id"], n["url"]))
-            items.append(n)
-    if not cursor and q.strip():
-        for h in search_hermes(q, limit=10):
-            if (h["id"], h["url"]) not in seen:
-                seen.add((h["id"], h["url"]))
-                items.append(h)
-    return {"items": items, "next": (data.get("metadata") or {}).get("nextCursor") or ""}
+    except (httpx.HTTPError, ValueError):
+        data = None  # mang loi/cham: van tra ve ket qua offline da co o tren, khong raise
+    if data:
+        for entry in data.get("servers", []):
+            n = _normalize(entry)
+            if n and (n["id"], n["url"]) not in seen:
+                seen.add((n["id"], n["url"]))
+                items.append(n)
+        next_cursor = (data.get("metadata") or {}).get("nextCursor") or ""
+    return {"items": items, "next": next_cursor}
