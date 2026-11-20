@@ -155,11 +155,22 @@ export function KanbanBoard({ adding, onAddingChange }: { adding: boolean; onAdd
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {COLUMNS.map((col) => {
           const list = cards.filter((c) => c.status === col.id)
+          const canAdd = col.id === 'todo'
           return (
             <div key={col.id} className="min-w-0">
               <div className="mb-2 flex items-center gap-2">
                 <h3 className="text-sm font-semibold">{t(col.label)}</h3>
                 <span className="rounded-md bg-panel2 px-1.5 py-0.5 text-[11px] text-muted">{list.length}</span>
+                <div className="flex-1" />
+                <button
+                  onClick={() => canAdd && onAddingChange(true)}
+                  disabled={!canAdd}
+                  aria-label={t('Thêm thẻ vào {col}', { col: t(col.label) })}
+                  title={canAdd ? t('Thêm thẻ vào {col}', { col: t(col.label) }) : t('Thêm thẻ trực tiếp vào đây — kéo thẻ từ Việc cần làm thay vào đó.')}
+                  className={cn('rounded-md p-1 transition', canAdd ? 'text-muted hover:bg-panel2 hover:text-fg' : 'cursor-not-allowed text-muted/30')}
+                >
+                  <Plus className="size-3.5" />
+                </button>
               </div>
               <p className="mb-2 text-[11px] text-muted/70">{t(col.hint)}</p>
               <div

@@ -111,6 +111,8 @@ const dict: Record<string, string> = {
   "Thẻ mới": "New card",
   "— trống —": "— empty —",
   "Bảng Kanban": "Kanban board",
+  "Thêm thẻ vào {col}": "Add a card to {col}",
+  "Thêm thẻ trực tiếp vào đây — kéo thẻ từ Việc cần làm thay vào đó.": "Cards can't be added directly here — drag one over from To do instead.",
   "Lên kế hoạch việc, kéo-thả sắp xếp, rồi giao cho Nestor chạy nền.": "Plan tasks, drag to reorder, then dispatch them to run in the background.",
 }
 
