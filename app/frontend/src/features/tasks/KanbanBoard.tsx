@@ -33,7 +33,7 @@ function NewCardDialog({ onClose }: { onClose: () => void }) {
     onError: (e) => toast(errMsg(e), 'bad'),
   })
   return (
-    <Modal open onClose={onClose} title={t('Thẻ mới')} footer={
+    <Modal open onClose={onClose} title={t('Thẻ mới')} wide footer={
       <Button variant="primary" loading={create.isPending} disabled={!title.trim()} onClick={() => create.mutate()}>
         <Plus className="size-4" />{t('Thêm thẻ')}
       </Button>
@@ -41,7 +41,7 @@ function NewCardDialog({ onClose }: { onClose: () => void }) {
       <div className="space-y-3">
         <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('Tiêu đề việc…')} autoFocus
           onKeyDown={(e) => { if (e.key === 'Enter' && title.trim()) create.mutate() }} />
-        <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder={t('Mô tả chi tiết (tuỳ chọn) — sẽ là nội dung giao cho Nestor')} />
+        <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={12} placeholder={t('Mô tả chi tiết (tuỳ chọn) — sẽ là nội dung giao cho Nestor')} />
       </div>
     </Modal>
   )
@@ -73,7 +73,7 @@ function CardDetail({ card, onClose, onChanged }: { card: KanbanCard; onClose: (
   })
   const editable = card.status === 'todo'
   return (
-    <Modal open onClose={onClose} title={t('Thẻ việc')} footer={
+    <Modal open onClose={onClose} title={t('Thẻ việc')} wide footer={
       <>
         <Button variant="ghost" onClick={() => del.mutate()} loading={del.isPending}><Trash2 className="size-4" />{t('Xoá')}</Button>
         {card.status === 'blocked' && <Button onClick={() => retry.mutate()} loading={retry.isPending}><RotateCcw className="size-4" />{t('Giao lại')}</Button>}
@@ -83,7 +83,7 @@ function CardDetail({ card, onClose, onChanged }: { card: KanbanCard; onClose: (
     }>
       <div className="space-y-3">
         <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={!editable} placeholder={t('Tiêu đề')} />
-        <Textarea value={body} onChange={(e) => setBody(e.target.value)} disabled={!editable} rows={4} placeholder={t('Mô tả')} />
+        <Textarea value={body} onChange={(e) => setBody(e.target.value)} disabled={!editable} rows={10} placeholder={t('Mô tả')} />
         {card.job && (
           <div className="rounded-lg border border-line bg-panel2/40 p-3 text-sm">
             <p className="text-muted">{t('Trạng thái việc')}: <span className="font-medium text-fg">{card.job.status}</span></p>
