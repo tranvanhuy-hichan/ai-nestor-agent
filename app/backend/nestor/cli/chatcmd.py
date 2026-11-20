@@ -6,7 +6,7 @@ import time
 
 from ..services import api_run, chat_runner, sessions
 from . import runtime
-from .ui import L, ask_yes_no, bold, cyan, dim, err, green, interactive, red, yellow
+from .ui import L, ask_yes_no, bold, choose, cyan, dim, err, green, interactive, red, yellow
 
 KIND = {"exec": ("chạy lệnh shell", "run a shell command"), "mcp": ("gọi tool MCP", "call an MCP tool"), "file_read": ("đọc file ngoài workspace", "read a file outside the workspace"),
         "file_write": ("ghi file", "write a file"), "http_request": ("gửi yêu cầu HTTP thay đổi dữ liệu", "send a state-changing HTTP request")}
@@ -185,7 +185,7 @@ def run(args) -> int:
 
 HELP = {
     "/help": ("Hiện trợ giúp", "Show help"), "/new": ("Bắt đầu hội thoại mới", "Start a new conversation"), "/sessions": ("Liệt kê hội thoại gần đây", "List recent conversations"),
-    "/open <id>": ("Mở lại một hội thoại", "Reopen a conversation"), "/model <name>": ("Đổi provider", "Switch provider"), "/perm <mode>": ("default | readonly | guarded | full", "default | readonly | guarded | full"),
+    "/open <id>": ("Mở lại một hội thoại", "Reopen a conversation"), "/model [name]": ("Xem & đổi model/provider", "List & switch model/provider"), "/perm <mode>": ("default | readonly | guarded | full", "default | readonly | guarded | full"),
     "/effort <level>": ("auto | low | medium | high | thinking", "auto | low | medium | high | thinking"), "/skills": ("Liệt kê skill", "List skills"), "/files": ("Liệt kê file của phiên", "List the conversation's files"), "/exit": ("Thoát (hoặc Ctrl+D)", "Quit (or Ctrl+D)"),
 }
 
@@ -215,7 +215,7 @@ def _make_reader(cfg, st):
                 return
             cmd, _, partial = text.partition(" ")
             if cmd == "/model":
-                opts = [(n, "") for n in cfg.providers]
+                opts = [(n, (cfg.providers[n].model or cfg.providers[n].type) + (" ●" if n == st.get("provider") else "")) for n in cfg.providers]
             elif cmd == "/perm":
                 opts = [(n, "") for n in PERMS]
             elif cmd == "/effort":
@@ -255,11 +255,11 @@ def chat(args) -> int:
         try:
             if reader:
                 print()
-                line = reader(f"{cyan(st['provider'])} {bold('›')} ", "").strip()
+                line = reader(f"{cyan('nestor')} {bold('›')} ", "").strip()
                 while line.endswith("\\"):
                     line = line[:-1] + "\n" + reader("", dim("  … ")).rstrip()
             else:
-                print(f"\n{cyan(st['provider'])} {bold('›')} ", end="", flush=True)
+                print(f"\n{cyan('nestor')} {bold('›')} ", end="", flush=True)
                 line = input().strip()
                 while line.endswith("\\"):
                     print(dim("  … "), end="", flush=True)
@@ -289,8 +289,30 @@ def chat(args) -> int:
             elif cmd == "/open" and sessions.get(rest):
                 st["sid"] = rest
                 print(dim(L(f"Đã mở {rest} ({len(sessions.messages(rest))} tin).", f"Opened {rest} ({len(sessions.messages(rest))} messages).")))
-            elif cmd == "/model" and rest in cfg.providers:
-                st["provider"] = rest
+            elif cmd == "/model":
+                names = list(cfg.providers)
+                if not rest:
+                    opts = [(f"{'●' if n == st['provider'] else ' '} {n}", cfg.providers[n].model or cfg.providers[n].type) for n in names]
+                    try:
+                        rest = names[choose(L("Chọn model", "Pick a model"), opts, names.index(st["provider"]) if st["provider"] in names else 0)]
+                    except (EOFError, KeyboardInterrupt):
+                        print()
+                        continue
+                if rest.isdigit() and 1 <= int(rest) <= len(names):
+                    rest = names[int(rest) - 1]
+                if rest in cfg.providers:
+                    st["provider"] = rest
+                    print(dim(L(f"Đã chuyển sang {rest} ({cfg.providers[rest].model or cfg.providers[rest].type}).", f"Switched to {rest} ({cfg.providers[rest].model or cfg.providers[rest].type}).")))
+                else:
+                    print(red(L(f"Không có provider '{rest}'. Gõ /model để xem danh sách.", f"No provider '{rest}'. Type /model to list.")))
+            elif cmd in ("/perm", "/effort") and not rest and interactive():
+                key, vals = ("perm", PERMS) if cmd == "/perm" else ("effort", EFFORTS)
+                try:
+                    st[key] = vals[choose(L("Chọn quyền", "Pick permissions") if key == "perm" else L("Chọn mức suy nghĩ", "Pick effort"), [("● " if v == st[key] else "  ") + v for v in vals], vals.index(st[key]) if st[key] in vals else 0)]
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+                print(dim(f"{key}: {st[key]}"))
             elif cmd == "/perm" and rest in PERMS:
                 st["perm"] = rest
                 print(dim(f"{L('Quyền', 'Permissions')}: {rest}") + (red(L("  (không hỏi xác nhận!)", "  (no confirmations!)")) if rest == "full" else ""))
