@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { GripVertical, Plus, Play, RotateCcw, Trash2, X } from 'lucide-react'
+import { GripVertical, Plus, Play, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Textarea, Input } from '@/components/ui/Form'
@@ -22,25 +22,28 @@ const COLUMNS: { id: KanbanCard['status']; label: string; hint: string }[] = [
   { id: 'done', label: tk('Đã xong'), hint: tk('Hoàn tất.') },
 ]
 
-function NewCardForm({ onDone }: { onDone: () => void }) {
+function NewCardDialog({ onClose }: { onClose: () => void }) {
   const toast = useToast()
   const qc = useQueryClient()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const create = useMutation({
     mutationFn: () => api.post('/api/kanban', { title, body }),
-    onSuccess: () => { setTitle(''); setBody(''); void qc.invalidateQueries({ queryKey: ['kanban'] }); onDone() },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['kanban'] }); onClose() },
     onError: (e) => toast(errMsg(e), 'bad'),
   })
   return (
-    <Card className="mb-4 p-4">
-      <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('Tiêu đề việc…')} className="mb-2"
-        onKeyDown={(e) => { if (e.key === 'Enter' && title.trim()) create.mutate() }} />
-      <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder={t('Mô tả chi tiết (tuỳ chọn) — sẽ là nội dung giao cho Nestor')} className="mb-2" />
-      <Button size="sm" variant="primary" loading={create.isPending} disabled={!title.trim()} onClick={() => create.mutate()}>
+    <Modal open onClose={onClose} title={t('Thẻ mới')} footer={
+      <Button variant="primary" loading={create.isPending} disabled={!title.trim()} onClick={() => create.mutate()}>
         <Plus className="size-4" />{t('Thêm thẻ')}
       </Button>
-    </Card>
+    }>
+      <div className="space-y-3">
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('Tiêu đề việc…')} autoFocus
+          onKeyDown={(e) => { if (e.key === 'Enter' && title.trim()) create.mutate() }} />
+        <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder={t('Mô tả chi tiết (tuỳ chọn) — sẽ là nội dung giao cho Nestor')} />
+      </div>
+    </Modal>
   )
 }
 
@@ -124,10 +127,9 @@ function CardTile({ card, draggable, onDrop, onOpen }: { card: KanbanCard; dragg
   )
 }
 
-export function KanbanBoard() {
+export function KanbanBoard({ adding, onAddingChange }: { adding: boolean; onAddingChange: (v: boolean) => void }) {
   const qc = useQueryClient()
   const toast = useToast()
-  const [adding, setAdding] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const q = useQuery({
     queryKey: ['kanban'],
@@ -148,13 +150,8 @@ export function KanbanBoard() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm text-muted">{t('Thẻ "Việc cần làm" chưa chạy gì — bấm vào thẻ rồi "Giao việc" để Nestor bắt đầu.')}</p>
-        <Button size="sm" variant={adding ? 'ghost' : 'primary'} onClick={() => setAdding(!adding)}>
-          {adding ? <X className="size-4" /> : <Plus className="size-4" />}{adding ? t('Đóng') : t('Thẻ mới')}
-        </Button>
-      </div>
-      {adding && <NewCardForm onDone={() => setAdding(false)} />}
+      <p className="mb-4 text-sm text-muted">{t('Thẻ "Việc cần làm" chưa chạy gì — bấm vào thẻ rồi "Giao việc" để Nestor bắt đầu.')}</p>
+      {adding && <NewCardDialog onClose={() => onAddingChange(false)} />}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {COLUMNS.map((col) => {
           const list = cards.filter((c) => c.status === col.id)

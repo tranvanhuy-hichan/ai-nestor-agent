@@ -2,7 +2,7 @@ import { coreFeatures } from '@/lib/featureCatalog'
 import { useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { NotebookText, Bell, Blocks, Cable, FileSearch, Clock, Code2, Gauge, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, LayoutGrid, ChevronDown, Sun, type LucideIcon } from 'lucide-react'
+import { NotebookText, Bell, Blocks, Cable, FileSearch, Clock, Code2, Columns3, Gauge, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, LayoutGrid, ChevronDown, Sun, type LucideIcon } from 'lucide-react'
 import { setTheme, useAppearance } from '@/lib/appearance'
 import { api } from '@/lib/api'
 import { t, tk } from '@/lib/i18n.ts'
@@ -33,6 +33,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   { title: tk('Công việc'), items: [
     ...(CODE_MODE ? [{ to: '/code', label: tk('Lập trình'), icon: Code2, hint: tk('Mở một dự án và nhờ agent viết code') }] : []),
     { to: '/tasks', label: tk('Tác vụ'), icon: ListTodo, hint: tk('Việc dài agent làm ngầm') },
+    { to: '/kanban', label: tk('Kanban'), icon: Columns3, hint: tk('Bảng việc kéo-thả, giao cho Nestor chạy nền') },
     { to: '/automations', label: tk('Tự động hóa'), icon: Clock, hint: tk('Việc lặp theo lịch') },
     { to: '/f', label: tk('Công cụ'), icon: LayoutGrid, hint: tk('Mỗi trợ lý chuyên trách một trang riêng') },
     { to: '/notifications', label: tk('Hộp thư'), icon: Bell, hint: tk('Thông báo từ agent') },

@@ -8,6 +8,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { NotificationsPage } from '@/features/notifications/NotificationsPage'
 import { TasksPage } from './features/tasks/TasksPage'
+import { KanbanPage } from './features/tasks/KanbanPage'
 import { AutomationsPage } from '@/features/automations/AutomationsPage'
 import { CodePage } from '@/features/code/CodePage'
 import { ChatPage } from '@/features/chat/ChatPage'
@@ -73,6 +74,7 @@ export default function App() {
         <Route path="integrations" element={adv(<IntegrationsPage />)} />
         <Route path="audit" element={<Navigate to="/activity?tab=log" replace />} />
         <Route path="tasks" element={<TasksPage />} />
+        <Route path="kanban" element={<KanbanPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="workspace" element={adv(<WorkspacePage />)} />
         <Route path="settings" element={simple ? <SimpleSettings /> : <SettingsPage />} />

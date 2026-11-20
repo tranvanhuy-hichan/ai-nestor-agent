@@ -104,8 +104,8 @@ const dict: Record<string, string> = {
   "Thẻ \"Việc cần làm\" chưa chạy gì — bấm vào thẻ rồi \"Giao việc\" để Nestor bắt đầu.": "\"To do\" cards haven't run yet — open a card and press \"Dispatch\" to have Nestor start.",
   "Thẻ mới": "New card",
   "— trống —": "— empty —",
-  "Giao việc nhanh": "Quick dispatch",
   "Bảng Kanban": "Kanban board",
+  "Lên kế hoạch việc, kéo-thả sắp xếp, rồi giao cho Nestor chạy nền.": "Plan tasks, drag to reorder, then dispatch them to run in the background.",
 }
 
 export default dict
