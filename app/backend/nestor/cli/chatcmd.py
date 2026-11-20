@@ -186,7 +186,14 @@ def run(args) -> int:
 HELP = {
     "/help": ("Hiện trợ giúp", "Show help"), "/new": ("Bắt đầu hội thoại mới", "Start a new conversation"), "/sessions": ("Liệt kê hội thoại gần đây", "List recent conversations"),
     "/open <id>": ("Mở lại một hội thoại", "Reopen a conversation"), "/model [name]": ("Xem & đổi model/provider", "List & switch model/provider"), "/perm <mode>": ("default | readonly | guarded | full", "default | readonly | guarded | full"),
-    "/effort <level>": ("auto | low | medium | high | thinking", "auto | low | medium | high | thinking"), "/skills": ("Liệt kê skill", "List skills"), "/files": ("Liệt kê file của phiên", "List the conversation's files"), "/exit": ("Thoát (hoặc Ctrl+D)", "Quit (or Ctrl+D)"),
+    "/effort <level>": ("auto | low | medium | high | thinking", "auto | low | medium | high | thinking"), "/skills": ("Liệt kê skill", "List skills"), "/files": ("Liệt kê file của phiên", "List the conversation's files"),
+    "/status": ("Model, quyền, mức suy nghĩ, usage phiên", "Model, permissions, effort, session usage"),
+    "/retry": ("Gửi lại tin nhắn cuối", "Resend the last message"),
+    "/undo": ("Hoàn tác file của lượt gần nhất (giữ nguyên hội thoại)", "Undo files from the last turn (keeps the conversation)"),
+    "/rewind [n]": ("Lùi lại n tin của bạn rồi sửa & gửi lại", "Rewind n of your messages, then edit & resend"),
+    "/compress": ("Nén bớt hội thoại cũ (tóm tắt) để đỡ tốn ngữ cảnh", "Summarize older turns to save context"),
+    "/diff": ("Xem git diff của dự án", "Show the project's git diff"),
+    "/exit": ("Thoát (hoặc Ctrl+D)", "Quit (or Ctrl+D)"),
 }
 
 
@@ -273,6 +280,7 @@ def chat(args) -> int:
         if not line:
             continue
         if line.startswith("/"):
+            resend = False
             cmd, _, rest = line.partition(" ")
             rest = rest.strip()
             if cmd in ("/exit", "/quit", "/q"):
@@ -328,9 +336,76 @@ def chat(args) -> int:
 
                 for f in workfiles.tree(workfiles.session_dir(cfg, st["sid"])):
                     print(f"  {f['path']}{'/' if f['dir'] else ''}")
+            elif cmd == "/status":
+                pc = cfg.providers.get(st["provider"])
+                print(f"  {L('Model', 'Model')}: {bold(st['provider'])} ({dim(pc.model or pc.type if pc else '?')})")
+                print(f"  {L('Quyền', 'Permissions')}: {st['perm']}" + (red(L(' (full)', ' (full)')) if st["perm"] == "full" else ""))
+                print(f"  {L('Mức suy nghĩ', 'Effort')}: {st['effort']}")
+                print(f"  {L('Phiên', 'Session')}: {st['sid'] or dim(L('(chưa có)', '(none yet)'))}")
+                if st["sid"]:
+                    msgs = sessions.messages(st["sid"])
+                    chars = sum(len(m.get("content", "")) for m in msgs)
+                    print(f"  {L('Tin nhắn', 'Messages')}: {len(msgs)}  ·  ~{chars // 4} tokens {dim(L('(ước lượng)', '(estimate)'))}")
+            elif cmd == "/retry":
+                if not st["sid"]:
+                    print(red(L("Chưa có hội thoại để gửi lại.", "No conversation to retry yet.")))
+                    continue
+                msgs = sessions.messages(st["sid"])
+                last_user = next((m["content"] for m in reversed(msgs) if m["role"] == "user"), None)
+                if not last_user:
+                    print(red(L("Không tìm thấy tin nhắn trước đó.", "No previous message found.")))
+                    continue
+                line, resend = last_user, True
+            elif cmd == "/undo":
+                from ..services import checkpoints
+
+                if not st["sid"]:
+                    continue
+                restored = checkpoints.undo(st["sid"])
+                print(dim(L(f"Đã hoàn tác {len(restored)} file." if restored else "Không có gì để hoàn tác.",
+                             f"Restored {len(restored)} file(s)." if restored else "Nothing to undo.")))
+            elif cmd.startswith("/rewind"):
+                if not st["sid"]:
+                    continue
+                n = int(rest) if rest.isdigit() else 1
+                msgs = sessions.messages(st["sid"])
+                user_idx = [i for i, m in enumerate(msgs) if m["role"] == "user"]
+                if len(user_idx) < n:
+                    print(red(L("Không đủ tin nhắn để lùi lại.", "Not enough messages to rewind.")))
+                    continue
+                cut = user_idx[-n]
+                prior_text = msgs[cut]["content"]
+                sessions.truncate_from(st["sid"], cut)
+                print(dim(L(f"Đã lùi lại {n} tin. Sửa và Enter để gửi lại (trống = hủy):", f"Rewound {n} message(s). Edit and press Enter to resend (empty = cancel):")))
+                try:
+                    edited = (reader(f"{cyan('›')} ", "") if reader else input(f"{cyan('›')} ")).strip() if interactive() else prior_text
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+                if not edited:
+                    continue
+                line, resend = edited, True
+            elif cmd == "/compress":
+                from ..services import compaction
+
+                if not st["sid"]:
+                    continue
+                done = compaction.maybe_compact(st["sid"], cfg, st["provider"])
+                print(dim(L("Đã nén hội thoại cũ." if done else "Hội thoại còn ngắn, chưa cần nén.",
+                             "Older turns summarized." if done else "Conversation is short enough; nothing to compress.")))
+            elif cmd == "/diff":
+                import subprocess
+
+                try:
+                    out = subprocess.run(["git", "diff", "--stat", "HEAD"], capture_output=True, text=True, timeout=10, cwd=str(cfg.workdir) if hasattr(cfg, "workdir") else None).stdout.strip()
+                except Exception as e:  # noqa: BLE001 - khong co git/khong phai repo thi bao loi gon
+                    out = ""
+                    print(red(str(e)))
+                print(out or dim(L("Không có thay đổi.", "No changes.")))
             else:
                 print(red(L("Lệnh không hợp lệ. Gõ /help.", "Unknown or invalid command. Type /help.")))
-            continue
+            if not resend:
+                continue
         print()
         effort = None if st["effort"] == "auto" else st["effort"]
         t0 = time.time()
