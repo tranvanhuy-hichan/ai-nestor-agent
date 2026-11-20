@@ -18,8 +18,10 @@ import httpx
 import psutil
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from ..cli import daemon
+from ..cli import service as servicecmd
 from ..core import config, db
 from ..core.paths import LOG_FILE
 from ..services import heartbeat, mcp_client, scheduler
@@ -79,6 +81,73 @@ def _restart_manager():
         except (OSError, subprocess.TimeoutExpired):
             pass
     return None
+
+
+def _autostart_path() -> Path:
+    return servicecmd.unit_path() if servicecmd._system() == "Linux" else servicecmd.plist_path()
+
+
+def _autostart_status() -> dict:
+    """Co cai dat tu khoi dong (systemd user / launchd) chua, va hien dang bat hay tat."""
+    system = servicecmd._system()
+    if system not in ("Linux", "Darwin"):
+        return {"supported": False, "installed": False, "enabled": False}
+    path = _autostart_path()
+    if not path.is_file():
+        return {"supported": True, "installed": False, "enabled": False}
+    if system == "Linux":
+        r = servicecmd._run(["systemctl", "--user", "is-enabled", f"{servicecmd.NAME}.service"])
+        enabled = r.stdout.strip() == "enabled"
+    else:
+        r = servicecmd._run(["launchctl", "print", f"gui/{os.getuid()}/{servicecmd.LABEL}"])
+        enabled = r.returncode == 0
+    return {"supported": True, "installed": True, "enabled": enabled}
+
+
+@router.get("/gateway/autostart")
+def autostart_status():
+    return _autostart_status()
+
+
+class AutostartBody(BaseModel):
+    enabled: bool
+
+
+@router.post("/gateway/autostart")
+def set_autostart(b: AutostartBody):
+    """Bat: cai/bat dich vu he thong (systemd user tren Linux, launchd tren macOS), chay cung may bai dang nhap.
+    Tat: go dich vu do, tien trinh hien tai (neu dang chay qua service) khong bi dung ngay."""
+    system = servicecmd._system()
+    if system not in ("Linux", "Darwin"):
+        raise HTTPException(409, "Hệ điều hành này chưa hỗ trợ tự khởi động cùng máy")
+    state = daemon.read_state()
+    host, port = state.get("host") or daemon.default_host(), state.get("port") or daemon.default_port()
+    if b.enabled:
+        path = _autostart_path()
+        text = servicecmd.systemd_unit(host, port) if system == "Linux" else servicecmd.launchd_plist(host, port)
+        if system == "Linux" and not shutil.which("systemctl"):
+            raise HTTPException(409, "Không tìm thấy systemctl")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        if system == "Linux":
+            steps = [["systemctl", "--user", "daemon-reload"], ["systemctl", "--user", "enable", f"{servicecmd.NAME}.service"]]
+        else:
+            steps = [["launchctl", "bootstrap", f"gui/{os.getuid()}", str(path)]]
+        for cmd in steps:
+            r = servicecmd._run(cmd)
+            if r.returncode != 0:
+                raise HTTPException(500, (r.stderr or r.stdout or "Lệnh thất bại").strip()[:500])
+    else:
+        path = _autostart_path()
+        if path.is_file():
+            if system == "Linux":
+                servicecmd._run(["systemctl", "--user", "disable", f"{servicecmd.NAME}.service"])
+            else:
+                servicecmd._run(["launchctl", "bootout", f"gui/{os.getuid()}", str(path)])
+            path.unlink(missing_ok=True)
+            if system == "Linux":
+                servicecmd._run(["systemctl", "--user", "daemon-reload"])
+    return _autostart_status()
 
 
 def current_version() -> str:

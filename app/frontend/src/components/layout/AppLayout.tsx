@@ -35,15 +35,19 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     { to: '/tasks', label: tk('Tác vụ'), icon: ListTodo, hint: tk('Việc dài agent làm ngầm') },
     { to: '/kanban', label: tk('Kanban'), icon: Columns3, hint: tk('Bảng việc kéo-thả, giao cho Nestor chạy nền') },
     { to: '/automations', label: tk('Tự động hóa'), icon: Clock, hint: tk('Việc lặp theo lịch') },
-    { to: '/f', label: tk('Công cụ'), icon: LayoutGrid, hint: tk('Mỗi trợ lý chuyên trách một trang riêng') },
     { to: '/notifications', label: tk('Hộp thư'), icon: Bell, hint: tk('Thông báo từ agent') },
   ] },
-  { title: tk('Khả năng của agent'), items: [
+  { title: tk('Nội dung & kiến thức'), items: [
     { to: '/skills', label: tk('Kỹ năng'), icon: Puzzle, hint: tk('Dạy agent làm thêm việc mới') },
     { to: '/pages', label: tk('Sổ tay'), icon: NotebookText, hint: tk('Ghi chú và tài liệu của bạn, agent đọc và viết được') },
     { to: '/documents', label: tk('Tài liệu'), icon: FileSearch, hint: tk('Hỏi đáp trên hợp đồng, báo cáo, bảng tính của bạn') },
+    { to: '/f', label: tk('Công cụ'), icon: LayoutGrid, hint: tk('Mỗi trợ lý chuyên trách một trang riêng') },
+  ] },
+  { title: tk('Kết nối & tiện ích'), items: [
     { to: '/plugins', label: tk('Tiện ích'), icon: Blocks, hint: tk('Nối GitHub, Notion, Canva… chỉ bằng một cú bấm') },
     { to: '/integrations', label: tk('Kết nối'), icon: Cable, hint: tk('Telegram, API, công cụ ngoài') },
+  ] },
+  { title: tk('Trợ lý của tôi'), items: [
     { to: '/profiles', label: tk('Hồ sơ trợ lý'), icon: Sparkles, hint: tk('Cấu hình trợ lý tùy chỉnh') },
     { to: '/workspace', label: tk('Tính cách & trí nhớ'), icon: FolderCog, hint: tk('Agent là ai và nhớ gì về bạn') },
   ] },
@@ -190,12 +194,21 @@ export function AppLayout() {
         ))}
       </nav>
 
-      {/* Footer */}
+      {/* Footer: ngon ngu rieng 1 hang (sidebar rong co du 2 nut VI|EN, khong du cho ghep them sang/toi),
+          sang/toi la 1 hang rieng, roi den cac hanh dong chuyen che do/dang xuat */}
       <div className="space-y-0.5 border-t border-line p-2">
         {chatMode
           ? <div className={cn('overflow-hidden pb-1 transition-all duration-200', exp ? 'max-h-10 opacity-100' : 'max-h-0 opacity-0 pointer-events-none')}><LangSwitcher /></div>
           : <div className="hidden pb-1 md:block"><LangSwitcher /></div>
         }
+        <button onClick={() => setTheme(light ? 'dark' : 'light')} title={light ? t('Giao diện tối') : t('Giao diện sáng')}
+          className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-sm text-muted transition-colors hover:bg-panel2 hover:text-fg">
+          {light ? <Moon className="size-[18px] shrink-0" /> : <Sun className="size-[18px] shrink-0" />}
+          {chatMode
+            ? <span className={cn('whitespace-nowrap transition-opacity duration-200', exp ? 'opacity-100' : 'opacity-0')}>{light ? t('Giao diện tối') : t('Giao diện sáng')}</span>
+            : <span className="hidden md:block">{light ? t('Giao diện tối') : t('Giao diện sáng')}</span>
+          }
+        </button>
         <button onClick={() => setUiMode(simple ? 'advanced' : 'simple')} title={simple ? t('Chuyển sang giao diện dành cho lập trình viên') : t('Quay lại giao diện đơn giản')}
           className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-sm font-medium text-accent transition-colors hover:bg-panel2">
           <Wrench className="size-[18px] shrink-0" />
@@ -214,14 +227,6 @@ export function AppLayout() {
             }
           </button>
         )}
-        <button onClick={() => setTheme(light ? 'dark' : 'light')} title={light ? t('Giao diện tối') : t('Giao diện sáng')}
-          className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-sm text-muted transition-colors hover:bg-panel2 hover:text-fg">
-          {light ? <Moon className="size-[18px] shrink-0" /> : <Sun className="size-[18px] shrink-0" />}
-          {chatMode
-            ? <span className={cn('whitespace-nowrap transition-opacity duration-200', exp ? 'opacity-100' : 'opacity-0')}>{light ? t('Giao diện tối') : t('Giao diện sáng')}</span>
-            : <span className="hidden md:block">{light ? t('Giao diện tối') : t('Giao diện sáng')}</span>
-          }
-        </button>
       </div>
     </>
   )

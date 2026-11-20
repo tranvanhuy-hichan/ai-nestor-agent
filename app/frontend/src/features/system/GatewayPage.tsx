@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Activity, Cpu, HardDrive, MemoryStick, Radio, RefreshCw, Search, Server, Terminal } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Activity, Cpu, HardDrive, MemoryStick, Power, Radio, RefreshCw, Search, Server, Terminal } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { Input, Select } from '@/components/ui/Form'
 import { ErrorNote, Loading, Page } from '@/components/ui/misc'
+import { Switch } from '@/components/ui/Switch'
+import { useToast } from '@/components/ui/Toast'
 import { api, ApiError } from '@/lib/api'
+import { errMsg } from '@/lib/utils'
 import { t } from '@/lib/i18n.ts'
+
+type Autostart = { supported: boolean; installed: boolean; enabled: boolean }
 
 type Gateway = {
   pid: number; started: number; version: string; cpu: number; restart_manager: string | null
@@ -81,7 +86,15 @@ function GatewayLogs({ paused }: { paused: boolean }) {
 }
 
 export function GatewayPage() {
+  const qc = useQueryClient()
+  const toast = useToast()
   const gateway = useQuery({ queryKey: ['gateway'], queryFn: () => api.get<Gateway>('/api/gateway'), refetchInterval: 4000, retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2 })
+  const autostart = useQuery({ queryKey: ['gateway-autostart'], queryFn: () => api.get<Autostart>('/api/gateway/autostart') })
+  const setAutostart = useMutation({
+    mutationFn: (enabled: boolean) => api.post<Autostart>('/api/gateway/autostart', { enabled }),
+    onSuccess: (r) => { qc.setQueryData(['gateway-autostart'], r); toast(r.enabled ? t('Đã bật tự khởi động cùng máy') : t('Đã tắt tự khởi động cùng máy')) },
+    onError: (e) => toast(errMsg(e), 'bad'),
+  })
   const [restarting, setRestarting] = useState<{ started: number; deadline: number } | null>(null)
   const [now, setNow] = useState(Date.now)
   const check = useMutation({ mutationFn: () => api.get<Update>('/api/gateway/updates') })
@@ -101,9 +114,9 @@ export function GatewayPage() {
   const outdated = gateway.error instanceof ApiError && gateway.error.status === 404
   return <Page>
     <div className="w-full space-y-5 pb-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="mb-3 grid size-11 place-items-center rounded-xl bg-accent/10 text-accent"><Activity className="size-5" /></div>
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent"><Activity className="size-5" /></div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('Sức khỏe hệ thống')}</h1>
         </div>
         {data && <div className="flex flex-wrap gap-2">
@@ -138,6 +151,16 @@ export function GatewayPage() {
           </p>}
           {(check.error || restart.error) && <ErrorNote error={check.error ?? restart.error} />}
         </Card>
+        {autostart.data?.supported && (
+          <Card className="flex flex-wrap items-center gap-3 rounded-xl p-4 sm:p-5">
+            <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent"><Power className="size-5" /></span>
+            <div className="mr-auto">
+              <p className="font-medium">{t('Tự khởi động cùng máy')}</p>
+              <p className="mt-0.5 text-xs text-muted">{t('Bật để Nestor tự chạy mỗi khi bạn đăng nhập vào máy, không cần mở tay.')}</p>
+            </div>
+            <Switch checked={!!autostart.data.enabled} disabled={setAutostart.isPending} onChange={(v) => setAutostart.mutate(v)} label={t('Tự khởi động cùng máy')} />
+          </Card>
+        )}
         <div className="grid gap-3 sm:grid-cols-3">
           <Meter icon={Cpu} label="CPU" used={data.cpu} total={100} detail={t('Tải bộ xử lý')} />
           <Meter icon={MemoryStick} label="RAM" used={data.memory_used} total={data.memory_total} detail={`${bytes(data.memory_used)} / ${bytes(data.memory_total)}`} />

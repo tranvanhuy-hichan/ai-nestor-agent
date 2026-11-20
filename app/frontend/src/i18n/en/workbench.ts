@@ -113,5 +113,9 @@ export default {
   "Chưa có bản phát hành để đối chiếu.": "No release available for comparison.",
   "Ổ đĩa": "Disk",
   "Tối": "Dark",
-  "Sáng": "Light"
+  "Sáng": "Light",
+  "Đã bật tự khởi động cùng máy": "Auto-start enabled",
+  "Đã tắt tự khởi động cùng máy": "Auto-start disabled",
+  "Tự khởi động cùng máy": "Start automatically with your computer",
+  "Bật để Nestor tự chạy mỗi khi bạn đăng nhập vào máy, không cần mở tay.": "Turn on so Nestor runs automatically whenever you log in, without opening it by hand."
 }
