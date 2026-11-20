@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, ExternalLink, KeyRound, LogOut, Plus, ShieldAlert, Trash2 } from 'lucide-react'
+import { ChevronRight, ExternalLink, KeyRound, LayoutGrid, LogOut, Plus, ShieldAlert, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Field, Input } from '@/components/ui/Form'
 import { Modal } from '@/components/ui/Modal'
 import { ErrorNote, Loading } from '@/components/ui/misc'
+import { paginate, Pagination } from '@/components/ui/Pagination'
 import { ServiceLogo } from '@/components/ui/ServiceLogo'
 import { useToast } from '@/components/ui/Toast'
 import { api } from '@/lib/api'
@@ -100,8 +101,12 @@ export function ServicesTab({ q }: { q: string }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [dq, setDq] = useState('')
   const [ask, setAsk] = useState<TokenAsk | null>(null)
+  const [cat, setCat] = useState('all')
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 20
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['mcp'] }) }
   useEffect(() => { const h = setTimeout(() => setDq(q.trim()), 450); return () => clearTimeout(h) }, [q])
+  useEffect(() => setPage(0), [q, cat])
 
   const registry = useInfiniteQuery({
     queryKey: ['mcp-registry', dq], enabled: dq.length >= 2, initialPageParam: '', staleTime: 300_000,
@@ -129,7 +134,17 @@ export function ServicesTab({ q }: { q: string }) {
   const mine = Object.entries(servers).filter(([, c]) => (c.service || c.oauth) && !catalogUrls.some((u) => sameUrl(u, c.url)))
 
   const needle = q.trim().toLowerCase()
-  const shown = useMemo(() => (needle ? services.filter((s) => `${s.name} ${s.id} ${s.desc.vi} ${s.desc.en}`.toLowerCase().includes(needle)) : services), [services, needle])
+  const groupCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: services.length }
+    for (const s of services) counts[s.group] = (counts[s.group] || 0) + 1
+    return counts
+  }, [services])
+  const shown = useMemo(() => services.filter((s) => {
+    const matchesCat = cat === 'all' || s.group === cat
+    const matchesFilter = !needle || `${s.name} ${s.id} ${s.desc.vi} ${s.desc.en}`.toLowerCase().includes(needle)
+    return matchesCat && matchesFilter
+  }), [services, needle, cat])
+  const pageList = paginate(shown, page, PAGE_SIZE)
   const registryItems = (registry.data?.pages.flatMap((p) => p.items) ?? []).filter((i) => !catalogUrls.some((u) => sameUrl(u, i.url)))
 
   if (mcp.isLoading || cfg.isLoading || catalog.isLoading) return <Loading />
@@ -185,24 +200,78 @@ export function ServicesTab({ q }: { q: string }) {
 
   return (
     <div className="space-y-6">
-      {catalog.data.groups.map((g) => {
-        const items = shown.filter((s) => s.group === g.id)
-        if (!items.length) return null
-        return (
-          <section key={g.id}>
-            <h3 className="mb-2 flex items-baseline gap-2 text-sm font-semibold">{pick(g.label)}<span className="rounded-md bg-panel2 px-1.5 py-0.5 text-[11px] font-normal text-muted">{items.length}</span></h3>
-            <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
-              {items.map((s) => {
-                const name = nameFor(s.url)
-                return <Row key={s.id} logo={<ServiceLogo id={s.id} name={s.name} color={s.color} />} title={s.name} desc={pick(s.desc)} info={infoOf(name)} busy={busy === s.id || busy === name}
-                  badges={s.auth === 'token' ? <Badge tone="info">{t('Cần token')}</Badge> : s.auth === 'open' ? <Badge tone="ok">{t('Không cần đăng nhập')}</Badge> : null} {...common}
-                  onUse={() => chooseCatalog(s)} onLogin={() => name && login(name)} onLogout={() => name && logout(name)} onRemove={() => name && remove(name)} onToken={s.auth === 'token' ? () => chooseCatalog(s) : undefined} />
-              })}
+      {/* Danh muc cuon ngang tren man hinh nho */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:hidden">
+        <button onClick={() => setCat('all')} className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition', cat === 'all' ? 'border-accent bg-accent text-accent-fg' : 'border-line bg-panel2 text-muted')}>
+          <LayoutGrid className="size-3.5" />{t('Tất cả')}<span className="rounded bg-white/20 px-1.5 py-0.5 text-[10px]">{groupCounts.all}</span>
+        </button>
+        {catalog.data.groups.map((g) => {
+          const count = groupCounts[g.id] || 0
+          if (!count) return null
+          const active = cat === g.id
+          return (
+            <button key={g.id} onClick={() => setCat(g.id)} className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition', active ? 'border-accent bg-accent text-accent-fg' : 'border-line bg-panel2 text-muted')}>
+              {pick(g.label)}<span className={cn('rounded px-1.5 py-0.5 text-[10px]', active ? 'bg-white/20 text-white' : 'bg-panel text-muted')}>{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="flex flex-col gap-6 md:flex-row md:items-start">
+        {/* Sidebar danh muc ben trai (desktop) */}
+        <aside className="hidden w-60 shrink-0 md:block lg:w-64">
+          <div className="rounded-xl border border-line bg-panel p-2 shadow-xs md:sticky md:top-4">
+            <div className="flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted">
+              <span>{t('Danh mục')}</span>
+              <span className="rounded-full bg-panel2 px-2 py-0.5 text-[11px] font-normal tabular-nums text-muted">{services.length}</span>
             </div>
-          </section>
-        )
-      })}
-      {needle && shown.length === 0 && <p className="text-sm text-muted">{t('Không có dịch vụ nào trong danh mục khớp “{q}”.', { q })}</p>}
+            <nav className="mt-1 space-y-0.5" aria-label={t('Danh mục tiện ích')}>
+              <button onClick={() => setCat('all')} className={cn('flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition', cat === 'all' ? 'bg-accent/12 font-semibold text-accent' : 'text-muted hover:bg-panel2 hover:text-fg')}>
+                <span className="flex items-center gap-2.5"><LayoutGrid className="size-4 shrink-0" />{t('Tất cả')}</span>
+                <span className={cn('rounded-full px-2 py-0.5 text-xs tabular-nums', cat === 'all' ? 'bg-accent/20 font-semibold text-accent' : 'bg-panel2 text-muted')}>{groupCounts.all}</span>
+              </button>
+              {catalog.data.groups.map((g) => {
+                const count = groupCounts[g.id] || 0
+                if (!count) return null
+                const active = cat === g.id
+                return (
+                  <button key={g.id} onClick={() => setCat(g.id)} className={cn('flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition', active ? 'bg-accent/12 font-semibold text-accent' : 'text-muted hover:bg-panel2 hover:text-fg')}>
+                    <span className="truncate">{pick(g.label)}</span>
+                    <span className={cn('ml-2 rounded-full px-2 py-0.5 text-xs tabular-nums', active ? 'bg-accent/20 font-semibold text-accent' : 'bg-panel2 text-muted')}>{count}</span>
+                  </button>
+                )
+              })}
+            </nav>
+          </div>
+        </aside>
+
+        {/* Danh sach dich vu ben phai, co phan trang */}
+        <div className="w-full min-w-0 flex-1">
+          <div className="mb-3 flex items-center justify-between text-xs text-muted">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-fg">{cat === 'all' ? t('Tất cả') : pick(catalog.data.groups.find((g) => g.id === cat)?.label ?? { vi: cat, en: cat })}</span>
+              <span>·</span>
+              <span>{t('{n} tiện ích', { n: shown.length })}</span>
+            </div>
+            {cat !== 'all' && <button onClick={() => setCat('all')} className="text-xs font-medium text-accent hover:underline">{t('Xem tất cả')}</button>}
+          </div>
+          {shown.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-muted">{t('Không có dịch vụ nào trong danh mục khớp “{q}”.', { q: needle || t('Tất cả') })}</p>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-line bg-panel shadow-xs">
+              <div className="divide-y divide-line">
+                {pageList.map((s) => {
+                  const name = nameFor(s.url)
+                  return <Row key={s.id} logo={<ServiceLogo id={s.id} name={s.name} color={s.color} />} title={s.name} desc={pick(s.desc)} info={infoOf(name)} busy={busy === s.id || busy === name}
+                    badges={s.auth === 'token' ? <Badge tone="info">{t('Cần token')}</Badge> : s.auth === 'open' ? <Badge tone="ok">{t('Không cần đăng nhập')}</Badge> : null} {...common}
+                    onUse={() => chooseCatalog(s)} onLogin={() => name && login(name)} onLogout={() => name && logout(name)} onRemove={() => name && remove(name)} onToken={s.auth === 'token' ? () => chooseCatalog(s) : undefined} />
+                })}
+              </div>
+              <Pagination page={page} pageSize={PAGE_SIZE} total={shown.length} onPageChange={setPage} />
+            </div>
+          )}
+        </div>
+      </div>
 
       {dq.length >= 2 && (
         <section>
