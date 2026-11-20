@@ -1,4 +1,10 @@
 const dict: Record<string, string> = {
+  'Danh mục': 'Categories',
+  'Danh mục kỹ năng': 'Skill categories',
+  'Không tìm thấy skill phù hợp': 'No matching skills found',
+  'Xóa bộ lọc': 'Clear filter',
+  '{n} kỹ năng': '{n} skills',
+  'Tìm kiếm': 'Search',
   'Không bắt buộc': 'Optional',
   'Thu gọn kết quả': 'Collapse result',
   'Xem kết quả lần chạy gần nhất': 'View the latest run result',
