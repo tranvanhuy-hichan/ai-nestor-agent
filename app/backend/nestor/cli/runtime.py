@@ -8,6 +8,8 @@ from ..core.workspace import ensure_workspace
 
 
 def bootstrap(with_mcp: bool = False, wait: float = 8.0) -> cfgmod.Config:
+    import logging
+    logging.getLogger("mcp").setLevel(logging.CRITICAL)
     ROOT.mkdir(parents=True, exist_ok=True)
     db.init()
     cfg = cfgmod.load()

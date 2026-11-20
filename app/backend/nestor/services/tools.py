@@ -245,6 +245,10 @@ def exec_tool(ctx, command, timeout=60):
 
 @tool("web_fetch", "Tải một trang web và trả về nội dung dạng text.", {"url": ("string", "URL http/https")}, risk="network")
 def web_fetch(ctx, url):
+    from . import security
+    safe, reason = security.is_safe_url(url, allow_private=ctx.full_access)
+    if not safe:
+        return f"Lỗi bảo mật: {reason}"
     r = _fetch(url, headers={"User-Agent": "nestor-agent/0.3"})
     text = _html_to_text(r.text) if "html" in r.headers.get("content-type", "") else r.text
     return f"HTTP {r.status_code}\n{text[:8000]}"
@@ -255,6 +259,10 @@ def web_fetch(ctx, url):
        "body": ("string", "nội dung body (JSON) nếu có"), "headers": ("string", "JSON object các header nếu có")},
       required=["url"], risk="network")
 def http_request(ctx, url, method="GET", body="", headers=""):
+    from . import security
+    safe, reason = security.is_safe_url(url, allow_private=ctx.full_access)
+    if not safe:
+        return f"Lỗi bảo mật: {reason}"
     if ctx.confirm_writes and not ctx.full_access and method.upper() != "GET" and not ctx.approve("http_request", f"{method.upper()} {url}"):
         return DENIED
     h = {"Content-Type": "application/json", "User-Agent": "nestor-agent/0.3", **(json.loads(headers) if headers else {})}
@@ -468,9 +476,82 @@ def remember(ctx, note):
 def skills_read(ctx, name):
     s = ctx.skills.get(name)
     if not s:
-        return f"khong co skill '{name}'. Hien co: {', '.join(ctx.skills) or '(trong)'}"
+        import difflib
+        matches = difflib.get_close_matches(name, list(ctx.skills.keys()), n=4, cutoff=0.35)
+        hint = f" Gợi ý skill tương tự: {', '.join(matches)}" if matches else ""
+        return f"Không tìm thấy skill '{name}'.{hint} Hãy kiểm tra lại danh sách available_skills để chọn đúng tên."
     files = sorted(str(p.relative_to(s.path)) for p in s.path.rglob("*") if p.is_file() and ".clawhub" not in p.parts)[:40]
-    return f"{s.instructions()}\n\n[Thu muc skill: {s.path}]\n[File di kem: {', '.join(files)}]"
+    return f"{s.instructions()}\n\n[Thư mục skill: {s.path}]\n[File đi kèm: {', '.join(files)}]"
+
+
+@tool("skill_patch", "Sửa một đoạn trong file SKILL.md của một kỹ năng bằng cách thay đoạn cũ bằng đoạn mới (chuẩn Hermes Agent).",
+      {"name": ("string", "tên skill"), "old": ("string", "đoạn văn bản cũ cần sửa"), "new": ("string", "đoạn văn bản mới thay thế")}, risk="file")
+def skill_patch(ctx, name, old, new):
+    from . import skills as skillmod
+    from ..core import config as cfgmod
+    cfg = cfgmod.load()
+    try:
+        s = skillmod.patch(cfg, name, old, new)
+        ctx.skills[name] = s
+        return f"Đã cập nhật SKILL.md của '{name}' thành công."
+    except Exception as e:
+        return f"Lỗi sửa skill: {e}"
+
+
+_TODO_ICONS = {"completed": "[x]", "in_progress": "[>]", "pending": "[ ]", "cancelled": "[~]"}
+
+@tool("todo_list", "Quản lý danh sách việc cần làm (Todo list theo chuẩn Hermes Agent). Đọc hoặc cập nhật tiến độ các bước.",
+      {"todos": ("string", "Danh sách JSON các mục todo: [{\"id\": \"1\", \"content\": \"...\", \"status\": \"pending|in_progress|completed|cancelled\", \"parent\": \"optional_id\"}]. Bỏ trống nếu chỉ muốn xem danh sách hiện tại."),
+       "merge": ("boolean", "True để chỉ cập nhật các mục có ID trùng (không ghi đè toàn bộ danh sách). Mặc định False.")})
+def todo_list(ctx, todos="", merge=False):
+    import json
+    from ..core.db import db
+    key = f"todos:{ctx.session_id}"
+    if not todos or not str(todos).strip():
+        with db() as c:
+            r = c.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+        items = json.loads(r["value"]) if r and r["value"] else []
+        if not items:
+            return "Danh sách việc cần làm hiện đang trống. Hãy lập kế hoạch bằng cách gửi danh sách todos."
+        out = []
+        for it in items:
+            icon = _TODO_ICONS.get(it.get("status"), "[ ]")
+            pfx = "  " if it.get("parent") else ""
+            out.append(f"{pfx}{icon} #{it.get('id')}: {it.get('content')} ({it.get('status')})")
+        return "\n".join(out)
+
+    try:
+        new_items = json.loads(todos) if isinstance(todos, str) else todos
+        if not isinstance(new_items, list):
+            return "Lỗi: todos phải là một danh sách JSON các object."
+    except Exception as e:
+        return f"Lỗi cú pháp JSON của todos: {e}"
+
+    with db() as c:
+        r = c.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+    current = json.loads(r["value"]) if r and r["value"] else []
+
+    if merge:
+        curr_map = {str(it.get("id")): it for it in current}
+        for item in new_items:
+            iid = str(item.get("id"))
+            if iid in curr_map:
+                curr_map[iid].update(item)
+            else:
+                curr_map[iid] = item
+        final_list = list(curr_map.values())
+    else:
+        final_list = new_items
+
+    with db() as c:
+        c.execute("INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)", (key, json.dumps(final_list, ensure_ascii=False)))
+
+    out = []
+    for it in final_list:
+        icon = _TODO_ICONS.get(it.get("status"), "[ ]")
+        pfx = "  " if it.get("parent") else ""
+        out.append(f"{pfx}{icon} #{it.get('id')}: {it.get('content')} ({it.get('status')})")
+    return "Đã cập nhật danh sách việc cần làm:\n" + "\n".join(out)
 
 
 @tool("edit", "Sửa file bằng cách thay đúng một đoạn văn bản bằng đoạn khác. Báo lỗi nếu đoạn cũ không có hoặc xuất hiện nhiều lần.",

@@ -1,6 +1,7 @@
 """nestor chat (REPL) va nestor run (mot lan): chay agent ngay trong tien trinh, khong can server."""
 import json
 import sys
+import threading
 import time
 
 from ..services import api_run, chat_runner, sessions
@@ -11,6 +12,64 @@ KIND = {"exec": ("chạy lệnh shell", "run a shell command"), "mcp": ("gọi t
         "file_write": ("ghi file", "write a file"), "http_request": ("gửi yêu cầu HTTP thay đổi dữ liệu", "send a state-changing HTTP request")}
 PERMS = ("default", "readonly", "guarded", "full", "plan")
 EFFORTS = ("auto", "low", "medium", "high", "thinking")
+
+
+class ThinkingSpinner:
+    """Hieu ung animation spinner khi Nestor / model dang suy nghi hoac goi tool."""
+    FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+    def __init__(self, message: str = "Nestor đang suy nghĩ..."):
+        self.message = message
+        self._stop = threading.Event()
+        self._active = False
+        self._thread: threading.Thread | None = None
+        self._t0 = time.time()
+        self._isatty = sys.stdout.isatty()
+
+    def start(self, message: str | None = None) -> None:
+        if not self._isatty:
+            return
+        if message:
+            self.message = message
+        if self._active:
+            return
+        self._stop.clear()
+        self._active = True
+        self._t0 = time.time()
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._thread.start()
+
+    def set_message(self, message: str) -> None:
+        self.message = message
+
+    def _spin(self) -> None:
+        idx = 0
+        while not self._stop.is_set():
+            frame = self.FRAMES[idx % len(self.FRAMES)]
+            elapsed = time.time() - self._t0
+            sec = f" ({elapsed:.1f}s)" if elapsed >= 1.0 else ""
+            line = f"\r  {cyan(frame)} {dim(self.message)}{dim(sec)} \033[K"
+            try:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            except Exception:
+                pass
+            idx += 1
+            time.sleep(0.08)
+
+    def stop(self, clear: bool = True) -> None:
+        if not self._active:
+            return
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=0.2)
+        self._active = False
+        if clear and self._isatty:
+            try:
+                sys.stdout.write("\r\033[K")
+                sys.stdout.flush()
+            except Exception:
+                pass
 
 
 def _trace(ev: dict) -> str | None:
@@ -24,7 +83,7 @@ def _trace(ev: dict) -> str | None:
     return None
 
 
-def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | None = None) -> dict:
+def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | None = None, spinner: ThinkingSpinner | None = None) -> dict:
     """Doc su kien tu stream_chat. live=True: in chu khi model dang sinh; ask=True: hoi y/N khi can phe duyet."""
     out = {"session": None, "output": "", "error": None, "timed_out": False, "provider": None, "usage": {"prompt": 0, "completion": 0}}
     streamed = False
@@ -34,11 +93,18 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
             if t == "session":
                 out["session"] = ev["id"]
             elif t == "delta" and live:
+                if spinner:
+                    spinner.stop(clear=True)
                 print(ev["text"], end="", flush=True)
                 streamed = True
-            elif t == "thinking" and verbose:
-                print(dim(ev["text"]), end="", file=sys.stderr, flush=True)
+            elif t == "thinking":
+                if spinner:
+                    spinner.set_message(L("Nestor đang suy nghĩ...", "Nestor is thinking..."))
+                if verbose:
+                    print(dim(ev["text"]), end="", file=sys.stderr, flush=True)
             elif t == "assistant":
+                if spinner:
+                    spinner.stop(clear=True)
                 out["output"], out["provider"] = ev["content"], ev["provider"]
                 out["usage"] = {k: out["usage"][k] + ev["usage"][k] for k in out["usage"]}
                 if live and streamed:
@@ -47,10 +113,16 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
                     print(ev["content"])
                 streamed = False
             elif t in ("tool", "tool_result") and (verbose or live):
+                if spinner:
+                    spinner.stop(clear=True)
                 line = _trace(ev)
                 if line:
                     print(dim(line), file=sys.stdout if live else sys.stderr, flush=True)
+                if spinner and t == "tool":
+                    spinner.start(L(f"Đang thực hiện {ev.get('name', 'tool')}...", f"Running {ev.get('name', 'tool')}..."))
             elif t == "approval":
+                if spinner:
+                    spinner.stop(clear=True)
                 label = KIND.get(ev["kind"], (ev["kind"], ev["kind"]))
                 print(f"\n{yellow('⚠')} {L('Agent muốn', 'The agent wants to')} {bold(L(label[0], label[1]))}:\n  {ev['detail'][:500]}", file=sys.stderr if not live else sys.stdout)
                 allowed = ask and ask_yes_no(L("Cho phép?", "Allow?"), False)
@@ -58,11 +130,15 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
             elif t == "notice" and (verbose or live):
                 print(dim(f"· {ev['message']}"), file=sys.stderr if not live else sys.stdout)
             elif t == "error":
+                if spinner:
+                    spinner.stop(clear=True)
                 out["error"] = ev["message"]
             if deadline and time.time() > deadline:
                 out["timed_out"], out["error"] = True, out["error"] or L("hết thời gian chờ", "timed out")
                 break
     finally:
+        if spinner:
+            spinner.stop(clear=True)
         events.close()
     return out
 
@@ -93,7 +169,12 @@ def run(args) -> int:
         print(json.dumps(res, ensure_ascii=False, indent=2))
         return 1 if res["error"] else 0
     events = chat_runner.stream_chat(args.session, prompt, args.provider, approver_override=approver, source="cli", only_tools=tools, permission=args.permission, effort=effort)
-    res = consume(events, live=False, verbose=args.verbose, ask=args.ask, deadline=time.time() + args.timeout)
+    spinner = ThinkingSpinner(L("Nestor đang xử lý...", "Nestor is working..."))
+    spinner.start()
+    try:
+        res = consume(events, live=False, verbose=args.verbose, ask=args.ask, deadline=time.time() + args.timeout, spinner=spinner)
+    finally:
+        spinner.stop(clear=True)
     if res["output"]:
         print(res["output"])
     if res["error"]:
@@ -109,7 +190,55 @@ HELP = {
 }
 
 
+def _make_reader(cfg, st):
+    """Tra ve ham doc 1 dong. Co prompt_toolkit: go "/" la hien menu goi y lenh (kem mo ta). Khong co: input() thuong."""
+    try:
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.completion import Completer, Completion
+        from prompt_toolkit.formatted_text import ANSI
+        from prompt_toolkit.history import InMemoryHistory
+    except ImportError:
+        return None
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return None
+
+    class SlashCompleter(Completer):
+        def get_completions(self, document, complete_event):
+            text = document.text_before_cursor
+            if not text.startswith("/") or "\n" in text:
+                return
+            if " " not in text:
+                for k, (vi, en) in HELP.items():
+                    name = k.split(" ")[0]
+                    if name.startswith(text):
+                        yield Completion(name, start_position=-len(text), display=k, display_meta=L(vi, en))
+                return
+            cmd, _, partial = text.partition(" ")
+            if cmd == "/model":
+                opts = [(n, "") for n in cfg.providers]
+            elif cmd == "/perm":
+                opts = [(n, "") for n in PERMS]
+            elif cmd == "/effort":
+                opts = [(n, "") for n in EFFORTS]
+            elif cmd == "/open":
+                opts = [(x["id"], x["title"][:40]) for x in sessions.list_all(10)]
+            else:
+                return
+            for name, meta in opts:
+                if name.startswith(partial):
+                    yield Completion(name, start_position=-len(partial), display_meta=meta)
+
+    session = PromptSession(completer=SlashCompleter(), complete_while_typing=True, history=InMemoryHistory(), reserve_space_for_menu=8)
+
+    def read(first: str, cont: str) -> str:
+        return session.prompt(ANSI(first if not cont else cont))
+
+    return read
+
+
 def chat(args) -> int:
+    import logging
+    logging.getLogger("mcp").setLevel(logging.CRITICAL)
     cfg = runtime.bootstrap(with_mcp=True)
     try:
         import readline  # noqa: F401 - bat lich su phim mui ten cho input()
@@ -119,13 +248,22 @@ def chat(args) -> int:
     if st["provider"] not in cfg.providers:
         err(L(f"Không có provider '{st['provider']}'. Có: {', '.join(cfg.providers)}", f"No provider '{st['provider']}'. Available: {', '.join(cfg.providers)}"))
         return 2
-    print(f"{bold('Nestor Agent')} {dim('· ' + L('gõ /help để xem lệnh, Ctrl+D để thoát', 'type /help for commands, Ctrl+D to quit'))}")
-    print(dim(f"  {st['provider']} · {cfg.providers[st['provider']].model} · {L('quyền', 'permissions')}: {st['perm']}" + (f" · {L('phiên', 'session')} {st['sid']}" if st["sid"] else "")))
+    from .banner import print_chat_banner
+    print_chat_banner(cfg, st["provider"], st["perm"], st["sid"])
+    reader = _make_reader(cfg, st)
     while True:
         try:
-            line = input(f"\n{cyan(st['provider'])} {bold('›')} ").strip()
-            while line.endswith("\\"):
-                line = line[:-1] + "\n" + input(dim("  … ")).rstrip()
+            if reader:
+                print()
+                line = reader(f"{cyan(st['provider'])} {bold('›')} ", "").strip()
+                while line.endswith("\\"):
+                    line = line[:-1] + "\n" + reader("", dim("  … ")).rstrip()
+            else:
+                print(f"\n{cyan(st['provider'])} {bold('›')} ", end="", flush=True)
+                line = input().strip()
+                while line.endswith("\\"):
+                    print(dim("  … "), end="", flush=True)
+                    line = line[:-1] + "\n" + input().rstrip()
         except EOFError:
             print()
             return 0
@@ -175,11 +313,15 @@ def chat(args) -> int:
         effort = None if st["effort"] == "auto" else st["effort"]
         t0 = time.time()
         events = chat_runner.stream_chat(st["sid"], line, st["provider"], source="cli", permission=st["perm"], effort=effort)
+        spinner = ThinkingSpinner(L("Nestor đang suy nghĩ...", "Nestor is thinking..."))
+        spinner.start()
         try:
-            res = consume(events, live=True, verbose=False, ask=True)
+            res = consume(events, live=True, verbose=False, ask=True, spinner=spinner)
         except KeyboardInterrupt:
             print(dim(f"\n({L('đã dừng', 'stopped')})"))
             continue
+        finally:
+            spinner.stop(clear=True)
         st["sid"] = res["session"] or st["sid"]
         if res["error"]:
             print(red(f"✗ {res['error']}"))

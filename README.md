@@ -29,6 +29,8 @@ An **open-source** personal AI assistant that runs on your own machine and keeps
   </tr>
 </table>
 
+<p align="center"><img src="docs/assets/screenshots/06-cli-banner.png" alt="Interactive Nestor CLI with cyberpunk ASCII banner" width="880"><br><sub><b>Interactive Nestor CLI (<code>nestor</code>) with cyberpunk ASCII banner and real-time status card</b></sub></p>
+
 ## Features
 
 - **Models**: Ollama and local servers (LM Studio, vLLM), Gemini, Claude, OpenAI, OpenRouter, DeepSeek (R1, V3), Mistral, xAI, Groq, Cerebras, Together, Fireworks, Qwen, and any OpenAI-compatible API. Fallbacks, automatic retry on 429/503, cost estimates, and a visual local-model browser/picker.

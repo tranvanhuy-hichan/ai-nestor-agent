@@ -29,6 +29,8 @@ Trợ lý AI cá nhân **mã nguồn mở**, chạy trên máy bạn, dữ liệ
   </tr>
 </table>
 
+<p align="center"><img src="docs/assets/screenshots/06-cli-banner.png" alt="Giao diện CLI tương tác nestor với banner ASCII cyberpunk" width="880"><br><sub><b>Giao diện CLI tương tác (<code>nestor</code>) với banner ASCII phong cách cyberpunk và thẻ trạng thái thời gian thực</b></sub></p>
+
 ## Tính năng
 
 - **Model**: Ollama và server local (LM Studio, vLLM), Gemini, Claude, OpenAI, OpenRouter, DeepSeek (DeepSeek-R1, V3), Mistral, xAI, Groq, Cerebras, Together, Fireworks, Qwen và mọi API tương thích OpenAI. Có fallback, tự thử lại khi lỗi 429/503, ước tính chi phí. Trình duyệt và chọn mô hình local trực quan.

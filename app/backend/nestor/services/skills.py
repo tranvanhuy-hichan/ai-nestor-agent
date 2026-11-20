@@ -15,7 +15,7 @@ import yaml
 
 from ..core.config import Config
 
-META_KEYS = ("openclaw", "clawdbot", "clawdis")  # cac ten khoa metadata ma skill tren ClawHub dang dung (can doc het de tuong thich)
+META_KEYS = ("openclaw", "clawdbot", "clawdis", "hermes")  # ho tro ClawHub + Hermes Agent skills format
 MAX_DEPTH = 6
 MAX_ZIP_FILES, MAX_ZIP_BYTES = 500, 20 * 1024 * 1024
 OS_ALIAS = {"darwin": "darwin", "macos": "darwin", "linux": "linux", "win32": "win32", "windows": "win32"}
@@ -144,12 +144,30 @@ BUNDLED_DIR = Path(__file__).resolve().parent.parent / "bundled_skills"
 
 def discover(cfg: Config) -> dict[str, Skill]:
     skills: dict[str, Skill] = {}
-    for d in _find_skill_dirs(cfg.workspace_path() / "skills"):
+    # 1. Kỹ năng trong workspace của người dùng (ưu tiên cao nhất)
+    ws_skills = cfg.workspace_path() / "skills"
+    for d in _find_skill_dirs(ws_skills):
         try:
             s = load_one(d, cfg)
         except OSError:
             continue
         skills.setdefault(s.name, s)
+
+    # 2. Kỹ năng mẫu trong template đi kèm bản build (dự phòng nếu workspace chưa seed)
+    try:
+        from ..core.workspace import template_dir
+        tpl_skills = template_dir() / "skills"
+        if tpl_skills.is_dir() and tpl_skills.resolve() != ws_skills.resolve():
+            for d in _find_skill_dirs(tpl_skills):
+                try:
+                    s = load_one(d, cfg)
+                except OSError:
+                    continue
+                skills.setdefault(s.name, s)
+    except Exception:
+        pass
+
+    # 3. Kỹ năng nghiệp vụ văn phòng đi kèm (bundled)
     for d in _find_skill_dirs(BUNDLED_DIR):  # skill di kem: skill cung ten trong workspace thang
         try:
             s = load_one(d, cfg)
@@ -172,31 +190,37 @@ def env_for(skills: dict[str, Skill], cfg: Config) -> dict[str, str]:
     return env
 
 
-def prompt_block(skills: dict[str, Skill], limit: int = 9000, bundled_limit: int = 8200) -> str:
-    """Danh sach skill cho model tu chon (skills_read). Skill nguoi dung cai: day du; skill di kem cua Nestor: rut gon de it ton token."""
+def prompt_block(skills: dict[str, Skill], limit: int = 40000, bundled_limit: int = 18000) -> str:
+    """Danh sach muc luc skill theo chuan Progressive Disclosure cua Hermes Agent.
+    Cap do 0: chi hien name va mo ta ngan de tiet kiem token.
+    Cap do 1: agent chu dong goi tool `skills_read(name)` de nap huong dan chi tiet khi can."""
     usable = [s for s in skills.values() if s.active and not s.front.get("disable-model-invocation")]
     own, bundled = [s for s in usable if not s.bundled], [s for s in usable if s.bundled]
     lines, size = [], 0
     for s in own:
-        line = f"  <skill><name>{s.name}</name><description>{s.description[:200]}</description></skill>"
+        first_line = s.description.strip().splitlines()[0] if s.description else ""
+        desc = first_line[:140].strip()
+        line = f"  <skill><name>{s.name}</name><description>{desc}</description></skill>"
         if size + len(line) > limit:
-            lines.append("  <!-- con nhieu skill khac bi luoc bot do gioi han prompt -->")
+            lines.append("  <!-- Cac skill khac xem them qua skills_read -->")
             break
         lines.append(line)
         size += len(line)
     blines, bsize = [], 0
     for s in bundled:
-        line = f"  <skill><name>{s.name}</name><description>{s.description[:105]}</description></skill>"
+        first_line = s.description.strip().splitlines()[0] if s.description else ""
+        desc = first_line[:105].strip()
+        line = f"  <skill><name>{s.name}</name><description>{desc}</description></skill>"
         if bsize + len(line) > bundled_limit:
             break
         blines.append(line)
         bsize += len(line)
     if not lines and not blines:
         return ""
-    return ("Skills la cac goi huong dan chuyen biet. Neu yeu cau cua nguoi dung khop ro rang voi MOT skill, "
-            "hay goi tool skills_read de nap huong dan TRUOC KHI lam (khong can nguoi dung chon skill). SAU KHI doc xong, hay THUC HIEN huong dan do bang tool "
-            "roi tra loi nguoi dung dua tren KET QUA that, khong tu bia. Huong dan co the nhac ten tool khac "
-            "(exec, read, write, web_fetch) - dung tool tuong ung dang co.\n<available_skills>\n" + "\n".join([*lines, *blines]) + "\n</available_skills>")
+    return ("## KIẾN THỨC CHUYÊN BIỆT (SKILLS - PROGRESSIVE DISCLOSURE)\n"
+            "Hệ thống có sẵn các gói kỹ năng quy trình chuẩn dưới đây. Khi yêu cầu của người dùng khớp rõ ràng với một kỹ năng, "
+            "hãy gọi tool `skills_read(name='...')` để nạp hướng dẫn TRƯỚC KHI làm (khong can nguoi dung chon skill). "
+            "Sau khi đọc, hãy làm đúng theo từng bước hướng dẫn trong skill đó.\n<available_skills>\n" + "\n".join([*lines, *blines]) + "\n</available_skills>")
 
 
 # ---------- cai dat / go bo
@@ -267,3 +291,20 @@ def create(cfg: Config, name: str, description: str, body: str) -> Skill:
     d.mkdir(parents=True, exist_ok=True)
     (d / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {json.dumps(description, ensure_ascii=False)}\n---\n{body}\n")
     return load_one(d, cfg)
+
+
+def patch(cfg: Config, name: str, old: str, new: str) -> Skill:
+    """Sửa một đoạn trong SKILL.md theo kiểu patch (diff-based) của Hermes thay vì ghi đè cả file."""
+    s = discover(cfg).get(name)
+    if not s:
+        raise SkillError(f"không tìm thấy skill '{name}'")
+    skill_file = s.path / "SKILL.md"
+    if not skill_file.is_file():
+        raise SkillError(f"skill '{name}' không có file SKILL.md")
+    content = skill_file.read_text(encoding="utf-8", errors="replace")
+    if old not in content:
+        raise SkillError(f"không tìm thấy đoạn cũ trong SKILL.md của '{name}'")
+    if content.count(old) > 1:
+        raise SkillError(f"đoạn cũ xuất hiện {content.count(old)} lần, hãy cung cấp đoạn văn bản dài hơn để khớp duy nhất 1 lần")
+    skill_file.write_text(content.replace(old, new, 1), encoding="utf-8")
+    return load_one(s.path, cfg)

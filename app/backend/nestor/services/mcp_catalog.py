@@ -62,6 +62,7 @@ SERVICES = [
     _s("granola", "Granola", "https://mcp.granola.ai/mcp", "work", "oauth", "Truy cập ghi chú cuộc họp trong Granola.", "Access meeting notes in Granola.", "5CAB2A"),
     _s("zapier", "Zapier", "https://mcp.zapier.com/api/mcp/mcp", "work", "oauth", "Kích hoạt các hành động trong hàng nghìn ứng dụng qua Zapier.", "Trigger actions across thousands of apps through Zapier.", "FF4F00"),
     # --- Thiet ke va website
+    _s("figma", "Figma", "https://mcp.figma.com/mcp", "design", "oauth", "Ngữ cảnh thiết kế, Code Connect và ghi vào canvas trong Figma (OAuth DCR).", "Design context, Code Connect and write-to-canvas in Figma (OAuth DCR).", "F24E1E"),
     _s("canva", "Canva", "https://mcp.canva.com/mcp", "design", "oauth", "Tạo slide, tìm, đọc và chỉnh thiết kế trong Canva.", "Create slides, find, read and edit designs in Canva.", "00C4CC"),
     _s("webflow", "Webflow", "https://mcp.webflow.com/mcp", "design", "oauth", "Quản lý site, trang và CMS của Webflow.", "Manage Webflow sites, pages and CMS.", "146EF5"),
     _s("wix", "Wix", "https://mcp.wix.com/mcp", "design", "oauth", "Quản lý site và cửa hàng trên Wix.", "Manage sites and stores on Wix.", "0C6EFC"),

@@ -60,8 +60,7 @@ def _oauth_provider(name: str, cfg: McpServerCfg, st: "ServerState") -> OAuthCli
             st.url_ready.set()
 
     flow = mcp_oauth.Flow(bool(st.oauth_base), on_url)
-    meta = OAuthClientMetadata(client_name="Nestor Agent", redirect_uris=[base + mcp_oauth.CALLBACK_PATH], grant_types=["authorization_code", "refresh_token"],
-                               response_types=["code"], token_endpoint_auth_method="none", scope=cfg.oauth_scope or None)
+    meta = mcp_oauth.resolve_client_metadata(name, cfg.url, base, cfg.oauth_scope)
     return OAuthClientProvider(server_url=cfg.url, client_metadata=meta, storage=store, redirect_handler=flow.redirect, callback_handler=flow.callback)
 
 

@@ -22,7 +22,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="nestor", description=L("Nestor Agent: trợ lý AI cá nhân chạy trên máy bạn.", "Nestor Agent: a personal AI agent running on your machine."))
     p.add_argument("--version", action="version", version=f"nestor-agent {VERSION}")
     p.add_argument("--lang", choices=["vi", "en"], help=L("ngôn ngữ của CLI (mặc định: theo cấu hình/hệ thống)", "CLI language (default: from config/system)"))
+    p.add_argument("-s", "--session", help=L("mở lại hội thoại theo id", "reopen a conversation by id"))
+    p.add_argument("-p", "--provider", help=L("chọn AI provider (mặc định theo cấu hình)", "choose AI provider (default from config)"))
+    p.add_argument("--permission", choices=["default", "readonly", "guarded", "full", "plan"], default="default", help=L("chế độ phân quyền", "permission mode"))
+    p.add_argument("--effort", choices=["auto", "low", "medium", "high", "thinking"], default="auto", help=L("mức độ suy nghĩ (reasoning effort)", "reasoning effort level"))
     sub = p.add_subparsers(dest="cmd", metavar=L("<lệnh>", "<command>"))
+    sub.add_parser("help", help=L("hiện trợ giúp", "show help message"))
 
     def srv(sp) -> None:
         sp.add_argument("--host", default=default_host(), help=L("địa chỉ lắng nghe (0.0.0.0 để mở cho máy khác)", "address to listen on (0.0.0.0 to expose it)"))
@@ -170,9 +175,11 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     if args.lang:
         set_lang(args.lang)
-    if not args.cmd:
+    if args.cmd == "help":
         parser.print_help()
         raise SystemExit(0)
+    if not args.cmd:
+        args.cmd = "chat"
     try:
         code = dispatch(args)
     except KeyboardInterrupt:

@@ -99,33 +99,49 @@ def coding_prompt(project, workspace=None) -> str:
 
 
 def build_system_prompt(cfg: cfgmod.Config, skills: dict, workdir, summary: str = "", sid: str | None = None, has_planning: bool = False, coding: bool = False) -> str:
+    """Xây dựng System Prompt 3 tầng theo chuẩn Hermes Agent để tối ưu Prompt Caching (Cache Hit trên Gemini/Claude/OpenAI/vLLM):
+    - TIER 1 (STABLE - Cố định 100%): Identity, SOUL, RULES, USER, Autonomy, Shell notes, Planning rules, Skills Index Level 0.
+      Tầng này luôn nằm ở đầu mảng để được cache hoàn toàn qua mọi turn.
+    - TIER 2 (CONTEXT - Bán tĩnh): Hướng dẫn dự án coding, tài liệu tri thức (Knowledge Base).
+    - TIER 3 (VOLATILE - Biến động theo phiên): Thư mục làm việc, thời gian thực, plan tiến độ, tóm tắt hội thoại.
+    """
     ws = cfg.workspace_path()
-    parts = []
+
+    # --- TIER 1: STABLE (Prefix bất biến để cache) ---
+    stable_parts = []
     for name in PROMPT_FILES:
         p = ws / name
         if p.exists() and p.read_text().strip():
-            parts.append(f"## {name}\n{p.read_text()[-4000:].strip()}")
-    parts.append(f"Hiện tại: {datetime.now().astimezone():%Y-%m-%d %H:%M %Z}.\n"
-                 f"Thư mục làm việc của phiên này: {workdir}. Mọi file bạn tạo (script, dữ liệu trung gian, kết quả) hãy đặt ở đây; "
-                 "đường dẫn tương đối được tính từ thư mục này và người dùng nhìn thấy chúng trong panel Workspace. "
-                 "Khi cần nhớ chuyện đã nói trước đây, dùng tool memory_search.")
-    if kb_note := knowledge_note():
-        parts.append(kb_note)
+            stable_parts.append(f"## {name}\n{p.read_text()[-4000:].strip()}")
+    stable_parts.append(AUTONOMY)
     if note := tools.shell_note():
-        parts.append(note)
-    parts.append(AUTONOMY)
-    if coding:
-        parts.append(coding_prompt(workdir, ws))
-    if summary:
-        parts.append(f"Tóm tắt phần hội thoại trước đó:\n{summary}")
-    block = skillmod.prompt_block(skills)
-    if block:
-        parts.append(block)
-    if sid and (plan := plans.prompt_block(sid)):
-        parts.append(plan)
+        stable_parts.append(note)
     if has_planning:
-        parts.append("Với việc phức tạp nhiều bước: lập kế hoạch bằng plan_set trước rồi làm lần lượt. Việc cần chuyên môn riêng hoặc làm song song: giao cho agent con bằng delegate. Việc rất dài: task_start để chạy nền.")
-    return "\n\n".join(parts)
+        stable_parts.append("Với việc phức tạp nhiều bước: lập kế hoạch bằng plan_set trước rồi làm lần lượt. Việc cần chuyên môn riêng hoặc làm song song: giao cho agent con bằng delegate. Việc rất dài: task_start để chạy nền.")
+    if block := skillmod.prompt_block(skills):
+        stable_parts.append(block)
+
+    # --- TIER 2: CONTEXT (Dự án & Tri thức) ---
+    context_parts = []
+    if coding:
+        context_parts.append(coding_prompt(workdir, ws))
+    if kb_note := knowledge_note():
+        context_parts.append(kb_note)
+
+    # --- TIER 3: VOLATILE (Động theo từng phiên/thời điểm) ---
+    volatile_parts = [
+        f"Hiện tại: {datetime.now().astimezone():%Y-%m-%d %H:%M %Z}.\n"
+        f"Thư mục làm việc của phiên này: {workdir}. Mọi file bạn tạo (script, dữ liệu trung gian, kết quả) hãy đặt ở đây; "
+        "đường dẫn tương đối được tính từ thư mục này và người dùng nhìn thấy chúng trong panel Workspace. "
+        "Khi cần nhớ chuyện đã nói trước đây, dùng tool memory_search."
+    ]
+    if summary:
+        volatile_parts.append(f"Tóm tắt phần hội thoại trước đó:\n{summary}")
+    if sid and (plan := plans.prompt_block(sid)):
+        volatile_parts.append(plan)
+
+    all_sections = [*stable_parts, *context_parts, *volatile_parts]
+    return "\n\n".join(s for s in all_sections if s)
 
 
 MENTION_RE = re.compile(r"(?<![\w@])@([\w][\w./-]*)")

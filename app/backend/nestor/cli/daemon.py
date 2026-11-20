@@ -269,7 +269,8 @@ def open_ui(host: str, port: int) -> int:
     if not health(url):
         bad(L("Server chưa chạy. Bật bằng: nestor start", "The server is not running. Start it with: nestor start"))
         return 1
-    ok(url)
+    from .banner import print_open_banner
+    print_open_banner(url)
     webbrowser.open(url)
     return 0
 

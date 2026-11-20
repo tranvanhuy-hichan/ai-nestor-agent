@@ -14,7 +14,8 @@ from .ui import L, ask, ask_secret, ask_yes_no, bold, choose, cyan, dim, err, gr
 
 
 def _banner() -> None:
-    print(bold(cyan("\n  Nestor Agent")) + dim(f"  ·  {L('trình hướng dẫn cài đặt', 'setup wizard')}\n"))
+    from .banner import print_onboard_banner
+    print_onboard_banner()
 
 
 def _ollama_models() -> list[str]:

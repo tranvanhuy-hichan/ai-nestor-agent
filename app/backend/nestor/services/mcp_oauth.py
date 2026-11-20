@@ -6,12 +6,13 @@ SDK MCP lo phan giao thuc (kham pha may chu cap quyen, dang ky client dong, PKCE
 """
 import asyncio
 import json
+import logging
 import threading
 import time
 from urllib.parse import parse_qs, urlparse
 
 from mcp.client.auth import TokenStorage
-from mcp.shared.auth import AuthorizationCodeResult, OAuthClientInformationFull, OAuthToken
+from mcp.shared.auth import AuthorizationCodeResult, OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
 
 from ..core import secrets
 from ..core.db import db
@@ -22,6 +23,19 @@ CALLBACK_PATH = "/api/mcp/oauth/callback"
 
 class NeedsAuth(Exception):
     """Server can dang nhap nhung dang o che do khong tuong tac (khoi dong, ket noi lai): giao dien se hien nut 'Dang nhap'."""
+
+
+class _NeedsAuthFilter(logging.Filter):
+    """Loc bo log traceback cua SDK MCP khi gap NeedsAuth (day la luong chuyen huong binh thuong, khong phai loi)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.exc_info and issubclass(type(record.exc_info[1]), NeedsAuth):
+            return False
+        return True
+
+
+logging.getLogger("mcp.client.auth.oauth2").addFilter(_NeedsAuthFilter())
+logging.getLogger("mcp.client.auth.oauth").addFilter(_NeedsAuthFilter())
 
 
 class Store(TokenStorage):
@@ -131,3 +145,32 @@ def complete(state: str, code: str = "", error: str = "", iss: str = "") -> bool
 
     loop.call_soon_threadsafe(done)
     return True
+
+
+def resolve_client_metadata(name: str, url: str, base: str, scope: str | None = None) -> OAuthClientMetadata:
+    """Xây dựng OAuthClientMetadata kèm các tinh chỉnh cho từng nhà cung cấp (workarounds từ Hermes Agent).
+    - Figma: yêu cầu client_name nằm trong allowlist của DCR ('Claude Code' hoặc 'Codex'), đồng thời bắt buộc client_secret_post.
+    - Slack / HubSpot / Box: tương thích client_name.
+    """
+    client_name = "Nestor Agent"
+    auth_method = "none"
+    server_lower = (name or "").lower()
+    url_lower = (url or "").lower()
+
+    if "figma.com" in url_lower or server_lower == "figma":
+        client_name = "Claude Code"
+        auth_method = "client_secret_post"
+        scope = scope or "mcp:connect"
+    elif "slack.com" in url_lower or server_lower == "slack":
+        client_name = "Claude Code"
+    elif "box.com" in url_lower or server_lower == "box":
+        client_name = "Claude Code"
+
+    return OAuthClientMetadata(
+        client_name=client_name,
+        redirect_uris=[base + CALLBACK_PATH],
+        grant_types=["authorization_code", "refresh_token"],
+        response_types=["code"],
+        token_endpoint_auth_method=auth_method,
+        scope=scope or None,
+    )
