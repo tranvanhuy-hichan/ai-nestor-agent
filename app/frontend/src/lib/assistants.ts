@@ -6,7 +6,7 @@ export type FormField = { key: string; label: string; type: 'text' | 'textarea' 
 export type FormStep = { id: string; label: string; goal: string; task: string; fields: FormField[]; review: string[]; produces: string[]; submit?: string; optional?: boolean }
 export type FormFlow = { id: string; label: string; desc: string; steps: FormStep[] }
 export type FeatureForm = { experience?: { title: string; checks: string[]; handoff: string }; intro?: string; flows: FormFlow[]; panels?: string[] }
-export interface Assistant { builtin?: boolean; id: string; name: string; icon: string; group: string; description: string; starters: string[]; form?: FeatureForm; done_criteria?: string[]; deliverables?: string[] }
+export interface Assistant { builtin?: boolean; scoped?: boolean; providers?: string[]; skills?: string[]; id: string; name: string; icon: string; group: string; description: string; starters: string[]; form?: FeatureForm; done_criteria?: string[]; deliverables?: string[] }
 
 export const GROUP_GOV = tk('Cơ quan nhà nước')
 export const GROUP_BIZ = tk('Doanh nghiệp')

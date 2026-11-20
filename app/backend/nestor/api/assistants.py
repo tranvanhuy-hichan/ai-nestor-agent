@@ -16,6 +16,9 @@ class AssistantBody(BaseModel):
     description: str = ""
     starters: list[str] = []
     skills: list[str] = []
+    providers: list[str] = []
+    env_refs: dict[str, str] = {}
+    scoped: bool = False
     tools: list[str] | None = None
     done_criteria: list[str] = []
     deliverables: list[str] = []

@@ -2,7 +2,6 @@
 import hashlib
 import hmac
 import logging
-import secrets
 import threading
 import time
 
@@ -10,27 +9,14 @@ import httpx
 
 from ..core import config as cfgmod
 from ..core.db import db
-from . import chat_runner, notifications, sessions, workfiles
+from . import chat_runner, notifications, pairing, sessions, workfiles
 from .telegram_channel import KIND_LABEL, clean_reply
 
 log = logging.getLogger("zalo")
 API_BASE = "https://openapi.zalo.me"  # test co the doi sang server gia
 OAUTH_BASE = "https://oauth.zaloapp.com"
 CHUNK = 1900  # Zalo gioi han ~2000 ky tu moi tin
-PAIR_TTL = 600
 TOKEN_EXPIRED = {-216, -124, -233}  # access_token het han / khong hop le
-_pair: dict[str, float] = {}
-
-
-def new_pair_code() -> str:
-    code = f"{secrets.randbelow(10**6):06d}"
-    _pair[code] = time.time() + PAIR_TTL
-    return code
-
-
-def _consume_pair(code: str) -> bool:
-    return _pair.pop(code, 0) > time.time()
-
 
 def verify(cfg: cfgmod.ZaloCfg, body: bytes, signature: str, timestamp: str, query_secret: str) -> bool:
     """Chap nhan khi chu ky X-ZEvent-Signature dung (sha256(app_id + body + timestamp + secret)) hoac ?secret= khop. Chua dat webhook_secret => tu choi het."""
@@ -119,13 +105,10 @@ class ZaloChannel:
         if text.lower().startswith("/id"):
             return self.say(uid, f"ID Zalo của bạn: {uid}")
         if text.lower().startswith("/pair"):
-            if _consume_pair(text[5:].strip()):
-                if uid not in z.allowed_users:
-                    cfg = cfgmod.load()
-                    cfg.channels.zalo.allowed_users.append(uid)
-                    cfgmod.save(cfg)
-                    self.cfg = cfg.channels.zalo
-                return self.say(uid, "Đã ghép đôi thành công. Bạn có thể nhắn tin giao việc cho trợ lý.")
+            if uid in z.allowed_users:
+                return self.say(uid, "Tài khoản đã được cấp quyền.")
+            if pairing.submit("zalo", text[5:].strip(), uid):
+                return self.say(uid, "Đã gửi yêu cầu. Hãy duyệt trong giao diện web Nestor.")
             return self.say(uid, "Mã ghép đôi sai hoặc đã hết hạn. Tạo mã mới trong giao diện, mục Tích hợp > Kênh chat.")
         if uid not in z.allowed_users:
             return self.say(uid, "Bạn chưa được phép dùng trợ lý này. Tạo mã ghép đôi trong giao diện web rồi gửi: /pair <mã>")

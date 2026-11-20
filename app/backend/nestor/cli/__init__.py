@@ -207,7 +207,7 @@ def dispatch(a: argparse.Namespace) -> int:
     if c == "stop":
         return daemon.stop()
     if c == "restart":
-        return daemon.restart(a.host, a.port)
+        return daemon.restart(a.host, a.port, build=not a.no_build)
     if c == "status":
         return daemon.status(a.json)
     if c == "logs":

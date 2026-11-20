@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from .api import activity, channels, chat, dashboard, external, files, integrations, skills, system
+from .api import activity, channels, chat, dashboard, external, files, gateway, integrations, skills, system
 from .core import db
 from .core.env import getenv
 from .core.paths import DIST
@@ -28,6 +28,7 @@ DEV_ORIGINS = set(filter(None, getenv("DEV_ORIGINS").split(",")))
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    log_capture = gateway.start_log_capture()
     db.init()
     ensure_workspace(cfgmod.load())
     jobs.recover_interrupted()
@@ -38,10 +39,13 @@ async def lifespan(_: FastAPI):
     telegram.apply(cfg.channels.telegram)
     zalo.apply(cfg.channels.zalo)
     heartbeat.start()
-    yield
-    heartbeat.stop()
-    mcp_manager.stop()
-    scheduler.stop()
+    try:
+        yield
+    finally:
+        heartbeat.stop()
+        mcp_manager.stop()
+        scheduler.stop()
+        gateway.stop_log_capture(log_capture)
 
 
 app = FastAPI(title="Nestor Agent", version="0.4.0", lifespan=lifespan)

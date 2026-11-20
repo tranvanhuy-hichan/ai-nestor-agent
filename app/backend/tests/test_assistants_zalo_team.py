@@ -85,7 +85,7 @@ def test_zalo_config_api_masks_and_requires_secret(client):
     assert client.put("/api/channels/zalo", json={"enabled": True, "access_token": "***", "webhook_secret": "***"}).status_code == 200
     assert cfgmod.load().channels.zalo.access_token == "t"
     assert client.get("/api/channels").json()["zalo"]["enabled"]
-    assert len(client.post("/api/channels/zalo/pair-code").json()["code"]) == 6
+    assert len(client.post("/api/channels/zalo/pair-code").json()["code"]) >= 16
 
 
 def test_zalo_webhook_auth_and_pairing_and_reply(client, monkeypatch):
@@ -104,10 +104,14 @@ def test_zalo_webhook_auth_and_pairing_and_reply(client, monkeypatch):
     assert client.post("/api/channels/zalo/webhook", content=raw, headers={"X-ZEvent-Signature": "mac=" + sig}).status_code == 200
     assert done.wait(5) and "u1" in sent[0][1]
     # ghep doi
-    code = zalo_channel.new_pair_code()
+    code = client.post("/api/channels/zalo/pair-code").json()["code"]
     done.clear()
     client.post(f"/api/channels/zalo/webhook?secret={SECRET}", json={**ev, "message": {"text": f"/pair {code}"}})
     assert done.wait(5)
+    assert "u1" not in cfgmod.load().channels.zalo.allowed_users
+    request, = client.get("/api/channels/pairing").json()
+    assert request["user_id"] == "u1"
+    assert client.post(f"/api/channels/pairing/{request['id']}", json={"approve": True}).status_code == 200
     assert "u1" in cfgmod.load().channels.zalo.allowed_users
 
 

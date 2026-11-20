@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Compass, PackagePlus, Plus, Puzzle, Settings2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -13,13 +13,28 @@ import { useConfig, useSaveConfig, useSkills, useSkillUpdates } from '@/lib/quer
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import type { Skill } from '@/lib/types'
-import { errMsg } from '@/lib/utils'
+import { cn, errMsg } from '@/lib/utils'
 import { CreateSkillModal } from './CreateSkillModal'
 import { Discover } from './Discover'
 import { Picks } from './Picks'
 import { InstallHelp, binsOf } from './InstallHelp'
 import { SkillModal } from './SkillModal'
-import { t } from '@/lib/i18n.ts'
+import { t, tk } from '@/lib/i18n.ts'
+
+const CATEGORIES: { id: string; label: string }[] = [
+  { id: 'all', label: tk('Tất cả') },
+  { id: 'dev', label: tk('Lập trình & Web') },
+  { id: 'agents', label: tk('Tự động hóa & Agents') },
+  { id: 'productivity', label: tk('Văn phòng & Năng suất') },
+  { id: 'devops', label: tk('DevOps & MLOps') },
+  { id: 'creative', label: tk('Sáng tạo & Media') },
+  { id: 'research', label: tk('Nghiên cứu & Dữ liệu') },
+  { id: 'security', label: tk('Bảo mật') },
+  { id: 'finance', label: tk('Tài chính') },
+  { id: 'communication', label: tk('Giao tiếp & MXH') },
+  { id: 'tools', label: tk('Công cụ & MCP') },
+  { id: 'general', label: tk('Chung') },
+]
 
 export function missingText(m: string): string {
   const [kind, ...rest] = m.split(':')
@@ -47,6 +62,7 @@ export function SkillsPage() {
   const tab = params.get('tab') === 'discover' ? 'discover' : params.get('tab') === 'picks' ? 'picks' : 'installed'
   const setTab = (t: 'installed' | 'picks' | 'discover') => setParams(t === 'installed' ? {} : { tab: t }, { replace: true })
   const [filter, setFilter] = useState('')
+  const [cat, setCat] = useState('all')
   const [hubInput, setHubInput] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -60,7 +76,20 @@ export function SkillsPage() {
     save.mutate(c, { onError: (e) => toast(errMsg(e), 'bad') })
   }
 
-  const list = (skills.data ?? []).filter((s) => !filter || `${s.name} ${s.description}`.toLowerCase().includes(filter.toLowerCase()))
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: skills.data?.length ?? 0 }
+    for (const s of skills.data ?? []) {
+      const c = s.category || 'general'
+      counts[c] = (counts[c] || 0) + 1
+    }
+    return counts
+  }, [skills.data])
+
+  const list = (skills.data ?? []).filter((s) => {
+    const matchesCat = cat === 'all' || (s.category || 'general') === cat
+    const matchesFilter = !filter || `${s.name} ${s.description}`.toLowerCase().includes(filter.toLowerCase())
+    return matchesCat && matchesFilter
+  })
   const pageList = paginate(list, page, PAGE_SIZE)
 
   return (
@@ -88,6 +117,30 @@ export function SkillsPage() {
           <ErrorNote error={skills.error} />
         ) : (
           <>
+            <div className="mb-4 flex flex-wrap gap-1.5 overflow-x-auto pb-1">
+              {CATEGORIES.map((c) => {
+                const count = categoryCounts[c.id] || 0
+                if (c.id !== 'all' && !count) return null
+                const active = cat === c.id
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => { setCat(c.id); setPage(0) }}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition',
+                      active
+                        ? 'border-accent bg-accent text-accent-fg shadow-sm'
+                        : 'border-line bg-panel2 text-muted hover:border-line2 hover:text-text'
+                    )}
+                  >
+                    <span>{t(c.label)}</span>
+                    <span className={cn('rounded px-1.5 py-0.5 text-[10px]', active ? 'bg-white/20 text-white' : 'bg-panel text-muted')}>
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
             {list.length === 0 ? (
               <EmptyState icon={PackagePlus} title={t('Chưa có skill nào')} action={<Button onClick={() => setTab('picks')}><Compass className="size-4" />{t('Gợi ý cho bạn')}</Button>} />
             ) : (
@@ -98,6 +151,11 @@ export function SkillsPage() {
                     <div className="min-w-0 flex-1"><button onClick={() => setSelected(s.name)} className="w-full text-left">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{s.name}</span>
+                        {s.category && s.category !== 'general' && (
+                          <Badge tone="neutral">
+                            {t(CATEGORIES.find((c) => c.id === s.category)?.label || s.category)}
+                          </Badge>
+                        )}
                         {s.origin && <Badge tone="info">ClawHub · {s.origin.owner}{s.origin.version ? ` v${s.origin.version}` : ''}</Badge>}
                         {!s.eligible && <Badge tone="warn">{t('Cần thiết lập')}</Badge>}
                         {!s.enabled && <Badge>{t('Tạm tắt')}</Badge>}

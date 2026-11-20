@@ -67,11 +67,13 @@ def session_usage(sid: str, providers: dict) -> dict:
     with db() as c:
         t = c.execute("SELECT COUNT(*) calls, COALESCE(SUM(prompt_tokens),0) p, COALESCE(SUM(completion_tokens),0) c, COALESCE(SUM(1-ok),0) err FROM usage WHERE session_id=?", (sid,)).fetchone()
         by = c.execute("SELECT provider, COALESCE(SUM(prompt_tokens),0) p, COALESCE(SUM(completion_tokens),0) c FROM usage WHERE session_id=? GROUP BY provider", (sid,)).fetchall()
-        last = c.execute("SELECT provider, model, prompt_tokens, completion_tokens FROM usage WHERE session_id=? AND ok=1 AND prompt_tokens>0 ORDER BY id DESC LIMIT 1", (sid,)).fetchone()
+        last = c.execute("SELECT provider, model, prompt_tokens, completion_tokens, ts FROM usage WHERE session_id=? AND ok=1 AND prompt_tokens>0 ORDER BY id DESC LIMIT 1", (sid,)).fetchone()
     cost = sum((r["p"] * providers[r["provider"]].price_in + r["c"] * providers[r["provider"]].price_out) / 1e6 for r in by if r["provider"] in providers)
     out = {"calls": t["calls"], "errors": t["err"], "prompt_tokens": t["p"], "completion_tokens": t["c"], "cost": round(cost, 4),
            "provider": None, "model": None, "context_used": 0, "context_window": None, "context_left": None}
-    if last:
+    from . import sessions
+    compacted = (sessions.get(sid) or {}).get("compacted_at", 0)
+    if last and last["ts"] >= compacted:
         used = last["prompt_tokens"] + last["completion_tokens"]  # lượt sau sẽ gửi lại cả câu trả lời này
         win = context_window(providers[last["provider"]]) if last["provider"] in providers else None
         out.update(provider=last["provider"], model=last["model"], context_used=used, context_window=win, context_left=max(0, win - used) if win else None)

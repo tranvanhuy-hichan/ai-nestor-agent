@@ -1,6 +1,7 @@
 """Chay mot luot chat trong thread rieng va day su kien ra queue (cho SSE). Quan ly xin phep (approval)."""
 import queue
 import re
+from contextlib import contextmanager
 import threading
 import uuid
 from collections.abc import Iterator
@@ -97,6 +98,7 @@ class Run:
 
 _runs: dict[str, Run] = {}
 _runs_lock = threading.Lock()
+_session_edits: set[str] = set()
 KEEP_FINISHED = 120  # giu su kien cua luot da xong de client noi lai kip nhan ket qua
 
 
@@ -118,6 +120,21 @@ def state(sid: str) -> dict:
 def active(sid: str) -> bool:
     r = _runs.get(sid)
     return bool(r and not r.done)
+
+
+
+@contextmanager
+def edit_idle_session(sid: str):
+    with _runs_lock:
+        editable = not active(sid) and sid not in _session_edits
+        if editable:
+            _session_edits.add(sid)
+    try:
+        yield editable
+    finally:
+        if editable:
+            with _runs_lock:
+                _session_edits.remove(sid)
 
 
 def stop(sid: str) -> bool:
@@ -148,17 +165,21 @@ def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_ov
     """detach=True (giao dien web): dong ket noi khong dung agent; client noi lai bang attach(). Mac dinh (CLI/API/Telegram): dong ket noi thi dung."""
     if not sid or not sessions.get(sid):
         sid = sessions.create(text, source=source)
-    if assistant is not None:  # None = giu tro ly da luu; '' = bo chon
-        sessions.set_assistant(sid, assistant)
+    error = ""
     with _runs_lock:
         _gc()
-        if active(sid):
-            yield {"type": "session", "id": sid}
-            yield {"type": "error", "message": "Phiên này đang có một lượt chạy. Hãy đợi xong hoặc bấm Dừng.", "tpl": "Phiên này đang có một lượt chạy. Hãy đợi xong hoặc bấm Dừng."}
-            yield {"type": "done"}
-            return
-        run = Run(sid)
-        _runs[sid] = run
+        if active(sid) or sid in _session_edits:
+            error = "Phiên này đang có tác vụ. Hãy đợi xong rồi thử lại."
+        elif assistant is not None and not sessions.set_assistant(sid, assistant):
+            error = "Hãy bắt đầu phiên mới để đổi hồ sơ."
+        else:
+            run = Run(sid)
+            _runs[sid] = run
+    if error:
+        yield {"type": "session", "id": sid}
+        yield {"type": "error", "message": error}
+        yield {"type": "done"}
+        return
     cancel = run.cancel
 
     def approver(kind: str, detail: str) -> bool:
@@ -182,7 +203,7 @@ def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_ov
     def worker():
         try:
             agent.run_turn(sid, text, provider, approver_override or approver, run.push, cancel, only_tools, source, attachments, permission, effort, use_docs=docs, temperature=temperature, max_tokens=max_tokens, system_extra=system_extra, tool_allow=tool_allow,
-                           asker=None if approver_override else asker)
+                           asker=None if approver_override else asker, interactive_policy=detach and source == "chat" and approver_override is None)
         except Exception as e:  # loi bat ngo khong duoc lam treo luong SSE
             run.push({"type": "error", "message": f"{type(e).__name__}: {e}"})
         try:

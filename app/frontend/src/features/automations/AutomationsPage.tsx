@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { BarChart3, CalendarClock, ChevronDown, Languages, Moon, Newspaper, CircleCheck, CircleX, HeartPulse, Pencil, Play, Plus, Trash2, type LucideIcon } from 'lucide-react'
+import { BarChart3, CalendarClock, FileText, GitPullRequest, Sparkles, Video, ChevronDown, Languages, Moon, Newspaper, CircleCheck, CircleX, HeartPulse, Pencil, Play, Plus, Trash2, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -19,7 +19,28 @@ import { t, tk } from '@/lib/i18n.ts'
 import { T } from '@/lib/T.tsx'
 import { build, DAYS, describe, parse, type Freq, type Sched } from './schedule'
 
-const TEMPLATES: { icon: LucideIcon; name: string; prompt: string; schedule: string }[] = [
+type Blueprint = { icon: LucideIcon; name: string; prompt: string; schedule: string; field?: { label: string; hint: string } }
+const TEMPLATES: Blueprint[] = [
+  {
+    icon: FileText, name: tk('Báo cáo công việc tuần theo NĐ 30'), schedule: '0 16 * * 5',
+    prompt: tk('Soạn dự thảo báo cáo công việc tuần theo NĐ 30 từ nguồn {input}. Nêu kết quả, số liệu có nguồn, việc tồn và kế hoạch tuần tới. Dùng vanban_write_docx rồi rà thể thức. Đánh dấu dữ liệu còn thiếu.'),
+    field: { label: tk('Nguồn tổng hợp'), hint: tk('Ví dụ thư mục báo cáo hoặc tên Sổ tay của phòng') },
+  },
+  {
+    icon: Video, name: tk('Tóm tắt YouTube Live'), schedule: '30 19 * * *',
+    prompt: tk('Kiểm tra buổi YouTube Live mới nhất từ {input}. Tóm tắt từ bản ghi hoặc phụ đề sẵn có, kèm URL và mốc thời gian. Nếu chưa có phụ đề hoặc không truy cập được, báo rõ nguồn nào còn thiếu.'),
+    field: { label: tk('URL kênh hoặc buổi phát'), hint: 'https://www.youtube.com/@kenh' },
+  },
+  {
+    icon: Sparkles, name: tk('Rà soát bộ nhớ định kỳ'), schedule: '0 9 * * 1',
+    prompt: tk('Rà soát trí nhớ dài hạn về {input}. Liệt kê ghi nhớ trùng, lỗi thời hoặc cần xác nhận và đề xuất bản gộp. Giữ nguyên dữ liệu gốc để người dùng xem lại đề xuất.'),
+    field: { label: tk('Phạm vi bộ nhớ'), hint: tk('Ví dụ các ghi nhớ về dự án A') },
+  },
+  {
+    icon: GitPullRequest, name: tk('Theo dõi GitHub PR'), schedule: '0 9 * * 1-5',
+    prompt: tk('Đọc các pull request đang mở tại {input}. Tóm tắt trạng thái review, thay đổi kể từ lần gần nhất và việc cần xử lý, kèm liên kết từng PR. Nếu repo riêng tư cần kết nối GitHub, hãy báo rõ.'),
+    field: { label: tk('Kho GitHub'), hint: 'https://github.com/owner/repo' },
+  },
   { icon: Newspaper, name: tk('Tóm tắt tin buổi sáng'), prompt: tk('Tìm các tin công nghệ nổi bật nhất hôm nay và tóm tắt trong 5 gạch đầu dòng, mỗi ý kèm nguồn.'), schedule: '0 8 * * *' },
   { icon: Moon, name: tk('Nhắc việc cuối ngày'), prompt: tk('Đọc bộ nhớ của bạn về tôi và nhắc những việc còn dang dở cần làm vào ngày mai.'), schedule: '0 18 * * 1-5' },
   { icon: BarChart3, name: tk('Báo cáo cuối tuần'), prompt: tk('Tóm tắt những gì chúng ta đã làm trong tuần qua và gợi ý 3 việc nên ưu tiên tuần tới.'), schedule: '0 17 * * 5' },
@@ -30,6 +51,16 @@ type Draft = { id?: string; name: string; schedule: string; prompt: string; prov
 const blank: Draft = { name: '', schedule: '0 8 * * *', prompt: '', provider: null, enabled: true, notify: true }
 
 const FREQS: [Freq, string][] = [[tk('Mỗi ngày'), 'daily'], [tk('Các ngày trong tuần (Thứ Hai – Sáu)'), 'weekdays'], [tk('Một ngày trong tuần'), 'weekly'], [tk('Mỗi giờ'), 'hourly'], [tk('Cứ sau vài phút'), 'minutes'], [tk('Tùy chỉnh (nâng cao)'), 'custom']].map(([l, v]) => [v as Freq, l])
+
+function BlueprintModal({ blueprint, onClose, onApply }: { blueprint: Blueprint; onClose: () => void; onApply: (input: string) => void }) {
+  const [input, setInput] = useState('')
+  return <Modal open onClose={onClose} title={t(blueprint.name)}
+    footer={<Button variant="primary" disabled={!input.trim()} onClick={() => onApply(input.trim())}>{t('Chọn lịch chạy')}</Button>}>
+    {blueprint.field && <Field label={t(blueprint.field.label)}>
+      <Input autoFocus maxLength={500} value={input} placeholder={t(blueprint.field.hint)} onChange={(e) => setInput(e.target.value)} />
+    </Field>}
+  </Modal>
+}
 
 function JobModal({ draft, onClose }: { draft: Draft | null; onClose: () => void }) {
   const qc = useQueryClient()
@@ -129,6 +160,11 @@ export function AutomationsPage() {
   const jobs = useJobs()
   const qc = useQueryClient()
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [blueprint, setBlueprint] = useState<Blueprint | null>(null)
+  const apply = (template: Blueprint, input = '') => {
+    setBlueprint(null)
+    setDraft({ ...blank, name: t(template.name), prompt: t(template.prompt, { input }), schedule: template.schedule })
+  }
   const refresh = () => void qc.invalidateQueries({ queryKey: ['jobs'] })
   const list = jobs.data ?? []
   return (
@@ -144,16 +180,17 @@ export function AutomationsPage() {
               <h2 className="text-sm font-semibold">{list.length ? t('Gợi ý thêm') : t('Bắt đầu nhanh với một mẫu')}</h2>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {TEMPLATES.map((x) => (
-                  <button key={x.name} onClick={() => setDraft({ ...blank, name: t(x.name), prompt: t(x.prompt), schedule: x.schedule })}
+                  <button key={x.name} onClick={() => x.field ? setBlueprint(x) : apply(x)}
                     className="flex items-start gap-3 rounded-xl border border-line bg-panel p-4 text-left transition hover:border-accent/60">
                     <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent/12"><x.icon className="size-5 text-accent" /></span>
-                    <span className="min-w-0"><span className="block font-medium">{t(x.name)}</span><span className="mt-0.5 block text-xs text-accent">{describe(x.schedule)}</span><span className="mt-1 line-clamp-2 block text-xs text-muted">{t(x.prompt)}</span></span>
+                    <span className="min-w-0"><span className="block font-medium">{t(x.name)}</span><span className="mt-0.5 block text-xs text-accent">{describe(x.schedule)}</span><span className="mt-1 line-clamp-2 block text-xs text-muted">{t(x.prompt, { input: x.field ? t(x.field.label).toLowerCase() : '' })}</span></span>
                   </button>
                 ))}
               </div>
             </section>
           </>
         )}
+        {blueprint && <BlueprintModal blueprint={blueprint} onClose={() => setBlueprint(null)} onApply={(input) => apply(blueprint, input)} />}
         <JobModal draft={draft} onClose={() => setDraft(null)} />
       </div>
     </Page>

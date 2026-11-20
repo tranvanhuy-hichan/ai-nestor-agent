@@ -33,10 +33,11 @@ def _snip(t: str, n: int = 150) -> str:
 def memory_search(ctx, query, limit=6):
     limit = max(1, min(int(limit), 15))
     terms = fold(query).split()
-    mem = ctx.workspace / "MEMORY.md"
+    mem = ctx.memory_file
     notes = [ln for ln in (mem.read_text().splitlines() if mem.exists() else []) if any(t in fold(ln) for t in terms)]
-    fts = sessions.search(query, limit)
-    vec = _vector_hits(query, limit * 2)
+    fts = sessions.search(query, limit, scope=ctx.profile_id)
+    vec = [] if ctx.profile_id else _vector_hits(query, limit * 2)
+    vec = [h for h in vec if h["kind"] == "note" or (sessions.get(h["session_id"]) or {}).get("assistant_scope", "") == ""]
     items: dict[tuple, dict] = {}
 
     def put(key: tuple, rank: int, how: str, line: str) -> None:

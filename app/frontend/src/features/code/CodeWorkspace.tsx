@@ -221,7 +221,7 @@ export function CodeWorkspace() {
                 <FileTab key={activeTab.key} sid={sid} path={activeTab.path} draft={drafts[activeTab.path]} onDraft={(v) => setDrafts((d) => { const { [activeTab.path]: _, ...rest } = d; return v === undefined ? rest : { ...rest, [activeTab.path]: v } })} onSaved={() => { void qc.invalidateQueries({ queryKey: ['file', sid, activeTab.path] }); void qc.invalidateQueries({ queryKey: ['git', sid] }) }} />
               )}
             </div>
-            {terminal && <div className="h-56 shrink-0 border-t border-line bg-bg"><div className="flex h-7 items-center border-b border-line px-3 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('Terminal')}</div><div className="h-[calc(100%-1.75rem)]"><TerminalTab items={chat.items} /></div></div>}
+            {terminal && <div className="h-56 shrink-0 border-t border-line bg-bg"><div className="flex h-7 items-center border-b border-line px-3 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('Terminal')}</div><div className="h-[calc(100%-1.75rem)]"><TerminalTab items={chat.items} sid={sid} /></div></div>}
           </main>
 
           {/* Chat cua agent */}

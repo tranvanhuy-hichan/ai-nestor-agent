@@ -1,8 +1,9 @@
 import { coreFeatures } from '@/lib/featureCatalog'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { NotebookText, Bell, Blocks, Cable, FileSearch, Clock, Code2, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, LayoutGrid, ChevronDown, Sun, type LucideIcon } from 'lucide-react'
+import { NotebookText, Bell, Blocks, Cable, FileSearch, Clock, Code2, Gauge, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, LayoutGrid, ChevronDown, Sun, type LucideIcon } from 'lucide-react'
+import { setTheme, useAppearance } from '@/lib/appearance'
 import { api } from '@/lib/api'
 import { t, tk } from '@/lib/i18n.ts'
 import { AgentLogo, AgentOwl } from '@/components/ui/AgentMark'
@@ -42,10 +43,12 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     { to: '/documents', label: tk('Tài liệu'), icon: FileSearch, hint: tk('Hỏi đáp trên hợp đồng, báo cáo, bảng tính của bạn') },
     { to: '/plugins', label: tk('Tiện ích'), icon: Blocks, hint: tk('Nối GitHub, Notion, Canva… chỉ bằng một cú bấm') },
     { to: '/integrations', label: tk('Kết nối'), icon: Cable, hint: tk('Telegram, API, công cụ ngoài') },
+    { to: '/profiles', label: tk('Hồ sơ trợ lý'), icon: Sparkles, hint: tk('Cấu hình trợ lý tùy chỉnh') },
     { to: '/workspace', label: tk('Tính cách & trí nhớ'), icon: FolderCog, hint: tk('Agent là ai và nhớ gì về bạn') },
   ] },
   { title: tk('Hệ thống'), items: [
     { to: '/providers', label: tk('Mô hình AI'), icon: Plug, hint: tk('Bộ não của agent: Gemini, Ollama…') },
+    { to: '/gateway', label: tk('Sức khỏe hệ thống'), icon: Gauge, hint: tk('Tài nguyên và nhật ký máy chủ') },
     { to: '/activity', label: tk('Thống kê'), icon: LayoutDashboard, hint: tk('Agent đã làm gì, tốn bao nhiêu') },
     { to: '/settings', label: tk('Cài đặt'), icon: Settings, hint: tk('Tính năng, an toàn, mật khẩu') },
   ] },
@@ -91,17 +94,6 @@ function NavRow({ item: { to, label, icon: Icon, hint }, unread, chatMode, expan
   )
 }
 
-function useTheme() {
-  const [light, setLight] = useState(() => {
-    try { return localStorage.getItem('theme') === 'light' } catch { return false }
-  })
-  useEffect(() => {
-    document.documentElement.classList.toggle('light', light)
-    try { localStorage.setItem('theme', light ? 'light' : 'dark') } catch { /* private mode */ }
-  }, [light])
-  return [light, setLight] as const
-}
-
 /** Mục "Chức năng" của chế độ Đơn giản: mỗi trợ lý một dòng, gom theo nhóm, nhóm đang mở nhớ lại trong trình duyệt. */
 function FeatureNav({ chatMode, expanded }: { chatMode: boolean; expanded: boolean }) {
   const list = coreFeatures(useAssistants().data ?? FALLBACK_ASSISTANTS)
@@ -133,7 +125,7 @@ function FeatureNav({ chatMode, expanded }: { chatMode: boolean; expanded: boole
 }
 
 export function AppLayout() {
-  const [light, setLight] = useTheme()
+  const light = useAppearance().theme === 'light'
   const simple = useUiMode() === 'simple'
   const location = useLocation()
   const [expanded, setExpanded] = useState(false)
@@ -221,7 +213,7 @@ export function AppLayout() {
             }
           </button>
         )}
-        <button onClick={() => setLight(!light)} title={light ? t('Giao diện tối') : t('Giao diện sáng')}
+        <button onClick={() => setTheme(light ? 'dark' : 'light')} title={light ? t('Giao diện tối') : t('Giao diện sáng')}
           className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-sm text-muted transition-colors hover:bg-panel2 hover:text-fg">
           {light ? <Moon className="size-[18px] shrink-0" /> : <Sun className="size-[18px] shrink-0" />}
           {chatMode

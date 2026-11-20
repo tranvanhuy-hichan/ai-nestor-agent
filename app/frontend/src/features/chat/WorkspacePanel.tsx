@@ -45,7 +45,7 @@ export function WorkspacePanel({ sid, project, items, filesTick, tab, onTab, ope
   }
 
   return (
-    <aside className="relative hidden shrink-0 flex-col border-l border-line bg-panel xl:flex" style={{ width }} aria-label={t('Không gian làm việc')}>
+    <aside className="absolute inset-y-0 right-0 z-30 flex max-w-full shrink-0 flex-col border-l border-line bg-panel shadow-xl xl:relative xl:z-auto xl:shadow-none" style={{ width }} aria-label={t('Không gian làm việc')}>
       <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={() => { drag.current = false }} role="separator" aria-orientation="vertical" aria-label={t('Kéo để đổi độ rộng')}
         className="absolute left-0 top-0 z-10 h-full w-1.5 cursor-col-resize transition hover:bg-accent/40" />
       <div className="flex h-14 shrink-0 items-center gap-1 overflow-x-auto border-b border-line px-2">
@@ -60,7 +60,7 @@ export function WorkspacePanel({ sid, project, items, filesTick, tab, onTab, ope
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === 'changes' && <ChangesTab sid={sid} filesTick={filesTick} />}
         {tab === 'files' && <FilesTab sid={sid} filesTick={filesTick} openPath={openPath} onOpenPath={onOpenPath} />}
-        {tab === 'terminal' && <TerminalTab items={items} />}
+        {tab === 'terminal' && <TerminalTab items={items} sid={sid} />}
         {tab === 'activity' && <ActivityTab items={items} />}
       </div>
     </aside>

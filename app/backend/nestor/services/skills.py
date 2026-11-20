@@ -67,6 +67,7 @@ class Skill:
     missing: list[str] = field(default_factory=list)
     origin: dict | None = None
     bundled: bool = False  # skill di kem Nestor (chi doc); chi tro ly chuyen trach nap, khong dua vao danh sach skill chung
+    category: str = "general"
 
     @property
     def eligible(self) -> bool:
@@ -87,6 +88,7 @@ class Skill:
             "primary_env": self.meta.get("primaryEnv") or "", "origin": self.origin,
             "requires": self.meta.get("requires") or {},
             "model_invocable": not self.front.get("disable-model-invocation", False), "bundled": self.bundled,
+            "category": self.category,
         }
 
 
@@ -124,6 +126,67 @@ def _find_skill_dirs(root: Path, depth: int = 0):
             yield from _find_skill_dirs(child, depth + 1)
 
 
+CATEGORY_MAP = {
+    "autonomous-ai-agents": "agents",
+    "software-development": "dev",
+    "web-development": "dev",
+    "web": "dev",
+    "devops": "devops",
+    "mlops": "devops",
+    "security": "security",
+    "productivity": "productivity",
+    "note-taking": "productivity",
+    "creative": "creative",
+    "media": "creative",
+    "research": "research",
+    "data-science": "research",
+    "finance": "finance",
+    "payments": "finance",
+    "blockchain": "finance",
+    "social-media": "communication",
+    "communication": "communication",
+    "email": "communication",
+    "apple": "communication",
+    "mcp": "tools",
+    "gaming": "creative",
+    "health": "productivity",
+    "smart-home": "tools",
+    "dogfood": "dev",
+}
+
+VALID_CATEGORIES = {
+    "agents", "dev", "devops", "security", "productivity",
+    "creative", "research", "finance", "communication", "tools", "general",
+}
+
+
+def resolve_category(d: Path, front: dict, name: str) -> str:
+    raw = front.get("category")
+    if raw and isinstance(raw, str):
+        c = raw.strip().lower()
+        if c in CATEGORY_MAP:
+            return CATEGORY_MAP[c]
+        if c in VALID_CATEGORIES:
+            return c
+    parts = d.parts
+    if "hermes" in parts:
+        try:
+            idx = parts.index("hermes")
+            if idx + 1 < len(parts) - 1:
+                folder_cat = parts[idx + 1].lower()
+                return CATEGORY_MAP.get(folder_cat, "general")
+        except Exception:
+            pass
+    nl = name.lower()
+    if nl in ("excel-xlsx", "word-docx", "daily-planner", "meeting-notes", "career-coach", "study-coach", "cv-phong-van"):
+        return "productivity"
+    if nl in ("email-writer", "youtube-watcher"):
+        return "communication"
+    if nl in ("humanizer",):
+        return "creative"
+    return "general"
+
+
 def load_one(d: Path, cfg: Config) -> Skill:
     front, body = split_frontmatter((d / "SKILL.md").read_text(errors="replace"))
     meta = next((front["metadata"][k] for k in META_KEYS if isinstance(front["metadata"].get(k), dict)), {})
@@ -135,8 +198,9 @@ def load_one(d: Path, cfg: Config) -> Skill:
             origin = json.loads((d / ".clawhub" / "origin.json").read_text())
         except json.JSONDecodeError:
             pass
+    category = resolve_category(d, front, name)
     return Skill(name=name, description=str(front.get("description") or "").strip(), path=d, body=body.strip(), front=front, meta=meta,
-                 enabled=entry.enabled if entry else True, missing=_gate(meta, cfg, name), origin=origin)
+                 enabled=entry.enabled if entry else True, missing=_gate(meta, cfg, name), origin=origin, category=category)
 
 
 BUNDLED_DIR = Path(__file__).resolve().parent.parent / "bundled_skills"

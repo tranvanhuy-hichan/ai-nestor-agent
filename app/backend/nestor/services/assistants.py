@@ -1,6 +1,11 @@
 """Tro ly chuyen trach: persona dung san (co quan nha nuoc / doanh nghiep) + tro ly tu tao (luu trong workspace/assistants.json)."""
 import json
+import os
 import re
+import uuid
+from pathlib import Path
+from threading import Lock
+from tempfile import NamedTemporaryFile
 
 from ..assistant_defs import forms as formsmod
 from ..core import config as cfgmod
@@ -158,6 +163,7 @@ def validate_def(d: dict, known_tools: set[str], known_skills: set[str]) -> list
         errs.append(f"{i}: san pham {sorted(kinds)} nhung allowlist khong co tool tao file")
     return errs
 BUILTIN: list[dict] = _merge()
+_write_lock = Lock()
 _ID = re.compile(r"[a-z0-9][a-z0-9-]{0,40}")
 
 
@@ -180,7 +186,13 @@ def _custom() -> list[dict]:
 def _write(items: list[dict]) -> None:
     f = _file()
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps([{k: v for k, v in a.items() if k != "builtin"} for a in items], ensure_ascii=False, indent=2))
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=f.parent, delete=False) as tmp:
+        name = tmp.name
+        json.dump([{k: v for k, v in a.items() if k != "builtin"} for a in items], tmp, ensure_ascii=False, indent=2)
+    try:
+        Path(name).replace(f)
+    finally:
+        Path(name).unlink(missing_ok=True)
 
 
 def list_all() -> list[dict]:
@@ -196,10 +208,16 @@ def _clean(aid: str, data: dict) -> dict:
         raise AssistantError("id chỉ gồm chữ thường, số và dấu gạch ngang")
     if not (data.get("name") or "").strip() or not (data.get("prompt") or "").strip():
         raise AssistantError("cần có tên và hướng dẫn (prompt)")
+    env_refs = data.get("env_refs") or {}
+    pattern = r"[A-Za-z_][A-Za-z0-9_]{0,127}"
+    if len(env_refs) > 20 or any(not re.fullmatch(pattern, target) or not re.fullmatch(pattern, source)
+                                 for target, source in env_refs.items()):
+        raise AssistantError("Biến môi trường phải dùng tên hợp lệ, tối đa 20 biến")
     return {"id": aid, "name": data["name"].strip()[:60], "icon": data.get("icon") or "bot", "group": data.get("group") if data.get("group") in GROUPS else "doanh-nghiep",
             "description": (data.get("description") or "")[:300], "prompt": data["prompt"].strip()[:6000],
             "starters": [str(s)[:200] for s in (data.get("starters") or [])][:6], "skills": [str(s) for s in (data.get("skills") or [])][:20],
-            "tools": [str(t) for t in data["tools"]][:80] if data.get("tools") else None,
+            "providers": list(dict.fromkeys(data.get("providers") or []))[:20], "scoped": bool(data.get("scoped")), "env_refs": env_refs,
+            "tools": [str(t) for t in data["tools"]][:80] if data.get("tools") is not None else None,
             "done_criteria": [str(c)[:300] for c in (data.get("done_criteria") or [])][:10] or list(DEFAULT_CRITERIA),
             "deliverables": [str(k)[:200] for k in (data.get("deliverables") or ["none"])][:10] or ["none"]}
 
@@ -207,21 +225,27 @@ def _clean(aid: str, data: dict) -> dict:
 def save(aid: str, data: dict, create: bool) -> dict:
     if any(a["id"] == aid for a in BUILTIN):
         raise AssistantError("không sửa được trợ lý có sẵn; hãy tạo bản sao với id khác")
-    items = _custom()
-    exists = any(a["id"] == aid for a in items)
-    if create and exists:
-        raise AssistantError("id đã tồn tại")
-    if not create and not exists:
-        raise AssistantError("không có trợ lý này")
-    new = _clean(aid, data)
-    _write([a for a in items if a["id"] != aid] + [new])
-    return new | {"builtin": False}
+    with _write_lock:
+        items = _custom()
+        exists = any(a["id"] == aid for a in items)
+        if create and exists:
+            raise AssistantError("id đã tồn tại")
+        if not create and not exists:
+            raise AssistantError("không có trợ lý này")
+        new = _clean(aid, data)
+        previous = next((a for a in items if a["id"] == aid), {})
+        if previous.get("scoped") or new["scoped"]:
+            new["scoped"] = True
+            new["scope_key"] = previous.get("scope_key") or uuid.uuid4().hex
+        _write([a for a in items if a["id"] != aid] + [new])
+        return new | {"builtin": False}
 
 
 def delete(aid: str) -> None:
     if any(a["id"] == aid for a in BUILTIN):
         raise AssistantError("không xóa được trợ lý có sẵn")
-    _write([a for a in _custom() if a["id"] != aid])
+    with _write_lock:
+        _write([a for a in _custom() if a["id"] != aid])
 
 
 SKILL_BUDGET = 12000
@@ -236,7 +260,7 @@ def _skill_text(names: list[str]) -> str:
     parts, left = [], SKILL_BUDGET
     for n in names:
         sk = found.get(n)
-        if not sk or left <= 200:
+        if not sk or not sk.active or left <= 200:
             continue
         body = sk.instructions()[:left]
         left -= len(body)
@@ -280,6 +304,8 @@ def prompt_for(aid: str | None) -> str:
     a = get(aid)
     if not a:
         return ""
+    if a.get("scoped"):
+        return a["prompt"] + "\n\n" + _skill_text(a.get("skills") or [])
     parts = [f"## Bạn đang đóng vai trợ lý: {a['name']}\n{a['prompt']}", INTAKE, _skill_text(a.get("skills") or []), quality_gate(a)]
     return "\n\n".join(p for p in parts if p)
 
@@ -289,4 +315,14 @@ def tool_allow(aid: str | None) -> list[str] | None:
     a = get(aid)
     if not a or a.get("tools") is None:
         return None
-    return sorted({*a["tools"], *ALWAYS_TOOLS})
+    return sorted(set(a["tools"]) if a.get("scoped") else {*a["tools"], *ALWAYS_TOOLS})
+
+
+def scoped_profile(aid: str | None) -> dict | None:
+    a = get(aid)
+    return a if a and not a.get("builtin") and a.get("scoped") and re.fullmatch(r"[0-9a-f]{32}", a.get("scope_key", "")) else None
+
+
+def profile_env(profile: dict | None) -> dict[str, str]:
+    refs = (profile or {}).get("env_refs") or {}
+    return {target: os.environ[source] for target, source in refs.items() if source in os.environ}

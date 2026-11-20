@@ -43,6 +43,7 @@ export function useChat() {
   const [filesTick, setFilesTick] = useState(0)
   const [plan, setPlan] = useState<PlanItem[]>([])
   const abort = useRef<AbortController | null>(null)
+  const openRequest = useRef(0)
   const sessionRef = useRef<string | null>(null)
   const currentProviderRef = useRef<string | null>(null)
   sessionRef.current = sessionId
@@ -105,9 +106,9 @@ export function useChat() {
     })
   }, [])
 
-  const ensureSession = useCallback(async () => {
+  const ensureSession = useCallback(async (assistant?: string) => {
     if (sessionRef.current) return sessionRef.current
-    const r = await api.post<{ id: string }>('/api/sessions', {})
+    const r = await api.post<{ id: string }>('/api/sessions', { assistant })
     setSessionId(r.id)
     sessionRef.current = r.id
     void qc.invalidateQueries({ queryKey: ['sessions'] })
@@ -172,21 +173,27 @@ export function useChat() {
   }, [apply, qc])
 
   const open = useCallback(async (sid: string) => {
+    const request = ++openRequest.current
     abort.current?.abort() // chi ngat phia giao dien; agent tren server van chay tiep
     setBusy(false)
     setStatus(null)
     const [s, st] = await Promise.all([
-      api.get<{ messages: WireMessage[] }>(`/api/sessions/${sid}`),
+      api.get<{ messages: WireMessage[]; assistant?: string }>(`/api/sessions/${sid}`),
       api.get<RunState>(`/api/sessions/${sid}/run`).catch(() => null),
     ])
+    if (request !== openRequest.current) return
     setSessionId(sid)
     sessionRef.current = sid
     setItems(fromWire(s.messages))
     if (st?.active) void follow(sid, st)
-    api.get<{ items: PlanItem[] }>(`/api/sessions/${sid}/plan`).then((p) => setPlan(p.items)).catch(() => setPlan([]))
+    api.get<{ items: PlanItem[] }>(`/api/sessions/${sid}/plan`)
+      .then((p) => { if (request === openRequest.current) setPlan(p.items) })
+      .catch(() => { if (request === openRequest.current) setPlan([]) })
+    return s
   }, [follow])
 
   const reset = useCallback(() => {
+    ++openRequest.current
     abort.current?.abort()
     setBusy(false)
     setStatus(null)

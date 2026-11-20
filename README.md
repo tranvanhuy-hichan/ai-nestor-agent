@@ -50,6 +50,15 @@ An **open-source** personal AI assistant that runs on your own machine and keeps
 - **Bilingual Vietnamese/English UI**: switch language at the top of the sidebar (CLI follows `--lang`). To add strings, wrap them in `t('Vietnamese text')` and add the English version under `app/frontend/src/i18n/en/`; `npm run i18n:check` catches missing, untranslated or conflicting strings.
 - **Safe by default**: shell commands, files outside the session directory and MCP tools ask for confirmation; optional Docker sandbox (no network); optional login password; audit log of every tool call; localhost-only by default; API tokens stored only as hashes.
 
+## Advanced web interface
+
+- In **Chat**, use the profile switcher and **Tool permissions** drawer. A context banner appears when the last model call reaches 80% of its context window. Compact older turns or review highlights before saving them to memory.
+- **Assistant profiles** have their own instructions, model priorities, skills, tool allowlist, and memory. A profile can reference existing server environment variables by name using `TARGET=SOURCE`.
+- **Automations** includes blueprints for Decree 30 weekly reports, YouTube Live summaries, memory review, and GitHub pull requests. Use **Integrations → Chat channels** to approve pairing requests from Telegram and Zalo OA.
+- **System health** shows resource usage, gateway status, and live logs. Restart is available when the gateway runs in the background through `nestor start` or the `nestor.service` user systemd unit. **Settings** stores themes and code fonts per browser.
+
+To open **Chat → Terminal** on POSIX, set a Nestor password and start the gateway with `NESTOR_WEB_TERMINAL=1`. The shell runs under the gateway's operating-system account.
+
 ## Documentation
 
 > The in-depth docs are currently written in Vietnamese. English translations are welcome as contributions.

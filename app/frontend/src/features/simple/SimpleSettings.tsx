@@ -1,3 +1,6 @@
+import { AppearanceCard } from '@/features/settings/AppearanceCard'
+import { ZaloCard, type ZaloState } from '@/features/integrations/ZaloCard'
+import { PairingPanel } from '@/features/integrations/PairingPanel'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -53,47 +56,11 @@ function ChannelCard({ name, title, hint, label, state, path, extra }: { name: s
 }
 
 
-type ZaloState = ChannelState & { oa_id?: string; app_id?: string; has_app_secret?: boolean; has_access_token?: boolean; has_webhook_secret?: boolean; webhook_path?: string }
-
-/** Zalo OA cần vài mã từ trang quản trị Zalo; để trống ô nào thì giữ giá trị đã lưu. */
-function ZaloCard({ state }: { state?: ZaloState }) {
-  const qc = useQueryClient()
-  const toast = useToast()
-  const [f, setF] = useState({ oa_id: '', app_id: '', app_secret: '', access_token: '', refresh_token: '', webhook_secret: '' })
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value })
-  const save = useMutation({
-    mutationFn: (enabled: boolean) => api.put('/api/channels/zalo', { enabled, ...f, oa_id: f.oa_id || state?.oa_id || '', app_id: f.app_id || state?.app_id || '' }),
-    onSuccess: () => { setF({ oa_id: '', app_id: '', app_secret: '', access_token: '', refresh_token: '', webhook_secret: '' }); void qc.invalidateQueries({ queryKey: ['zalo'] }); toast(t('Đã lưu')) },
-    onError: (e) => toast(errMsg(e), 'bad'),
-  })
-  const on = !!state?.enabled
-  const fields: [keyof typeof f, string, boolean | undefined, boolean][] = [
-    ['oa_id', t('Mã Official Account (OA ID)'), !!state?.oa_id, false], ['app_id', t('App ID'), !!state?.app_id, false],
-    ['app_secret', t('App Secret'), state?.has_app_secret, true], ['access_token', t('Access token'), state?.has_access_token, true],
-    ['refresh_token', t('Refresh token'), undefined, true], ['webhook_secret', t('Khóa bí mật webhook'), state?.has_webhook_secret, true],
-  ]
-  return (
-    <Card title={t('Nhận việc qua Zalo')} hint={t('Nhắn Zalo cho trợ lý để giao việc. Cần một Zalo Official Account; nhờ bộ phận IT điền các mã dưới đây một lần.')}>
-      <div className="mb-3">{state?.running ? <Badge tone="ok">{t('Đang hoạt động')}</Badge> : on ? <Badge tone="warn">{t('Đã bật, chưa kết nối')}</Badge> : <Badge>{t('Chưa kết nối')}</Badge>}</div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {fields.map(([k, label, saved, secret]) => (
-          <Input key={k} type={secret ? 'password' : 'text'} value={f[k]} onChange={set(k)} placeholder={saved ? `${label} (${t('đã lưu')})` : label} />
-        ))}
-      </div>
-      {state?.webhook_path && <p className="mt-2 text-xs text-muted">{t('Địa chỉ webhook để dán vào Zalo:')} <code>{state.webhook_path}</code>?secret=…</p>}
-      <div className="mt-3 flex gap-2">
-        <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(true)}>{on ? t('Lưu') : t('Kết nối')}</Button>
-        {on && <Button onClick={() => save.mutate(false)}>{t('Ngắt kết nối')}</Button>}
-      </div>
-    </Card>
-  )
-}
-
 export function SimpleSettings() {
   const nav = useNavigate()
   const cfg = useConfig()
-  const tg = useQuery({ queryKey: ['channels'], queryFn: () => api.get<{ telegram: TelegramStatus }>('/api/channels') })
-  const zalo = useQuery({ queryKey: ['zalo'], queryFn: () => api.get<ZaloState>('/api/channels/zalo'), retry: false })
+  const tg = useQuery({ queryKey: ['channels'], queryFn: () => api.get<{ telegram: TelegramStatus }>('/api/channels'), refetchInterval: 4000 })
+  const zalo = useQuery({ queryKey: ['zalo'], queryFn: () => api.get<ZaloState>('/api/channels/zalo'), retry: false, refetchInterval: 4000 })
   if (!cfg.data) return <Loading />
   const c = cfg.data.config
   const def = c.providers[c.default_provider]
@@ -102,6 +69,7 @@ export function SimpleSettings() {
     <Page>
       <PageHeader title={t('Cài đặt')} subtitle={t('Những thứ cơ bản để bắt đầu. Cần tùy chỉnh sâu hơn, hãy bật chế độ Nâng cao.')} />
       <div className="grid items-start gap-4 pb-10 lg:grid-cols-2">
+        <AppearanceCard />
         <Card title={t('Ngôn ngữ')}><LangSwitcher /></Card>
         <Card title={t('Tài khoản AI')} hint={t('Bộ não giúp trợ lý làm việc.')}>
           <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -113,6 +81,7 @@ export function SimpleSettings() {
           <div className="lg:col-span-2"><ZaloCard state={zalo.data} /></div>
         )}
         <ChannelCard name="Telegram" title={t('Nhận việc qua Telegram')} hint={t('Nhắn Telegram cho trợ lý, kể cả khi bạn không ngồi trước máy tính.')} label={t('Dán mã bot Telegram')} state={tg.data?.telegram} path="/api/channels/telegram" extra={{ api_base: tg.data?.telegram.api_base ?? 'https://api.telegram.org' }} />
+        <div className="lg:col-span-2"><PairingPanel /></div>
       </div>
     </Page>
   )

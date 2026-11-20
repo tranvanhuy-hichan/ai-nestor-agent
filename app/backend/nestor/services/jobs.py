@@ -38,9 +38,13 @@ def get(job_id: str) -> dict | None:
     return _row(r) if r else None
 
 
-def list_jobs(status: str = "", kind: str = "", limit: int = 100) -> list[dict]:
+def list_jobs(status: str = "", kind: str = "", limit: int = 100, *, scope: str | None = None) -> list[dict]:
     with db() as c:
-        rows = c.execute("SELECT * FROM jobs WHERE (?='' OR status=?) AND (?='' OR kind=?) ORDER BY created DESC LIMIT ?", (status, status, kind, kind, limit)).fetchall()
+        rows = c.execute(
+            """SELECT * FROM jobs WHERE (?='' OR status=?) AND (?='' OR kind=?)
+               AND (? IS NULL OR assistant_scope=?) ORDER BY created DESC LIMIT ?""",
+            (status, status, kind, kind, scope, scope, limit),
+        ).fetchall()
     return [_row(r) for r in rows]
 
 
@@ -53,9 +57,12 @@ def _update(job_id: str, **fields) -> None:
 def create(goal: str, *, kind: str = "task", title: str = "", role: str = "", parent_session: str | None = None, parent_job: str | None = None, depth: int = 0,
            permission: str = "default", provider: str | None = None, max_steps: int | None = None, notify: bool = True) -> str:
     jid = uuid.uuid4().hex[:8]
+    parent = (sessions.get(parent_session) or {}) if parent_session else {}
+    scope = parent.get("assistant_scope", "")
+    assistant = parent.get("assistant", "") if scope else ""
     with db() as c:
-        c.execute("""INSERT INTO jobs(id,kind,title,goal,role,status,parent_session,parent_job,depth,permission,provider,max_steps,notify,created)
-                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (jid, kind, (title or goal)[:80], goal, role, "queued", parent_session, parent_job, depth, permission, provider, max_steps, int(notify), time.time()))
+        c.execute("""INSERT INTO jobs(id,kind,title,goal,role,status,parent_session,parent_job,depth,permission,provider,max_steps,notify,created,assistant,assistant_scope)
+                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (jid, kind, (title or goal)[:80], goal, role, "queued", parent_session, parent_job, depth, permission, provider, max_steps, int(notify), time.time(), assistant, scope))
     return jid
 
 
@@ -105,7 +112,7 @@ def _profile_tools(cfg: cfgmod.Config, role: str, depth: int) -> tuple[list[str]
 
 def execute(job_id: str, approver: Callable[[str, str], bool] | None = None, cancel: threading.Event | None = None) -> dict:
     """Chay mot job tu dau den cuoi trong thread hien tai va tra ve dong job da cap nhat."""
-    from . import agent  # import tre de tranh vong
+    from . import agent, assistants  # import tre de tranh vong
 
     job = get(job_id)
     if not job:
@@ -122,6 +129,12 @@ def execute(job_id: str, approver: Callable[[str, str], bool] | None = None, can
         max_steps = job["max_steps"] or (prof.max_steps if prof else cfg.agents.task_max_steps)
         provider = job["provider"] or (prof.provider if prof else None)
         sid = sessions.create(f"{'🤖' if job['kind'] == 'subagent' else '⏳'} {job['title']}", source=job["kind"])
+        if job["assistant_scope"]:
+            profile = assistants.scoped_profile(job["assistant"])
+            if not profile or profile["scope_key"] != job["assistant_scope"]:
+                raise JobError("Hồ sơ của tác vụ đã bị xóa")
+            sessions.set_assistant(sid, job["assistant"])
+            role_prompt = "\n\n".join(filter(None, (assistants.prompt_for(job["assistant"]), role_prompt)))
         _update(job_id, status="running", started=time.time(), session_id=sid, max_steps=max_steps)
         extra = (f"{role_prompt}\n\n" if role_prompt else "") + (
             "Bạn đang chạy như một " + ("agent con" if job["kind"] == "subagent" else "việc nền") + " để hoàn thành mục tiêu được giao. "

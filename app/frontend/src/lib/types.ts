@@ -70,6 +70,7 @@ export interface Skill {
   emoji: string; homepage: string; primary_env: string; model_invocable: boolean
   origin: { source: string; slug: string; owner: string; version: string | null; installedAt: number } | null
   requires: { bins?: string[]; anyBins?: string[]; env?: string[]; config?: string[] }
+  category?: string
 }
 export interface SkillDetail extends Skill { body: string; files: string[] }
 
@@ -90,6 +91,10 @@ export interface Task {
   id: string; kind: 'task' | 'subagent'; title: string; goal: string; role: string; status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted'
   steps: number; max_steps: number; progress: string; result: string; error: string; session_id: string | null
   created: number; started: number | null; finished: number | null; cancel_requested: boolean
+}
+export interface KanbanCard {
+  id: string; title: string; body: string; role: string; permission: string; job_id: string | null
+  sort: number; created: number; updated: number; status: 'todo' | 'running' | 'blocked' | 'done'; job: Task | null
 }
 export interface Job {
   id: string; name: string; schedule: string; prompt: string; provider: string | null; enabled: boolean

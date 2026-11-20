@@ -1,5 +1,6 @@
 """Tool tao file van phong that: .docx, .xlsx (co cong thuc), .pptx va van ban hanh chinh theo ND 30/2020."""
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -567,6 +568,9 @@ def run_script(ctx, name, code, timeout=120):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,80}", name or "") or ".." in name:
         raise ValueError("Tên script không hợp lệ (chỉ chữ, số, '.', '_', '-').")
     timeout = max(1, min(int(timeout or 120), 600))
+    policy = ctx.policies.get("run_script")
+    if policy and policy.timeout:
+        timeout = min(timeout, policy.timeout)
     if not ctx.full_access and not ctx.approve("exec", f"python scripts/{name}\n\n{code[:600]}"):
         return DENIED
     d = ctx.workdir / "scripts"
@@ -574,7 +578,7 @@ def run_script(ctx, name, code, timeout=120):
     f = d / name
     f.write_text(code, encoding="utf-8")
     try:
-        r = subprocess.run([sys.executable, str(f)], cwd=ctx.workdir, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run([sys.executable, str(f)], cwd=ctx.workdir, env={**os.environ, **ctx.env}, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return f"Script chạy quá {timeout}s nên đã bị dừng."
     out = (r.stdout or "")[-6000:]

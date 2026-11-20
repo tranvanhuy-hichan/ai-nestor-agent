@@ -1,4 +1,9 @@
-import { lazy, Suspense, type ReactElement } from 'react'
+import '@fontsource-variable/fira-code'
+import '@fontsource-variable/jetbrains-mono'
+import { useAppearance } from '@/lib/appearance'
+import { GatewayPage } from '@/features/system/GatewayPage'
+import { ProfilesPage } from '@/features/profiles/ProfilesPage'
+import { lazy, Suspense, useEffect, type ReactElement } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { NotificationsPage } from '@/features/notifications/NotificationsPage'
@@ -29,6 +34,14 @@ import { SimpleSettings } from '@/features/simple/SimpleSettings'
 const CodeWorkspace = lazy(() => import('@/features/code/CodeWorkspace').then((m) => ({ default: m.CodeWorkspace })))
 
 export default function App() {
+  const appearance = useAppearance()
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.toggle('light', appearance.theme === 'light')
+    root.dataset.theme = appearance.theme
+    root.dataset.mono = appearance.font
+    root.dataset.ligatures = appearance.ligatures ? 'on' : 'off'
+  }, [appearance.theme, appearance.font, appearance.ligatures])
   const simple = useUiMode() === 'simple'
   // trang chỉ dành cho chế độ Nâng cao: ở chế độ Đơn giản quay về trang chủ
   const adv = (el: ReactElement) => (simple ? <Navigate to="/" replace /> : el)
@@ -42,6 +55,8 @@ export default function App() {
         <Route path="history" element={<Navigate to="/tasks" replace />} />
         {CODE_MODE && !simple && <Route path="code" element={<CodePage />} />}
         <Route path="chat" element={<ChatPage />} />
+        <Route path="profiles" element={<ProfilesPage />} />
+        <Route path="gateway" element={adv(<GatewayPage />)} />
         <Route path="xao-de" element={<Navigate to="/f/ra-de-cham-bai?tab=exam-shuffle" replace />} />
         <Route path="f" element={<FeatureHub />} />
         <Route path="f/youtube-translate" element={<LiveTranslatePage />} />

@@ -34,16 +34,17 @@ def task_start(ctx: ToolContext, goal, title="", role="general"):
 def task_status(ctx: ToolContext, id=""):
     if id:
         job = jobs.get(id)
-        if not job:
+        if not job or job["assistant_scope"] != ctx.profile_id:
             return f"không có việc '{id}'"
         return f"{job['title']} [{job['status']}] {job['steps']}/{job['max_steps'] or '?'} bước" + (f"\nĐang: {job['progress']}" if job["progress"] else "") + (f"\nKết quả:\n{job['result']}" if job["result"] else "") + (f"\nLỗi: {job['error']}" if job["error"] else "")
-    rows = jobs.list_jobs(kind="task", limit=10)
+    rows = jobs.list_jobs(kind="task", limit=10, scope=ctx.profile_id)
     return "\n".join(f"{j['id']}  [{j['status']}]  {j['title']}  ({j['steps']} bước)" for j in rows) or "chưa có việc nền nào"
 
 
 @tool("task_cancel", "Hủy một việc chạy nền đang chạy.", {"id": ("string", "id việc nền")})
 def task_cancel(ctx: ToolContext, id):
-    return "đã yêu cầu hủy" if jobs.request_cancel(id) else f"không hủy được '{id}' (không tồn tại hoặc đã kết thúc)"
+    job = jobs.get(id)
+    return "đã yêu cầu hủy" if job and job["assistant_scope"] == ctx.profile_id and jobs.request_cancel(id) else f"không hủy được '{id}' (không tồn tại hoặc đã kết thúc)"
 
 
 # ---------------------------------------------------------------- to cong tac

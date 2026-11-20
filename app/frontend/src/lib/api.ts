@@ -1,4 +1,11 @@
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  readonly status?: number
+
+  constructor(message: string, status?: number) {
+    super(message)
+    this.status = status
+  }
+}
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, {
@@ -13,7 +20,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
       const j = await r.json()
       msg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail ?? j)
     } catch { /* body khong phai JSON */ }
-    throw new ApiError(msg)
+    throw new ApiError(msg, r.status)
   }
   return r.json() as Promise<T>
 }

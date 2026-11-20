@@ -50,6 +50,15 @@ Trợ lý AI cá nhân **mã nguồn mở**, chạy trên máy bạn, dữ liệ
 - **Song ngữ Việt/Anh**: đổi ngôn ngữ ở đầu thanh bên (và CLI theo `--lang`). Thêm chuỗi mới: bọc `t('câu tiếng Việt')` rồi thêm bản Anh vào `app/frontend/src/i18n/en/`; `npm run i18n:check` bắt chuỗi sót, thiếu bản dịch hoặc dịch xung đột.
 - **An toàn mặc định**: lệnh shell, file ngoài thư mục phiên và tool MCP hỏi xác nhận; tùy chọn sandbox Docker (không mạng); mật khẩu đăng nhập tùy chọn; nhật ký mọi lần gọi tool; chỉ nhận kết nối từ localhost; token API chỉ lưu bản băm.
 
+## Giao diện nâng cao
+
+- **Chat** có bộ chọn hồ sơ, ngăn **Quyền công cụ** và cảnh báo khi lượt gọi gần nhất dùng ít nhất 80% cửa sổ ngữ cảnh. Có thể tóm tắt các lượt cũ hoặc xem lại điểm nhấn trước khi lưu vào bộ nhớ.
+- **Hồ sơ trợ lý** có hướng dẫn, thứ tự mô hình, kỹ năng, danh sách công cụ và bộ nhớ riêng. Biến môi trường của hồ sơ tham chiếu tên biến đã đặt trên máy chủ theo dạng `TEN_DICH=TEN_NGUON`.
+- **Tự động hóa** có mẫu báo cáo tuần NĐ 30, tóm tắt YouTube Live, rà soát bộ nhớ và theo dõi GitHub PR. **Tích hợp → Kênh chat** duyệt quyền Telegram và Zalo OA. Mã ghép đôi tạo yêu cầu để người quản trị duyệt.
+- **Sức khỏe hệ thống** hiển thị tài nguyên, trạng thái Gateway và log trực tiếp. Có thể khởi động lại từ web khi Gateway chạy nền bằng `nestor start` hoặc bằng dịch vụ systemd người dùng `nestor.service`. **Cài đặt** lưu bảng màu và phông chữ theo trình duyệt.
+
+Để mở **Chat → Terminal** trên POSIX, đặt mật khẩu Nestor rồi khởi động Gateway với biến môi trường `NESTOR_WEB_TERMINAL=1`. Terminal chạy với quyền tài khoản hệ điều hành của Gateway.
+
 ## Tài liệu
 
 - [Hướng dẫn sử dụng](docs/huong-dan-su-dung.md): dành cho mọi người dùng

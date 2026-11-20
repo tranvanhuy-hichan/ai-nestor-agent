@@ -4,13 +4,38 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from ..core import config as cfgmod
-from ..services import auth, heartbeat
-from ..services.telegram_channel import channel, new_pair_code
+from ..services import auth, heartbeat, pairing
+from ..services.telegram_channel import channel
 from ..services.zalo_channel import channel as zalo
-from ..services.zalo_channel import new_pair_code as zalo_pair
 from ..services.zalo_channel import verify as zalo_verify
 
 router = APIRouter()
+
+
+@router.get("/channels/pairing")
+def pairing_requests():
+    return pairing.pending()
+
+
+class PairDecision(BaseModel):
+    approve: bool
+
+
+@router.post("/channels/pairing/{key}")
+def decide_pairing(key: str, body: PairDecision):
+    try:
+        request = pairing.decide(key, body.approve)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if request is None:
+        raise HTTPException(404, "Yêu cầu đã hết hạn hoặc đã được xử lý")
+    if body.approve:
+        cfg = cfgmod.load().channels
+        if request["channel"] == "telegram":
+            channel.apply(cfg.telegram)
+        else:
+            zalo.apply(cfg.zalo)
+    return {"ok": True}
 
 
 # ---------- Telegram
@@ -31,19 +56,22 @@ class TgConfig(BaseModel):
 def channels_save(b: TgConfig):
     cfg = cfgmod.load()
     tg = cfg.channels.telegram
+    previous = (tg.token, tg.api_base)
     tg.enabled, tg.api_base = b.enabled, b.api_base.rstrip("/")
     if b.token and b.token != cfgmod.MASK:
         tg.token = b.token.strip()
     if tg.enabled and not tg.token:
         raise HTTPException(400, "cần nhập token bot")
     cfgmod.save(cfg)
+    if not tg.enabled or previous != (tg.token, tg.api_base):
+        pairing.invalidate("telegram")
     channel.apply(tg)
     return {"ok": True}
 
 
 @router.post("/channels/telegram/pair-code")
 def pair_code():
-    return {"code": new_pair_code(), "expires_in": 600}
+    return {"code": pairing.invite("telegram"), "expires_in": pairing.CODE_TTL}
 
 
 class RemoveUser(BaseModel):
@@ -69,8 +97,8 @@ def channels_test(b: TgTest):
     token = b.token if b.token and b.token != cfgmod.MASK else cfgmod.load().channels.telegram.token
     try:
         r = httpx.post(f"{b.api_base.rstrip('/')}/bot{token}/getMe", timeout=15).json()
-    except httpx.HTTPError as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    except (httpx.HTTPError, ValueError):
+        return {"ok": False, "error": "không kết nối được Telegram"}
     return {"ok": True, "bot": "@" + r["result"].get("username", "")} if r.get("ok") else {"ok": False, "error": r.get("description", "token không hợp lệ")}
 
 
@@ -176,6 +204,7 @@ class ZaloConfig(BaseModel):
 def zalo_save(b: ZaloConfig):
     cfg = cfgmod.load()
     z = cfg.channels.zalo
+    previous = (z.oa_id, z.app_id, z.webhook_secret)
     z.enabled, z.oa_id, z.app_id = b.enabled, b.oa_id.strip(), b.app_id.strip()
     for k in cfgmod.ZALO_SECRETS:
         v = getattr(b, k)
@@ -186,13 +215,15 @@ def zalo_save(b: ZaloConfig):
     if z.enabled and not z.webhook_secret:
         raise HTTPException(400, "cần đặt webhook secret để xác thực tin nhắn từ Zalo")
     cfgmod.save(cfg)
+    if not z.enabled or previous != (z.oa_id, z.app_id, z.webhook_secret):
+        pairing.invalidate("zalo")
     zalo.apply(z)
     return _zalo_public(z)
 
 
 @router.post("/channels/zalo/pair-code")
 def zalo_pair_code():
-    return {"code": zalo_pair(), "expires_in": 600}
+    return {"code": pairing.invite("zalo"), "expires_in": pairing.CODE_TTL}
 
 
 class ZaloRemove(BaseModel):

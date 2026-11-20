@@ -41,7 +41,10 @@ def get_config():
 
 @router.put("/config")
 def put_config(body: dict):
-    new = cfgmod.merge_secrets(cfgmod.Config.model_validate(body), cfgmod.load())
+    current = cfgmod.load()
+    new = cfgmod.merge_secrets(cfgmod.Config.model_validate(body), current)
+    # The policy drawer saves separately from Settings, which may still hold an older form.
+    new.agent.tool_policies = current.agent.tool_policies
     if new.default_provider not in new.providers:
         raise HTTPException(400, "provider mặc định không tồn tại")
     new.fallback = [n for n in new.fallback if n in new.providers and n != new.default_provider]

@@ -301,7 +301,14 @@ class McpManager:
             needs_ok = (cfg.confirm or ctx.confirm_writes) and not ctx.full_access
             if needs_ok and not t["read_only"] and not ctx.approve("mcp", f"{t['full_name']} {json.dumps(args, ensure_ascii=False)}"):
                 return "KHÔNG THỰC HIỆN: lời gọi tool bị từ chối nên CHƯA được chạy, không có kết quả nào. Hãy báo cho người dùng biết."
-            return self._submit(self._call(server, t["name"], args), timeout=CALL_TIMEOUT)
+            policy = ctx.policies.get(t["full_name"])
+            timeout = min(CALL_TIMEOUT, policy.timeout) if policy and policy.timeout else CALL_TIMEOUT
+
+            async def call():
+                async with asyncio.timeout(timeout):
+                    return await self._call(server, t["name"], args)
+
+            return self._submit(call(), timeout=timeout + 1)
 
         return fn
 

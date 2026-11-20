@@ -31,22 +31,34 @@ def plan(msgs: list[dict], limit: int, keep_turns: int = 2) -> int | None:
     return users[-keep_turns]
 
 
-def maybe_compact(sid: str, cfg: Config, provider_name: str) -> bool:
+def maybe_compact(sid: str, cfg: Config, provider_name: str, *, force: bool = False) -> bool:
     sess = sessions.get(sid)
     if not sess:
         return False
     msgs = sessions.messages(sid, after_id=sess["summary_upto"], with_ids=True)
-    cut = plan(msgs, cfg.agent.compact_chars)
+    cut = plan(msgs, 0 if force else cfg.agent.compact_chars, keep_turns=1 if force else 2)
     if not cut:
         return False
     old = msgs[:cut]
     text = (f"Tóm tắt trước đó:\n{sess['summary']}\n\n" if sess["summary"] else "") + "\n".join(_render(m) for m in old)
-    try:
-        out = "".join(e["text"] for e in make_provider(cfg.providers[provider_name]).stream(
-            [{"role": "system", "content": PROMPT}, {"role": "user", "content": text[:30000]}], []) if e["type"] == "delta").strip()
-    except ProviderError:
-        return False  # that bai thi van chay duoc bang cach cat bot nhu truoc
+    out = summarize(cfg, provider_name, text)
     if not out:
         return False
-    sessions.set_summary(sid, out, old[-1]["_id"])
-    return True
+    return sessions.set_summary(sid, out, old[-1]["_id"], previous=sess["summary_upto"])
+
+
+def summarize(cfg: Config, provider_name: str, text: str) -> str:
+    try:
+        return "".join(e["text"] for e in make_provider(cfg.providers[provider_name]).stream(
+            [{"role": "system", "content": PROMPT}, {"role": "user", "content": text[:30000]}], []) if e["type"] == "delta").strip()
+    except ProviderError:
+        return ""
+
+
+def highlights(sid: str, cfg: Config, provider_name: str) -> str:
+    sess = sessions.get(sid)
+    if not sess:
+        return ""
+    history = sessions.messages(sid, after_id=sess["summary_upto"])
+    lines = [sess["summary"], *(_render(m) for m in history[-40:])]
+    return summarize(cfg, provider_name, "\n".join(line for line in lines if line)) if history or sess["summary"] else ""

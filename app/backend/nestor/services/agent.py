@@ -9,7 +9,7 @@ from datetime import datetime
 from threading import Event
 
 from ..core import config as cfgmod
-from . import audit, checkpoints, commands, compaction, knowledge, mcp_client, tools_kb, plans, sessions, skills as skillmod, tools, usage, workfiles
+from . import assistants, audit, checkpoints, commands, compaction, knowledge, mcp_client, tools_kb, plans, sessions, skills as skillmod, tools, usage, workfiles
 from .providers import ProviderError, make_provider
 
 PROMPT_FILES = ("SOUL.md", "USER.md", "RULES.md", "MEMORY.md")  # RULES.md: quy tac nguoi dung "dung ket" tu hoi thoai (api/rules)
@@ -98,7 +98,7 @@ def coding_prompt(project, workspace=None) -> str:
     return text
 
 
-def build_system_prompt(cfg: cfgmod.Config, skills: dict, workdir, summary: str = "", sid: str | None = None, has_planning: bool = False, coding: bool = False) -> str:
+def build_system_prompt(cfg: cfgmod.Config, skills: dict, workdir, summary: str = "", sid: str | None = None, has_planning: bool = False, coding: bool = False, profile: dict | None = None) -> str:
     """Xây dựng System Prompt 3 tầng theo chuẩn Hermes Agent để tối ưu Prompt Caching (Cache Hit trên Gemini/Claude/OpenAI/vLLM):
     - TIER 1 (STABLE - Cố định 100%): Identity, SOUL, RULES, USER, Autonomy, Shell notes, Planning rules, Skills Index Level 0.
       Tầng này luôn nằm ở đầu mảng để được cache hoàn toàn qua mọi turn.
@@ -110,7 +110,9 @@ def build_system_prompt(cfg: cfgmod.Config, skills: dict, workdir, summary: str 
     # --- TIER 1: STABLE (Prefix bất biến để cache) ---
     stable_parts = []
     for name in PROMPT_FILES:
-        p = ws / name
+        if profile and name == "SOUL.md":
+            continue
+        p = tools.ToolContext(workspace=ws, profile_id=profile["scope_key"]).memory_file if profile and name == "MEMORY.md" else ws / name
         if p.exists() and p.read_text().strip():
             stable_parts.append(f"## {name}\n{p.read_text()[-4000:].strip()}")
     stable_parts.append(AUTONOMY)
@@ -323,9 +325,23 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
              source: str = "chat", attachments: list[str] | None = None, permission: str = "default", effort: str | None = None,
              system_extra: str = "", max_steps: int | None = None, depth: int = 0, job_id: str | None = None, workdir_sid: str | None = None,
              use_docs: bool = False, docs_pre: str | None = None, temperature: float | None = None, max_tokens: int | None = None,
-             asker: Callable[[str, list[str]], str] | None = None, tool_allow: list[str] | None = None) -> None:
+             asker: Callable[[str, list[str]], str] | None = None, tool_allow: list[str] | None = None, interactive_policy: bool = False) -> None:
     cfg = cfgmod.load()
+    session = sessions.get(sid) or {}
+    scope = session.get("assistant_scope", "")
+    profile = assistants.scoped_profile(session.get("assistant"))
+    if scope and (not profile or profile["scope_key"] != scope):
+        emit(ui_event("error", "Hồ sơ của phiên này đã bị xóa. Hãy mở một phiên mới."))
+        return
+    if profile:
+        profile_tools = assistants.tool_allow(profile["id"])
+        if profile_tools is not None:
+            tool_allow = profile_tools if tool_allow is None else sorted(set(tool_allow) & set(profile_tools))
+        if not system_extra:
+            system_extra = assistants.prompt_for(profile["id"])
     skills = skillmod.discover(cfg)
+    if profile:
+        skills = {name: s for name, s in skills.items() if name in profile.get("skills", [])}
     workdir = workfiles.workdir_for(cfg, workdir_sid or sid)  # agent con/viec nen dung chung thu muc voi phien da giao viec
     project = (sessions.get(workdir_sid or sid) or {}).get("project") or ""
     workdir.mkdir(parents=True, exist_ok=True)
@@ -337,7 +353,9 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
         return ok
 
     ctx = tools.ToolContext(workspace=cfg.workspace_path(), cwd=workdir, approver=recording_approver, confirm_exec=cfg.agent.confirm_exec,
-                            env=skillmod.env_for(skills, cfg), enabled=cfg.agent.tools_enabled, skills={n: s for n, s in skills.items() if s.active},
+                            env={**skillmod.env_for(skills, cfg), **assistants.profile_env(profile)}, enabled=cfg.agent.tools_enabled,
+                            policies=cfg.agent.tool_policies, interactive_policy=interactive_policy,
+                            profile_id=scope, skills={n: s for n, s in skills.items() if s.active},
                             sandbox={"mode": cfg.agent.exec_sandbox, "image": cfg.agent.sandbox_image, "network": cfg.agent.sandbox_network})
     ctx.depth = depth
     ctx.session_id = workdir_sid or sid
@@ -381,10 +399,11 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
         ctx.enabled = lock(ctx.enabled)
         if ctx.plan_restore is not None:
             ctx.plan_restore = lock(ctx.plan_restore)
-    first = provider if provider in cfg.providers else cfg.default_provider
-    if first == cfg.default_provider and cfg.agent.fast_provider in cfg.providers and cfg.agent.fast_provider != first and is_simple(user_text, attachments, bool(project), only_tools):
+    preferred = [n for n in (profile or {}).get("providers", []) if n in cfg.providers]
+    first = provider if provider in cfg.providers else (preferred or [cfg.default_provider])[0]
+    if not preferred and first == cfg.default_provider and cfg.agent.fast_provider in cfg.providers and cfg.agent.fast_provider != first and is_simple(user_text, attachments, bool(project), only_tools):
         first = cfg.agent.fast_provider  # cau don gian: dung model nhanh/re de tiet kiem
-    names = [first] + [n for n in cfg.fallback if n != first and n in cfg.providers]
+    names = list(dict.fromkeys([first, *preferred, *(n for n in cfg.fallback if n in cfg.providers)]))
 
     emit(ui_event("status", "Đang chuẩn bị…"))
     if compaction.maybe_compact(sid, cfg, first):
@@ -400,7 +419,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
     if attachments and cfg.providers[first].vision:
         current["images"] = _images(workdir, attachments)
     has_planning = "plan_set" in tools.TOOLS and ctx.enabled.get("plan_set", True)
-    system = build_system_prompt(cfg, skills, workdir, sess.get("summary", ""), sid, has_planning, bool(project)) + (f"\n\n{perm_note}" if perm_note else "") + (f"\n\n{mention_note}" if mention_note else "") + (f"\n\n{system_extra}" if system_extra else "")
+    system = build_system_prompt(cfg, skills, workdir, sess.get("summary", ""), sid, has_planning, bool(project), profile) + (f"\n\n{perm_note}" if perm_note else "") + (f"\n\n{mention_note}" if mention_note else "") + (f"\n\n{system_extra}" if system_extra else "")
     messages = [{"role": "system", "content": system}] \
         + [_augment(m, workdir) for m in _window(history, cfg.agent.max_history)] + [current]
 
@@ -475,7 +494,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
             return
         parallel = {}  # nhieu delegate trong cung mot luot => chay dong thoi
         delegates = [c for c in result["tool_calls"] if c["name"] == "delegate"]
-        if len(delegates) > 1:
+        if len(delegates) > 1 and "delegate" not in ctx.policies:
             from concurrent.futures import ThreadPoolExecutor
 
             pool = ThreadPoolExecutor(max_workers=min(len(delegates), cfg.agents.max_parallel + 4))

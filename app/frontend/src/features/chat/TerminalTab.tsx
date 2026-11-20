@@ -1,10 +1,23 @@
-import { useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { t } from '@/lib/i18n.ts'
 import { fmtMs } from './MessageView'
 import type { Item, ToolItem } from './useChat'
 
-export function TerminalTab({ items }: { items: Item[] }) {
+const InteractiveTerminal = lazy(() => import('./InteractiveTerminal').then((m) => ({ default: m.InteractiveTerminal })))
+
+export function TerminalTab({ items, sid }: { items: Item[]; sid: string | null }) {
+  const [logs, setLogs] = useState(false)
+  return <div className="flex h-full flex-col">
+    <div className="flex gap-3 border-b border-line px-3 py-2 text-sm">
+      <button aria-pressed={!logs} onClick={() => setLogs(false)}>{t('Terminal')}</button>
+      <button aria-pressed={logs} onClick={() => setLogs(true)}>{t('Lệnh của agent')}</button>
+    </div>
+    <div className="min-h-0 flex-1">{logs ? <CommandLog items={items} /> : <Suspense fallback={null}><InteractiveTerminal key={sid} sid={sid} /></Suspense>}</div>
+  </div>
+}
+
+function CommandLog({ items }: { items: Item[] }) {
   const runs = items.filter((i): i is ToolItem => i.kind === 'tool' && i.name === 'exec')
   const end = useRef<HTMLDivElement>(null)
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }) }, [runs.length, runs[runs.length - 1]?.result])

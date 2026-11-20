@@ -12,6 +12,9 @@ GROUPS = [
     {"id": "work", "label": {"vi": "Công việc và cộng tác", "en": "Work and collaboration"}},
     {"id": "design", "label": {"vi": "Thiết kế và website", "en": "Design and websites"}},
     {"id": "biz", "label": {"vi": "Kinh doanh và thanh toán", "en": "Business and payments"}},
+    {"id": "ai", "label": {"vi": "Trí tuệ nhân tạo và mô hình", "en": "AI and models"}},
+    {"id": "sec", "label": {"vi": "Bảo mật và an toàn", "en": "Security and safety"}},
+    {"id": "media", "label": {"vi": "Truyền thông và mạng xã hội", "en": "Media and social"}},
 ]
 
 
@@ -21,6 +24,21 @@ def _s(id, name, url, group, auth, vi, en, color="6B7280", transport="http", **e
 
 GITHUB_TOKEN = {"header": "Authorization", "prefix": "Bearer ", "help_url": "https://github.com/settings/personal-access-tokens/new",
                 "hint": {"vi": "Tạo một Personal Access Token trên GitHub (chỉ cấp quyền cần thiết) rồi dán vào đây.", "en": "Create a Personal Access Token on GitHub (grant only the permissions you need) and paste it here."}}
+
+BRAVE_TOKEN = {"header": "X-Subscription-Token", "prefix": "", "help_url": "https://brave.com/search/api/",
+               "hint": {"vi": "Dán API Key Brave Search vào đây để tìm kiếm web.", "en": "Paste your Brave Search API key here."}}
+
+PERPLEXITY_TOKEN = {"header": "Authorization", "prefix": "Bearer ", "help_url": "https://www.perplexity.ai/settings/api",
+                    "hint": {"vi": "Dán Perplexity API key vào đây.", "en": "Paste your Perplexity API key here."}}
+
+SLACK_TOKEN = {"header": "Authorization", "prefix": "Bearer ", "help_url": "https://api.slack.com/apps",
+               "hint": {"vi": "Dán Bot User OAuth Token của Slack (xoxb-...) vào đây.", "en": "Paste your Slack Bot User OAuth Token (xoxb-...) here."}}
+
+DISCORD_TOKEN = {"header": "Authorization", "prefix": "Bot ", "help_url": "https://discord.com/developers/applications",
+                 "hint": {"vi": "Dán Discord Bot Token vào đây.", "en": "Paste your Discord Bot Token here."}}
+
+SHODAN_TOKEN = {"header": "X-API-Key", "prefix": "", "help_url": "https://account.shodan.io/",
+                "hint": {"vi": "Dán Shodan API Key vào đây để quét mạng và bảo mật.", "en": "Paste your Shodan API key here."}}
 
 SERVICES = [
     # --- Lap trinh va trien khai
@@ -85,6 +103,28 @@ SERVICES = [
     _s("close", "Close", "https://mcp.close.com/mcp", "biz", "oauth", "CRM bán hàng: lead, cơ hội, cuộc gọi và email trong Close.", "Sales CRM: leads, opportunities, calls and emails in Close.", "2B7DF7"),
     _s("shopify", "Shopify", "https://mcp.shopify.com/mcp", "biz", "open", "Công cụ cho cửa hàng Shopify: danh mục mẫu, gợi ý tên miền và sản phẩm số.", "Shopify store tools: mock catalogs, domain ideas and digital products.", "7AB55C"),
     _s("godaddy", "GoDaddy Domains", "https://api.godaddy.com/v1/domains/mcp", "biz", "open", "Gợi ý tên miền và kiểm tra tên miền còn trống, không cần đăng nhập.", "Domain suggestions and availability checks. No sign-in needed.", "1BDBDB"),
+    # --- Tri tue nhan tao va mo hinh (Hermes AI)
+    _s("anthropic-tools", "Anthropic Compute", "https://api.anthropic.com/mcp", "ai", "oauth", "Bộ công cụ Computer Use và thực thi mã nâng cao của Anthropic.", "Anthropic Computer Use and advanced code execution tools.", "D97706"),
+    _s("memory-graph", "Knowledge Graph Memory", "https://memory.mcp.run/mcp", "ai", "open", "Đồ thị tri thức ngữ cảnh dài hạn cho trợ lý AI cá nhân.", "Long-term graph memory and knowledge entity connections.", "8B5CF6"),
+    _s("replicate", "Replicate", "https://mcp.replicate.com", "ai", "oauth", "Chạy hàng nghìn mô hình AI sinh ảnh, video và xử lý giọng nói.", "Run open-source AI models for image, video and speech generation.", "000000"),
+    # --- Bao mat va an toan (Hermes Security)
+    _s("shodan", "Shodan Intelligence", "https://api.shodan.io/mcp", "sec", "token", "Quét thiết bị kết nối mạng, phát hiện lỗ hổng và cổng mở.", "Scan Internet-connected devices, detect CVEs and open ports.", "C93B2B", token=SHODAN_TOKEN),
+    _s("virustotal", "VirusTotal", "https://www.virustotal.com/api/v3/mcp", "sec", "open", "Phân tích mã độc tập tin, kiểm tra URL và địa chỉ IP độc hại.", "Analyze suspicious files, URLs and malicious IP addresses.", "3949AB"),
+    _s("onepassword", "1Password", "https://mcp.1password.com", "sec", "oauth", "Truy xuất mật khẩu, API key và credential an toàn từ vault.", "Retrieve credentials and secrets safely from 1Password vaults.", "0A85EA"),
+    # --- Truyen thong va mang xa hoi (Hermes Media)
+    _s("twitter", "X (Twitter)", "https://api.x.com/mcp", "media", "oauth", "Đăng bài viết, theo dõi xu hướng và phân tích tương tác trên X.", "Post tweets, monitor trending topics and analytics on X.", "000000"),
+    _s("youtube", "YouTube Data", "https://youtube.googleapis.com/mcp", "media", "open", "Tra cứu video, lấy transcript phụ đề và thống kê kênh YouTube.", "Search videos, fetch transcripts and inspect channel statistics.", "FF0000"),
+    _s("zotero", "Zotero Research", "https://zotero.mcp.run/mcp", "media", "open", "Quản lý thư viện tài liệu, trích dẫn chuẩn học thuật và PDF.", "Manage citation libraries, scholarly papers and PDF annotations.", "CC292B"),
+    # --- Lap trinh, ha tang va tim kiem bo sung (Hermes Developer Tools)
+    _s("docker", "Docker Engine", "https://mcp.docker.com/mcp", "dev", "open", "Quản lý container, image, volumes và Docker Compose.", "Manage containers, images, volumes and Docker Compose.", "2496ED"),
+    _s("kubernetes", "Kubernetes", "https://mcp.kubernetes.io/mcp", "dev", "open", "Kiểm tra pod, deployment, service và log cụm Kubernetes.", "Inspect pods, deployments, services and k8s logs.", "326CE5"),
+    _s("puppeteer", "Puppeteer Browser", "https://puppeteer.mcp.run/mcp", "dev", "open", "Duyệt web tự động, cào dữ liệu và chụp ảnh màn hình.", "Headless web browsing, web scraping and screenshots.", "00D8A2"),
+    _s("brave-search", "Brave Search", "https://api.search.brave.com/mcp", "search", "token", "Tìm kiếm web độc lập, chỉ mục riêng và bảo vệ quyền riêng tư.", "Independent web search, private indexing with zero tracking.", "FB542B", token=BRAVE_TOKEN),
+    _s("perplexity", "Perplexity AI", "https://api.perplexity.ai/mcp", "search", "token", "Tìm kiếm và tổng hợp câu trả lời thông minh từ web.", "AI-powered web search and answer synthesis.", "1FB8CD", token=PERPLEXITY_TOKEN),
+    _s("arxiv", "arXiv Research", "https://arxiv.mcp.run/mcp", "search", "open", "Tìm kiếm, đọc tóm tắt và tải bài báo khoa học từ arXiv.", "Search, read abstracts and download research papers from arXiv.", "B31B1B"),
+    _s("slack", "Slack", "https://slack.com/api/mcp", "work", "token", "Gửi tin nhắn, đọc kênh và trao đổi nhóm trong Slack.", "Send messages, read channels and collaborate in Slack.", "4A154B", token=SLACK_TOKEN),
+    _s("discord", "Discord", "https://discord.com/api/mcp", "work", "token", "Tương tác server, gửi thông báo và quản lý bot Discord.", "Interact with servers, send notifications and manage Discord bots.", "5865F2", token=DISCORD_TOKEN),
+    _s("obsidian", "Obsidian Vault", "https://obsidian.mcp.run/mcp", "work", "open", "Đọc, tạo và liên kết các ghi chú trong Obsidian Vault.", "Read, create and link notes in your Obsidian Vault.", "7C3AED"),
 ]
 
 

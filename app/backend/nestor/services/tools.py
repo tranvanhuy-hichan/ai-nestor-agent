@@ -10,14 +10,21 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 import httpx
 
+from ..core.config import ToolPolicy
+
 from . import checkpoints, hooks
+
+
+_approved_context: ContextVar[object] = ContextVar("approved_tool_context", default=None)
 
 
 @dataclass
@@ -25,6 +32,10 @@ class ToolContext:
     workspace: Path
     approver: Callable[[str, str], bool] = lambda kind, detail: False
     confirm_exec: bool = True
+    policies: dict[str, ToolPolicy] = field(default_factory=dict)
+    approvals_once: set[tuple[str, str]] = field(default_factory=set)
+    interactive_policy: bool = False
+    profile_id: str = ""
     env: dict[str, str] = field(default_factory=dict)
     enabled: dict[str, bool] = field(default_factory=dict)
     skills: dict = field(default_factory=dict)  # name -> skills.Skill
@@ -47,8 +58,12 @@ class ToolContext:
     def workdir(self) -> Path:
         return self.cwd or self.workspace
 
+    @property
+    def memory_file(self) -> Path:
+        return self.workspace / ".profiles" / self.profile_id / "MEMORY.md" if self.profile_id else self.workspace / "MEMORY.md"
+
     def approve(self, kind: str, detail: str) -> bool:
-        return self.approver(kind, detail)
+        return _approved_context.get() is self or self.approver(kind, detail)
 
 
 @dataclass
@@ -74,23 +89,46 @@ def tool(name: str, description: str, params: dict[str, tuple[str, str]], requir
 
 
 def schemas(ctx: ToolContext) -> list[dict]:
-    return [{"name": t.name, "description": t.description, "parameters": t.parameters} for t in [*TOOLS.values(), *ctx.extra.values()] if ctx.enabled.get(t.name, True)]
+    return [{"name": t.name, "description": t.description, "parameters": t.parameters} for t in [*TOOLS.values(), *ctx.extra.values()] if tool_enabled(ctx, t.name)]
+
+
+def tool_enabled(ctx: ToolContext, name: str) -> bool:
+    policy = ctx.policies.get(name)
+    return ctx.enabled.get(name, True) and (policy is None or policy.enabled)
 
 
 def call(ctx: ToolContext, name: str, args: dict) -> tuple[str, bool]:
     t = TOOLS.get(name) or ctx.extra.get(name)
-    if not t or not ctx.enabled.get(name, True):
+    if not t or not tool_enabled(ctx, name):
         return f"loi: khong co tool {name}", False
-    if blocked := hooks.run(ctx, "PreToolUse", name, args):
-        return f"KHÔNG THỰC HIỆN: hook chặn tool này: {blocked}", False
+    policy = ctx.policies.get(name)
+    mode = policy.approval if policy else "inherit"
+    approved = mode == "auto" and ctx.interactive_policy
+    if mode in ("ask", "once"):
+        detail = json.dumps(args, ensure_ascii=False, sort_keys=True)
+        key = (name, detail)
+        approved = mode == "once" and key in ctx.approvals_once
+        if not approved and not ctx.approver(name, detail):
+            return DENIED, False
+        if mode == "once":
+            ctx.approvals_once.add(key)
+        approved = True
+    token = _approved_context.set(ctx if approved else None)
     try:
+        if blocked := hooks.run(ctx, "PreToolUse", name, args):
+            return f"KHÔNG THỰC HIỆN: hook chặn tool này: {blocked}", False
         out = str(t.fn(ctx, **args))
+        if policy and policy.output_limit and len(out) > policy.output_limit:
+            suffix = "\n[Đã giới hạn đầu ra]"
+            out = out[:policy.output_limit - len(suffix)] + suffix
         hooks.run(ctx, "PostToolUse", name, args, out)
         return out, True
     except TypeError as e:
         return f"loi: tham so khong hop le ({e})", False
     except Exception as e:  # tool khong duoc lam sap vong lap agent
         return f"loi: {type(e).__name__}: {e}", False
+    finally:
+        _approved_context.reset(token)
 
 
 # ---------- helpers
@@ -98,6 +136,8 @@ def _resolve(ctx: ToolContext, path: str, mode: str) -> Path:
     p = Path(path).expanduser()
     p = (p if p.is_absolute() else ctx.workdir / p).resolve()
     ws = ctx.workspace.resolve()
+    if p.is_relative_to(ws / ".profiles"):
+        raise ValueError("Dùng công cụ bộ nhớ để truy cập ghi nhớ của hồ sơ")
     outside = p != ws and ws not in p.parents
     if outside and ctx.project:
         root = ctx.project.resolve()
@@ -173,10 +213,12 @@ def shell_note() -> str:
     return "" if name == "bash" else f"Lệnh exec chạy bằng {name} trên {platform.system()}: viết lệnh đúng cú pháp của shell này, không dùng cú pháp bash."
 
 
-def _docker_cmd(ctx: ToolContext, command: str) -> list[str]:
+def _docker_cmd(ctx: ToolContext, command: str, container: str = "") -> list[str]:
     sb = ctx.sandbox
     cmd = ["docker", "run", "--rm", "--network", "bridge" if sb.get("network") else "none", "--memory", "1g", "--cpus", "2", "--pids-limit", "256",
            *(["--user", f"{os.getuid()}:{os.getgid()}"] if hasattr(os, "getuid") else []), "-e", "HOME=/tmp", "-v", f"{ctx.workdir.resolve()}:/work", "-w", "/work"]
+    if container:
+        cmd += ["--name", container]
     for k, v in ctx.env.items():
         cmd += ["-e", f"{k}={v}"]
     return cmd + [sb.get("image") or "python:3.12-slim", "bash", "-c", command]
@@ -194,7 +236,6 @@ def _run_cancellable(ctx, cmd, timeout, **kw):
                             start_new_session=posix, **kw)
     end = time.time() + timeout
     chunks: list[str] = []
-    import threading
     t = threading.Thread(target=lambda: chunks.append(proc.stdout.read()), daemon=True)
     t.start()
 
@@ -226,18 +267,28 @@ def exec_tool(ctx, command, timeout=60):
     if ctx.confirm_exec and not ctx.approve("exec", command):
         return DENIED
     ctx.workdir.mkdir(parents=True, exist_ok=True)
+    policy = ctx.policies.get("exec")
+    limit = min(int(timeout), 300)
+    if policy and policy.timeout:
+        limit = min(limit, policy.timeout)
     sandboxed = ctx.sandbox.get("mode") == "docker"
     if sandboxed and not shutil.which("docker"):
         return "loi: da bat sandbox Docker nhung may khong co lenh docker"
+    container = f"nestor-{uuid_hex()}" if sandboxed else ""
     try:
         if sandboxed:
-            r = _run_cancellable(ctx, _docker_cmd(ctx, command), min(int(timeout), 300) + 30)
+            r = _run_cancellable(ctx, _docker_cmd(ctx, command, container), limit if policy and policy.timeout else limit + 30)
         else:
-            r = _run_cancellable(ctx, command, min(int(timeout), 300), shell=True, executable=_shell()[0], cwd=ctx.workdir, env={**os.environ, **ctx.env})
-    except subprocess.TimeoutExpired:
-        return f"loi: lenh chay qua {timeout}s va bi dung"
-    except _Cancelled:
-        return "loi: da dung lenh theo yeu cau cua nguoi dung"
+            r = _run_cancellable(ctx, command, limit, shell=True, executable=_shell()[0], cwd=ctx.workdir, env={**os.environ, **ctx.env})
+    except (subprocess.TimeoutExpired, _Cancelled) as exc:
+        if container:
+            try:
+                subprocess.run(["docker", "rm", "-f", container], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        if isinstance(exc, _Cancelled):
+            return "loi: da dung lenh theo yeu cau cua nguoi dung"
+        return f"loi: lenh chay qua {limit}s va bi dung"
     out = (r.stdout + r.stderr)[-6000:] or "(khong co output)"
     out = out if r.returncode == 0 else f"{out}\n[exit code {r.returncode}]"
     return f"[sandbox docker]\n{out}" if sandboxed else out
@@ -373,17 +424,19 @@ _BG: dict[str, dict] = {}
 MAX_BG = 5
 
 
-def _bg_kill(job: dict) -> None:
+def _bg_kill(job: dict, *, force: bool = False) -> None:
+    if timer := job.get("timer"):
+        timer.cancel()
     proc = job["proc"]
     if proc.poll() is None:
         try:
             if os.name == "posix":
                 import signal
-                os.killpg(proc.pid, signal.SIGTERM)
+                os.killpg(proc.pid, signal.SIGKILL if force else signal.SIGTERM)
             else:
-                proc.terminate()
-        except OSError:
-            proc.kill()
+                proc.kill() if force else proc.terminate()
+        except ProcessLookupError:
+            pass
 
 
 def _bg_cleanup() -> None:
@@ -410,17 +463,24 @@ def exec_bg(ctx, command):
     jid = uuid_hex()
     log = Path(dbmod.DATA) / "bg" / f"{jid}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
-    f = log.open("wb")
-    proc = subprocess.Popen(command, shell=True, executable=_shell()[0], stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=ctx.workdir,
-                            env={**os.environ, **ctx.env}, start_new_session=(os.name == "posix"))
-    _BG[jid] = {"proc": proc, "log": log, "cmd": command, "file": f}
+    with log.open("wb") as f:
+        proc = subprocess.Popen(command, shell=True, executable=_shell()[0], stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=ctx.workdir,
+                                env={**os.environ, **ctx.env}, start_new_session=(os.name == "posix"))
+    job = {"proc": proc, "log": log, "cmd": command, "scope": ctx.profile_id}
+    _BG[jid] = job
+    policy = ctx.policies.get("exec_bg")
+    if policy and policy.timeout:
+        timer = threading.Timer(policy.timeout, _bg_kill, args=(job,), kwargs={"force": True})
+        timer.daemon = True
+        job["timer"] = timer
+        timer.start()
     return f"đã chạy nền job {jid} (pid {proc.pid}). Dùng exec_read job={jid} để xem output."
 
 
-def _bg_job(job: str) -> dict:
+def _bg_job(ctx: ToolContext, job: str) -> dict:
     j = _BG.get(job)
-    if not j:
-        raise ValueError(f"không có job '{job}'. Đang có: {', '.join(_BG) or '(không có)'}")
+    if not j or j["scope"] != ctx.profile_id:
+        raise ValueError(f"không có job '{job}'")
     return j
 
 
@@ -428,9 +488,8 @@ def _bg_job(job: str) -> dict:
       {"job": ("string", "mã job từ exec_bg"), "wait": ("integer", "chờ tối đa bấy nhiêu giây trước khi đọc (mặc định 0, tối đa 30)")}, required=["job"], risk="exec")
 def exec_read(ctx, job, wait=0):
     import time
-    j = _bg_job(job)
+    j = _bg_job(ctx, job)
     time.sleep(max(0, min(int(wait or 0), 30)))
-    j["file"].flush()
     out = j["log"].read_bytes()[-6000:].decode("utf-8", "replace") or "(chưa có output)"
     rc = j["proc"].poll()
     return f"[{'đang chạy' if rc is None else f'đã thoát, mã {rc}'}] {j['cmd']}\n{out}"
@@ -438,7 +497,7 @@ def exec_read(ctx, job, wait=0):
 
 @tool("exec_stop", "Dừng một lệnh nền.", {"job": ("string", "mã job từ exec_bg")}, risk="exec")
 def exec_stop(ctx, job):
-    j = _bg_job(job)
+    j = _bg_job(ctx, job)
     _bg_kill(j)
     return f"đã dừng job {job}"
 
@@ -467,7 +526,9 @@ def project_note(ctx, note):
 
 @tool("remember", "Lưu một điều quan trọng vào bộ nhớ dài hạn (MEMORY.md).", {"note": ("string", "nội dung cần nhớ")})
 def remember(ctx, note):
-    with (ctx.workspace / "MEMORY.md").open("a") as f:
+    path = ctx.memory_file
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
         f.write(f"- {note}\n")
     return "da nho"
 
@@ -594,8 +655,8 @@ def web_search(ctx, query, limit=5):
       {"query": ("string", "từ khóa cần tìm"), "limit": ("integer", "số kết quả tối đa (mặc định 6)")}, required=["query"])
 def memory_search(ctx, query, limit=6):
     from . import sessions  # tranh import vong
-    hits = sessions.search(query, min(int(limit), 15))
-    mem = ctx.workspace / "MEMORY.md"
+    hits = sessions.search(query, min(int(limit), 15), scope=ctx.profile_id)
+    mem = ctx.memory_file
     from ..core.text import fold
     terms = fold(query).split()
     notes = [ln for ln in (mem.read_text().splitlines() if mem.exists() else []) if any(t in fold(ln) for t in terms)]

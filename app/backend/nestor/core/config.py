@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -28,12 +29,20 @@ class ProviderCfg(BaseModel):
     price_out: float = Field(0.0, ge=0)
 
 
+class ToolPolicy(BaseModel):
+    enabled: bool = True
+    approval: Literal["inherit", "ask", "once", "auto"] = "inherit"
+    timeout: int | None = Field(None, ge=1, le=300)
+    output_limit: int | None = Field(None, ge=100, le=100000)
+
+
 class AgentCfg(BaseModel):
     workspace: str = "workspace"
     max_steps: int = Field(10, ge=1, le=50)
     max_history: int = Field(30, ge=4, le=500)
     confirm_exec: bool = True
     tools_enabled: dict[str, bool] = {}
+    tool_policies: dict[str, ToolPolicy] = {}
     compact_chars: int = Field(24000, ge=4000)  # vuot nguong nay thi tom tat phan hoi thoai cu
     exec_sandbox: Literal["none", "docker"] = "none"
     sandbox_image: str = "python:3.12-slim"
@@ -185,11 +194,15 @@ def save(cfg: Config, encrypt: bool | None = None) -> None:
     if secrets.enabled() if encrypt is None else encrypt:
         secrets.encrypt_tree(data)
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = CONFIG_PATH.with_name(CONFIG_PATH.name + ".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(json.dumps(data, indent=2, ensure_ascii=False))
-    os.replace(tmp, CONFIG_PATH)
+    tmp = None
+    try:
+        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=CONFIG_PATH.parent, delete=False) as f:
+            tmp = Path(f.name)
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, CONFIG_PATH)
+    finally:
+        if tmp is not None:
+            tmp.unlink(missing_ok=True)
 
 
 def masked(cfg: Config) -> dict:

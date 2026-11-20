@@ -1,3 +1,4 @@
+import { AppearanceCard } from '@/features/settings/AppearanceCard'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -171,6 +172,7 @@ export function SettingsPage() {
         <Button variant="primary" disabled={!dirty} loading={save.isPending}
           onClick={() => save.mutate({ ...cfg.data.config, ...extra, agent, clawhub_url: hub }, { onSuccess: () => toast(t('Đã lưu cài đặt')), onError: (e) => toast(errMsg(e), 'bad') })}>{t('Lưu thay đổi')}</Button>
       } />
+      <div className="mb-4"><AppearanceCard /></div>
 
       <Tabs
         value={tab}

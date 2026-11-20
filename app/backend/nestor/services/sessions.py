@@ -45,9 +45,16 @@ def set_project(sid: str, project: str) -> None:
         c.execute("UPDATE sessions SET project=? WHERE id=?", (project, sid))
 
 
-def set_assistant(sid: str, assistant: str) -> None:
+def set_assistant(sid: str, assistant: str) -> bool:
+    from . import assistants
+    scope = (assistants.scoped_profile(assistant) or {}).get("scope_key", "")
     with db() as c:
-        c.execute("UPDATE sessions SET assistant=? WHERE id=?", (assistant or "", sid))
+        result = c.execute(
+            """UPDATE sessions SET assistant=?, assistant_scope=? WHERE id=?
+               AND (assistant_scope=? OR NOT EXISTS (SELECT 1 FROM messages WHERE session_id=?))""",
+            (assistant or "", scope, sid, scope, sid),
+        )
+        return result.rowcount > 0
 
 
 def rename(sid: str, title: str) -> None:
@@ -104,12 +111,18 @@ def truncate_from(sid: str, index: int) -> None:
         ids = [r["id"] for r in c.execute("SELECT id FROM messages WHERE session_id=? ORDER BY id", (sid,))]
         if index < len(ids):
             c.execute("DELETE FROM messages WHERE session_id=? AND id>=?", (sid, ids[index]))
-            c.execute("UPDATE sessions SET summary='', summary_upto=0 WHERE id=? AND summary_upto>=?", (sid, ids[index]))
+            c.execute("UPDATE sessions SET summary='', summary_upto=0, compacted_at=0 WHERE id=? AND summary_upto>=?", (sid, ids[index]))
 
 
-def set_summary(sid: str, summary: str, upto: int) -> None:
+def set_summary(sid: str, summary: str, upto: int, *, previous: int | None = None) -> bool:
     with db() as c:
-        c.execute("UPDATE sessions SET summary=?, summary_upto=? WHERE id=?", (summary, upto, sid))
+        result = c.execute(
+            """UPDATE sessions SET summary=?, summary_upto=?, compacted_at=? WHERE id=?
+               AND (? IS NULL OR COALESCE(summary_upto, 0)=?)
+               AND EXISTS (SELECT 1 FROM messages WHERE id=? AND session_id=?)""",
+            (summary, upto, time.time(), sid, previous, previous, upto, sid),
+        )
+        return result.rowcount > 0
 
 
 def _excerpt(text: str, terms: list[str], width: int = 150) -> str:
@@ -129,13 +142,15 @@ def _excerpt(text: str, terms: list[str], width: int = 150) -> str:
     return ("…" if start else "") + piece + ("…" if start + width < len(text) else "")
 
 
-def search(query: str, limit: int = 8) -> list[dict]:
+def search(query: str, limit: int = 8, *, scope: str | None = None) -> list[dict]:
     """Tim trong toan bo lich su hoi thoai (FTS5, khong phan biet dau/hoa thuong)."""
     terms = [t for t in "".join(ch if ch.isalnum() else " " for ch in fold(query)).split() if t]
     if not terms or not dbmod.fts_enabled:
         return []
     with db() as c:
         rows = c.execute("""SELECT f.session_id, f.role, f.content, s.title, s.updated
-                            FROM messages_fts f JOIN sessions s ON s.id=f.session_id WHERE messages_fts MATCH ? ORDER BY rank LIMIT ?""",
-                         (" ".join(f'"{t}"' for t in terms), limit)).fetchall()
+                            FROM messages_fts f JOIN sessions s ON s.id=f.session_id
+                            WHERE messages_fts MATCH ? AND (? IS NULL OR s.assistant_scope=?)
+                            ORDER BY rank LIMIT ?""",
+                         (" ".join(f'"{t}"' for t in terms), scope, scope, limit)).fetchall()
     return [{"session_id": r["session_id"], "role": r["role"], "snip": _excerpt(r["content"], terms), "title": r["title"], "updated": r["updated"]} for r in rows]

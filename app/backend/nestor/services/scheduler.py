@@ -10,6 +10,7 @@ from . import agent, notifications, sessions
 
 TICK = 15
 _stop = threading.Event()
+_thread: threading.Thread | None = None
 
 
 class ScheduleError(ValueError):
@@ -76,10 +77,20 @@ def _loop() -> None:
             threading.Thread(target=run_job, args=(job_id,), daemon=True).start()
 
 
+def running() -> bool:
+    return not _stop.is_set() and _thread is not None and _thread.is_alive()
+
+
 def start() -> None:
+    global _thread
+    if running():
+        return
     _stop.clear()
-    threading.Thread(target=_loop, daemon=True, name="scheduler").start()
+    _thread = threading.Thread(target=_loop, daemon=True, name="scheduler")
+    _thread.start()
 
 
 def stop() -> None:
     _stop.set()
+    if _thread:
+        _thread.join(timeout=1)

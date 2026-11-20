@@ -25,6 +25,10 @@ def bind(host: str, port: int):
 
 
 def main(argv: list[str] | None = None) -> int:
+    if os.name == "posix" and (sys.argv[1:] if argv is None else argv) == ["--terminal-shell"]:
+        from .services import terminal_child
+        terminal_child.run()
+        return 0
     ap = argparse.ArgumentParser(prog="nestor-server")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=0, help="cổng ưa thích (cố định để đăng nhập OAuth của MCP còn hiệu lực lần sau); bận hoặc 0 thì tự chọn")

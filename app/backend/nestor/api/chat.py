@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..core import config as cfgmod
-from ..services import assistants, chat_runner, sessions, usage, workfiles
+from ..services import assistants, chat_runner, compaction, sessions, tools, usage, workfiles
 
 router = APIRouter()
 
@@ -19,11 +19,17 @@ def list_sessions(q: str = ""):
 
 class NewSession(BaseModel):
     title: str = "Hội thoại mới"
+    assistant: str = ""
 
 
 @router.post("/sessions")
 def create_session(b: NewSession):
-    return {"id": sessions.create(b.title)}
+    if b.assistant and not assistants.get(b.assistant):
+        raise HTTPException(400, "không có trợ lý này")
+    sid = sessions.create(b.title)
+    if b.assistant:
+        sessions.set_assistant(sid, b.assistant)
+    return {"id": sid}
 
 
 @router.get("/sessions/{sid}")
@@ -40,6 +46,37 @@ def session_usage(sid: str):
     if not sessions.get(sid):
         raise HTTPException(404, "không có phiên này")
     return usage.session_usage(sid, cfgmod.load().providers)
+
+
+class ContextAction(BaseModel):
+    action: Literal["compact", "highlights"]
+    provider: str | None = None
+    note: str = Field("", max_length=4000)
+
+
+@router.post("/sessions/{sid}/context")
+def update_context(sid: str, body: ContextAction):
+    with chat_runner.edit_idle_session(sid) as editable:
+        if not editable:
+            raise HTTPException(409, "Hãy đợi tác vụ hiện tại kết thúc")
+        sess = sessions.get(sid)
+        if not sess:
+            raise HTTPException(404, "Không có phiên này")
+        cfg = cfgmod.load()
+        provider = body.provider if body.provider in cfg.providers else cfg.default_provider
+        scope = sess.get("assistant_scope", "")
+        profile = assistants.scoped_profile(sess.get("assistant"))
+        if scope and (not profile or profile["scope_key"] != scope):
+            raise HTTPException(409, "Hồ sơ của phiên này đã bị xóa")
+        if body.action == "compact":
+            if not compaction.maybe_compact(sid, cfg, provider, force=True):
+                raise HTTPException(422, "Chưa có lượt cũ để tóm tắt hoặc mô hình chưa trả về bản tóm tắt")
+            return {"ok": True}
+        note = body.note.strip()
+        if not note:
+            return {"note": compaction.highlights(sid, cfg, provider)}
+        tools.remember(tools.ToolContext(cfg.workspace_path(), profile_id=scope), note)
+        return {"ok": True}
 
 
 class Truncate(BaseModel):
@@ -80,7 +117,9 @@ def set_session_assistant(sid: str, body: AssistantPick):
         raise HTTPException(404, "không có phiên này")
     if body.assistant and not assistants.get(body.assistant):
         raise HTTPException(400, "không có trợ lý này")
-    sessions.set_assistant(sid, body.assistant)
+    with chat_runner.edit_idle_session(sid) as editable:
+        if not editable or not sessions.set_assistant(sid, body.assistant):
+            raise HTTPException(409, "Hãy bắt đầu phiên mới để đổi hồ sơ.")
     return {"ok": True, "assistant": body.assistant}
 
 

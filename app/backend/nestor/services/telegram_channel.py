@@ -1,7 +1,6 @@
 """Kenh Telegram (long polling, khong can cong mo ra ngoai): nhan tin -> agent -> tra loi, xin phep bang nut bam."""
 import logging
 import re
-import secrets
 import threading
 import time
 
@@ -9,25 +8,11 @@ import httpx
 
 from ..core import config as cfgmod
 from ..core.db import db
-from . import chat_runner, notifications, sessions, workfiles
+from . import chat_runner, notifications, pairing, sessions, workfiles
 
 log = logging.getLogger("telegram")
 CHUNK = 4000
-PAIR_TTL = 600
 KIND_LABEL = {"exec": "chạy lệnh shell", "mcp": "gọi tool MCP", "file_read": "đọc file ngoài workspace", "file_write": "ghi file ngoài workspace"}
-_pair: dict[str, float] = {}
-
-
-def new_pair_code() -> str:
-    code = f"{secrets.randbelow(10**6):06d}"
-    _pair[code] = time.time() + PAIR_TTL
-    return code
-
-
-def _consume_pair(code: str) -> bool:
-    exp = _pair.pop(code, 0)
-    return exp > time.time()
-
 
 def _link_get(chat_id: int) -> str | None:
     with db() as c:
@@ -72,7 +57,8 @@ class TelegramChannel:
             self.stop_evt.set()
             self.thread = None
         self.cfg = cfg
-        if cfg.enabled and cfg.token and not self.thread:
+        if cfg.enabled and cfg.token and (not self.thread or not self.thread.is_alive()):
+            self.status = {"running": False, "error": "", "bot": ""}
             self.stop_evt = threading.Event()
             self.thread = threading.Thread(target=self._poll, args=(self.stop_evt,), daemon=True, name="telegram")
             self.thread.start()
@@ -90,20 +76,27 @@ class TelegramChannel:
         offset = 0
         try:
             me = self.api("getMe", http_timeout=15)
+            if stop.is_set():
+                return
             self.status = {"running": True, "error": "", "bot": f"@{me.get('username', '')}"}
         except Exception as e:  # noqa: BLE001 - hien loi token len UI
-            self.status = {"running": False, "error": str(e)[:200], "bot": ""}
+            if not stop.is_set():
+                self.status = {"running": False, "error": str(e)[:200], "bot": ""}
             return
         while not stop.is_set():
             try:
                 for u in self.api("getUpdates", http_timeout=40, offset=offset, timeout=20, allowed_updates=["message", "callback_query"]):
+                    if stop.is_set():
+                        return
                     offset = u["update_id"] + 1
                     threading.Thread(target=self._handle, args=(u,), daemon=True).start()
             except Exception as e:  # noqa: BLE001
-                self.status["error"] = str(e)[:200]
+                if not stop.is_set():
+                    self.status["error"] = str(e)[:200]
                 stop.wait(5)
             else:
-                self.status["error"] = ""
+                if not stop.is_set():
+                    self.status["error"] = ""
 
     # ---- xu ly tin
     def _allowed(self, user_id: int) -> bool:
@@ -122,13 +115,12 @@ class TelegramChannel:
                 return self._say(chat, f"ID Telegram của bạn: {uid}")
             if text.startswith("/pair"):
                 code = text.removeprefix("/pair").strip()
-                if _consume_pair(code):
-                    cfg = cfgmod.load()
-                    if uid not in cfg.channels.telegram.allowed_users:
-                        cfg.channels.telegram.allowed_users.append(uid)
-                        cfgmod.save(cfg)
-                    self.cfg = cfg.channels.telegram
-                    return self._say(chat, "Đã ghép đôi thành công. Bạn có thể nhắn tin cho agent.")
+                if self._allowed(uid):
+                    return self._say(chat, "Tài khoản đã được cấp quyền.")
+                if msg["chat"].get("type") != "private":
+                    return self._say(chat, "Hãy gửi mã ghép đôi trong tin nhắn riêng với bot.")
+                if pairing.submit("telegram", code, uid, msg["from"].get("username", "")):
+                    return self._say(chat, "Đã gửi yêu cầu. Hãy duyệt trong giao diện web Nestor.")
                 return self._say(chat, "Mã ghép đôi sai hoặc đã hết hạn. Tạo mã mới trong giao diện, mục Tích hợp > Kênh chat.")
             if not self._allowed(uid):
                 return self._say(chat, "Bạn chưa được phép dùng agent này. Tạo mã ghép đôi trong giao diện web rồi gửi: /pair <mã>")

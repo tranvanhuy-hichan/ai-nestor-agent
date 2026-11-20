@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Check, ChevronDown, CircleCheck, CircleX, Copy, Eye, ListTodo, LoaderCircle, Maximize2, Play, ShieldCheck, Square, Trash2, Zap, type LucideIcon } from 'lucide-react'
@@ -7,8 +8,10 @@ import { Card } from '@/components/ui/Card'
 import { Select } from '@/components/ui/Form'
 import { Modal } from '@/components/ui/Modal'
 import { ErrorNote, Loading, Page, PageHeader } from '@/components/ui/misc'
+import { Tabs } from '@/components/ui/Tabs'
 import { useToast } from '@/components/ui/Toast'
 import { Markdown } from '@/features/chat/Markdown'
+import { KanbanBoard } from './KanbanBoard'
 import { api } from '@/lib/api'
 import { useConfig } from '@/lib/queries'
 import type { Task } from '@/lib/types'
@@ -175,7 +178,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
   return <section className="mb-6"><h2 className="mb-2.5 flex items-center gap-2 text-sm font-semibold">{title}<span className="rounded-md bg-panel2 px-1.5 py-0.5 text-[11px] font-normal text-muted">{count}</span></h2><div className="grid items-start gap-3 xl:grid-cols-2">{children}</div></section>
 }
 
-export function TasksPage() {
+function TaskList() {
   const qc = useQueryClient()
   const [showSub, setShowSub] = useState(false)
   const q = useQuery({ queryKey: ['tasks'], queryFn: () => api.get<Task[]>('/api/tasks'), refetchInterval: (s) => (s.state.data?.some((x) => active(x.status)) ? 1500 : 8000) })
@@ -187,28 +190,42 @@ export function TasksPage() {
   const running = shown.filter((x) => active(x.status))
   const finished = shown.filter((x) => !active(x.status))
   return (
+    <div>
+      <NewTask onDone={refresh} />
+      {q.isLoading ? <Loading /> : q.error ? <ErrorNote error={q.error} /> : (
+        <>
+          <Section title={t('Đang làm')} count={running.length}>{running.map((x) => <TaskCard key={x.id} task={x} refresh={refresh} />)}</Section>
+          <Section title={t('Đã xong')} count={finished.length}>{finished.map((x) => <TaskCard key={x.id} task={x} refresh={refresh} />)}</Section>
+          {!shown.length && (
+            <div className="rounded-xl border border-dashed border-line py-12 text-center">
+              <ListTodo className="mx-auto mb-3 size-8 text-muted" />
+              <p className="font-medium">{t('Chưa có việc nào')}</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-muted">{t('Gõ yêu cầu vào ô phía trên. Hoặc trong Trò chuyện, bạn chỉ cần nói “làm việc này ở chế độ nền giúp tôi”.')}</p>
+            </div>
+          )}
+          {subs.length > 0 && (
+            <button onClick={() => setShowSub(!showSub)} className="mt-2 flex items-center gap-1.5 text-xs text-muted hover:text-fg">
+              {showSub ? <Check className="size-3.5" /> : <span className="size-3.5 rounded border border-line" />}{t('Hiện cả việc do agent tự giao cho agent con ({n})', { n: subs.length })}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+export function TasksPage() {
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'kanban' ? 'kanban' : 'list'
+  const setTab = (v: 'list' | 'kanban') => setParams(v === 'list' ? {} : { tab: v }, { replace: true })
+  return (
     <Page>
       <div>
         <PageHeader title={t('Giao việc cho agent')} />
-        <NewTask onDone={refresh} />
-        {q.isLoading ? <Loading /> : q.error ? <ErrorNote error={q.error} /> : (
-          <>
-            <Section title={t('Đang làm')} count={running.length}>{running.map((x) => <TaskCard key={x.id} task={x} refresh={refresh} />)}</Section>
-            <Section title={t('Đã xong')} count={finished.length}>{finished.map((x) => <TaskCard key={x.id} task={x} refresh={refresh} />)}</Section>
-            {!shown.length && (
-              <div className="rounded-xl border border-dashed border-line py-12 text-center">
-                <ListTodo className="mx-auto mb-3 size-8 text-muted" />
-                <p className="font-medium">{t('Chưa có việc nào')}</p>
-                <p className="mx-auto mt-1 max-w-sm text-sm text-muted">{t('Gõ yêu cầu vào ô phía trên. Hoặc trong Trò chuyện, bạn chỉ cần nói “làm việc này ở chế độ nền giúp tôi”.')}</p>
-              </div>
-            )}
-            {subs.length > 0 && (
-              <button onClick={() => setShowSub(!showSub)} className="mt-2 flex items-center gap-1.5 text-xs text-muted hover:text-fg">
-                {showSub ? <Check className="size-3.5" /> : <span className="size-3.5 rounded border border-line" />}{t('Hiện cả việc do agent tự giao cho agent con ({n})', { n: subs.length })}
-              </button>
-            )}
-          </>
-        )}
+        <Tabs value={tab} onChange={setTab} tabs={[{ id: 'list', label: t('Giao việc nhanh') }, { id: 'kanban', label: t('Bảng Kanban') }]} />
+        <div className="mt-5">
+          {tab === 'kanban' ? <KanbanBoard /> : <TaskList />}
+        </div>
       </div>
     </Page>
   )
