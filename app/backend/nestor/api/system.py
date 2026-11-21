@@ -22,7 +22,7 @@ from ..services.zalo_channel import channel as zalo
 
 router = APIRouter()
 STARTED = time.time()
-VERSION = "0.4.0"
+VERSION = "0.6.2"
 EDITABLE_FILES = {"SOUL.md", "USER.md", "MEMORY.md", "HEARTBEAT.md"}
 
 

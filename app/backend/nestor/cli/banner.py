@@ -119,7 +119,7 @@ def print_chat_banner(cfg: Config, provider: str, perm: str, sid: str | None = N
     sess_disp = (sid[:18] + "…") if sid and len(sid) > 18 else (sid or (L("Mới", "New")))
     perm_color = yellow(perm) if perm != "full" else "\033[31mfull (no confirm)\033[0m"
 
-    title = L("  Nestor Agent v0.4.0 · Trợ lý AI cá nhân & Tự hành", "  Nestor Agent v0.4.0 · Local-first Personal AI Assistant")
+    title = L("  Nestor Agent v0.6.2 · Trợ lý AI cá nhân & Tự hành", "  Nestor Agent v0.6.2 · Local-first Personal AI Assistant")
     rows = [
         (f"  {L('Mô hình', 'Model')}:   {cyan(model_str)}", f"{L('Kỹ năng', 'Skills')}:   {green(f'{skills_count} loaded')}  "),
         (f"  {L('Quyền', 'Access')}:   {perm_color}", f"{L('Phiên', 'Session')}:  {sess_disp}  "),
@@ -146,7 +146,7 @@ def print_onboard_banner(cfg: Config | None = None) -> None:
     if len(data_dir) > 34:
         data_dir = "…" + data_dir[-31:]
 
-    title = L("  Nestor Agent v0.4.0 · Trình hướng dẫn cài đặt (Setup Wizard)", "  Nestor Agent v0.4.0 · Setup Wizard")
+    title = L("  Nestor Agent v0.6.2 · Trình hướng dẫn cài đặt (Setup Wizard)", "  Nestor Agent v0.6.2 · Setup Wizard")
     rows = [
         (f"  {L('Dữ liệu', 'Data')}:   {cyan(data_dir)}", f"{L('Kỹ năng', 'Skills')}:   {green(f'{skills_count} loaded')}  "),
         (f"  {L('Cổng', 'Port')}:     8787", "URL:      http://127.0.0.1:8787  "),
@@ -175,7 +175,7 @@ def print_open_banner(url: str, cfg: Config | None = None) -> None:
     if len(model_str) > 34:
         model_str = model_str[:31] + "…"
 
-    title = L("  Nestor Agent v0.4.0 · Mở Giao diện Web (Web UI)", "  Nestor Agent v0.4.0 · Web UI")
+    title = L("  Nestor Agent v0.6.2 · Mở Giao diện Web (Web UI)", "  Nestor Agent v0.6.2 · Web UI")
     rows = [
         (f"  {L('Địa chỉ', 'URL')}:   {cyan(url)}", f"{L('Trạng thái', 'Status')}:  {green(L('Đang chạy', 'Running'))}  "),
         (f"  {L('Mô hình', 'Model')}: {model_str}", f"{L('Kỹ năng', 'Skills')}:   {green(f'{skills_count} loaded')}  "),
