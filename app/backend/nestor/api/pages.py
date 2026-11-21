@@ -1,9 +1,11 @@
-"""API trang kieu Notion (file markdown trong workspace/pages)."""
+"""API trang kieu Notion (file JSON block-doc trong workspace/pages)."""
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from ..services import pages
+from ..services import pages, sessions
 
 AUTO = True
 router = APIRouter()
@@ -19,19 +21,25 @@ def _guard(fn, *a, **k):
 class NewPage(BaseModel):
     title: str = ""
     parent: str = ""
-    content: str = ""
+    content: dict[str, Any] | None = None
     icon: str = ""
 
 
 class EditPage(BaseModel):
     title: str | None = None
-    content: str | None = None
+    content: dict[str, Any] | None = None
     icon: str | None = None
+    fullWidth: bool | None = None
 
 
 class MovePage(BaseModel):
     parent: str = ""
     order: float | None = None
+
+
+class NotebookChatRequest(BaseModel):
+    create: bool = False
+    previous: list[str] = Field(default_factory=list, max_length=4)
 
 
 @router.get("/pages")
@@ -70,7 +78,18 @@ def get_page(pid: str):
 
 @router.put("/pages/{pid}")
 def edit_page(pid: str, b: EditPage):
-    return _guard(pages.update, pid, b.title, b.content, b.icon)
+    return _guard(pages.update, pid, b.title, b.content, b.icon, b.fullWidth)
+
+
+@router.get("/pages/{pid}/export")
+def export_page(pid: str):
+    return {"markdown": _guard(pages.export_markdown, pid)}
+
+
+@router.post("/pages/{pid}/chat")
+def notebook_chat(pid: str, body: NotebookChatRequest):
+    root = _guard(pages.notebook_root, pid)
+    return {"id": sessions.notebook_chat(root["id"], root["title"], create=body.create, previous=body.previous)}
 
 
 @router.post("/pages/{pid}/move")

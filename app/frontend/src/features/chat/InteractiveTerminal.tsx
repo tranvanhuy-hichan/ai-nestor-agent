@@ -10,6 +10,13 @@ import { Button } from '@/components/ui/Button'
 import { api } from '@/lib/api'
 import { t } from '@/lib/i18n.ts'
 
+function terminalTheme() {
+  const style = getComputedStyle(document.documentElement)
+  const foreground = style.getPropertyValue('--fg').trim()
+  const background = style.getPropertyValue('--bg').trim()
+  return { background, foreground, cursor: foreground, cursorAccent: background }
+}
+
 export function InteractiveTerminal({ sid }: { sid: string | null }) {
   const mount = useRef<HTMLDivElement>(null)
   const [connected, setConnected] = useState(false)
@@ -23,7 +30,7 @@ export function InteractiveTerminal({ sid }: { sid: string | null }) {
       cursorBlink: true,
       allowProposedApi: true,
       fontFamily: styles.getPropertyValue('--font-mono'),
-      theme: { background: styles.getPropertyValue('--bg').trim(), foreground: styles.getPropertyValue('--fg').trim() },
+      theme: terminalTheme(),
     })
     const fit = new FitAddon()
     terminal.loadAddon(fit)
@@ -31,6 +38,8 @@ export function InteractiveTerminal({ sid }: { sid: string | null }) {
     terminal.unicode.activeVersion = '11'
     terminal.loadAddon(new WebLinksAddon())
     terminal.open(node)
+    const appearance = new MutationObserver(() => { terminal.options.theme = terminalTheme() })
+    appearance.observe(document.documentElement, { attributeFilter: ['data-theme'] })
     const webgl = new WebglAddon()
     try {
       terminal.loadAddon(webgl)
@@ -54,6 +63,7 @@ export function InteractiveTerminal({ sid }: { sid: string | null }) {
       if (socket.readyState === WebSocket.OPEN) socket.send(new TextEncoder().encode(data))
     })
     return () => {
+      appearance.disconnect()
       observer.disconnect()
       socket.onopen = socket.onmessage = socket.onclose = null
       socket.close()

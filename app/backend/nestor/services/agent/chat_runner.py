@@ -194,7 +194,7 @@ def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_ov
                 only_tools: list[str] | None = None, attachments: list[str] | None = None, permission: str = "default",
                 effort: str | None = None, docs: bool = False, temperature: float | None = None,
                 max_tokens: int | None = None, detach: bool = False, system_extra: str = "", tool_allow: list[str] | None = None,
-                assistant: str | None = None) -> Iterator[dict]:
+                assistant: str | None = None, kb_category_id: str | None = None) -> Iterator[dict]:
     """detach=True (giao dien web): dong ket noi khong dung agent; client noi lai bang attach(). Mac dinh (CLI/API/Telegram): dong ket noi thi dung."""
     if not sid or not sessions.get(sid):
         sid = sessions.create(text, source=source)
@@ -244,7 +244,7 @@ def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_ov
     def worker():
         try:
             agent.run_turn(sid, text, provider, approver_override or approver, run.push, cancel, only_tools, source, attachments, permission, effort, use_docs=docs, temperature=temperature, max_tokens=max_tokens, system_extra=system_extra, tool_allow=tool_allow,
-                           asker=None if approver_override else asker, interactive_policy=detach and source == "chat" and approver_override is None)
+                           asker=None if approver_override else asker, interactive_policy=detach and source == "chat" and approver_override is None, kb_category_id=kb_category_id)
         except Exception as e:  # loi bat ngo khong duoc lam treo luong SSE
             run.push({"type": "error", "message": f"{type(e).__name__}: {e}"})
         try:

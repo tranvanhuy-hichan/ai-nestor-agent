@@ -29,8 +29,8 @@ function TeamProgress({ sid, busy }: { sid: string; busy: boolean }) {
   )
 }
 
-/** Nút "Làm như lần trước" (lưu thành kỹ năng) và "Ghi nhớ yêu cầu" (lưu thành quy tắc) cho chế độ Đơn giản. */
-export function SimpleChatTools({ sid, busy }: { sid: string; busy: boolean }) {
+/** Reuse a conversation as a skill or a durable rule, and show team activity. */
+export function ConversationTools({ sid, busy }: { sid: string; busy: boolean }) {
   const toast = useToast()
   const [saved, setSaved] = useState(false)
   const distill = useMutation({

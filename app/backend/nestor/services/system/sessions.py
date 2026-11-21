@@ -8,11 +8,54 @@ from nestor.core.text import fold
 
 
 def create(title: str, source: str = "chat", project: str = "") -> str:
+    with db() as c:
+        return _insert(c, title, source, project)
+
+
+def _insert(c, title: str, source: str = "chat", project: str = "") -> str:
     sid = uuid.uuid4().hex[:8]
     now = time.time()
-    with db() as c:
-        c.execute("INSERT INTO sessions(id,title,created,updated,source,project) VALUES(?,?,?,?,?,?)", (sid, title[:60] or "Hội thoại mới", now, now, source, project))
+    c.execute("INSERT INTO sessions(id,title,created,updated,source,project) VALUES(?,?,?,?,?,?)", (sid, title[:60] or "Hội thoại mới", now, now, source, project))
     return sid
+
+
+def _channel_chat(channel: str, external_id: str, title: str, *, create: bool, previous: list[str]) -> str | None:
+    """Resolve or claim one shared session before a turn starts, keyed by (channel, external_id)."""
+    with db() as c:
+        c.execute("BEGIN IMMEDIATE")
+        row = c.execute(
+            """SELECT s.id FROM channel_links l JOIN sessions s ON s.id=l.session_id
+               WHERE l.channel=? AND l.external_id=?""", (channel, external_id),
+        ).fetchone()
+        if row:
+            return row["id"]
+        sid = None
+        for candidate in previous:
+            row = c.execute(
+                """SELECT s.id FROM sessions s WHERE s.id=? AND s.source='chat'
+                   AND NOT EXISTS (SELECT 1 FROM channel_links l WHERE l.channel=? AND l.session_id=s.id)""",
+                (candidate, channel),
+            ).fetchone()
+            if row:
+                sid = row["id"]
+                break
+        if sid is None and create:
+            sid = _insert(c, title)
+        if sid:
+            c.execute(
+                """INSERT INTO channel_links(channel,external_id,session_id) VALUES(?,?,?)
+                   ON CONFLICT(channel,external_id) DO UPDATE SET session_id=excluded.session_id""",
+                (channel, external_id, sid),
+            )
+        return sid
+
+
+def notebook_chat(notebook_id: str, title: str, *, create: bool, previous: list[str]) -> str | None:
+    return _channel_chat("notebook", notebook_id, title, create=create, previous=previous)
+
+
+def category_chat(category_id: str, title: str, *, create: bool, previous: list[str]) -> str | None:
+    return _channel_chat("kb-category", category_id, title, create=create, previous=previous)
 
 
 def get(sid: str) -> dict | None:

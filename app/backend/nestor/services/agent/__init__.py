@@ -496,7 +496,8 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
              source: str = "chat", attachments: list[str] | None = None, permission: str = "default", effort: str | None = None,
              system_extra: str = "", max_steps: int | None = None, depth: int = 0, job_id: str | None = None, workdir_sid: str | None = None,
              use_docs: bool = False, docs_pre: str | None = None, temperature: float | None = None, max_tokens: int | None = None,
-             asker: Callable[[str, list[str]], str] | None = None, tool_allow: list[str] | None = None, interactive_policy: bool = False) -> None:
+             asker: Callable[[str, list[str]], str] | None = None, tool_allow: list[str] | None = None, interactive_policy: bool = False,
+             kb_category_id: str | None = None) -> None:
     cfg = cfgmod.load()
     session = sessions.get(sid) or {}
     scope = session.get("assistant_scope", "")
@@ -531,22 +532,23 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
     ctx.depth = depth
     ctx.session_id = workdir_sid or sid
     ctx.asker = asker
+    ctx.kb_category_id = kb_category_id
     if depth == 0:
         checkpoints.begin(sid)
     ctx.project = workdir if project else None
     # khong gui dinh nghia cua cong cu khong dung duoc (moi cong cu ton ~100 token o MOI luot goi mo hinh)
     hidden = [n for n in tools.TOOLS if (n.startswith("computer_") and not cfg.computer.enabled) or (n.startswith("browser_") and not cfg.browser.enabled)]
-    if not knowledge.has_docs():
+    if not knowledge.has_docs(kb_category_id):
         hidden.append("kb_search")
     ctx.enabled = {**ctx.enabled, **{n: False for n in hidden}}
     ctx.session_id, ctx.permission, ctx.provider, ctx.emit, ctx.cancel = sid, permission if permission in ("default", "readonly", "guarded", "full", "plan") else "default", provider, emit, cancel
     ctx.extra = mcp_client.manager.tool_defs()
-    if use_docs and not knowledge.has_docs():
+    if use_docs and not knowledge.has_docs(kb_category_id):
         emit(ui_event("notice", "Chưa có tài liệu nào sẵn sàng nên Nestor trả lời như bình thường"))
     elif use_docs:  # "Hỏi từ tài liệu": chỉ cho dùng công cụ tìm tài liệu, trả lời có nguồn
         only_tools = only_tools if only_tools is not None else ["kb_search"]
         emit(ui_event("status", "Đang tìm trong tài liệu…"))
-        found = docs_pre if docs_pre is not None else tools_kb.format_hits(knowledge.search(user_text, 6))  # tìm sẵn trước khi hỏi model: bớt được một lượt gọi model
+        found = docs_pre if docs_pre is not None else tools_kb.format_hits(knowledge.search(user_text, 6, kb_category_id))  # tìm sẵn trước khi hỏi model: bớt được một lượt gọi model
         pre = (f"\n\nCác đoạn tài liệu liên quan tới câu hỏi (đã tìm sẵn):\n{found}\n\nNếu các đoạn trên đủ để trả lời thì trả lời ngay, không cần gọi kb_search; "
                "chỉ gọi thêm kb_search (với từ khóa khác) khi còn thiếu thông tin.") if found else ""
         system_extra = f"{system_extra}\n\n{DOCS_PROMPT}{pre}".strip()

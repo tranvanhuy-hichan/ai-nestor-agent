@@ -661,6 +661,34 @@ const dict: Record<string, string> = {
   "Thông minh hơn rõ rệt, gọi công cụ ổn hơn. Cần máy khá.": "Noticeably smarter and better at calling tools. Needs a decent machine.",
   "Chất lượng cao, hợp việc nhiều bước. Cần GPU mạnh hoặc nhiều RAM.": "High quality, good for multi-step work. Needs a strong GPU or lots of RAM.",
   "Đa ngôn ngữ tốt, hiểu được ảnh. Cần máy mạnh.": "Strong multilingual, understands images. Needs a powerful machine.",
+
+  "Tạo danh mục": "New category",
+  "Hỏi toàn bộ kho": "Ask across all documents",
+  "Chưa có danh mục nào": "No categories yet",
+  "{n} tài liệu": "{n} documents",
+  "Tên danh mục": "Category name",
+  "Ví dụ: Hợp đồng dự án A": "e.g. Project A contracts",
+  "Hỏi đáp về danh mục này": "Ask about this category",
+  "Hỏi bất cứ điều gì về các tài liệu trong danh mục này. Câu trả lời chỉ dựa trên tài liệu ở đây, kèm nguồn trích dẫn.": "Ask anything about the documents in this category. Answers are based only on the documents here, with citations.",
+  "Hỏi về tài liệu trong danh mục này… (Enter để gửi)": "Ask about the documents in this category… (Enter to send)",
+  "Không có danh mục này": "This category doesn't exist",
+  "Chưa có tài liệu nào trong danh mục này. Kéo thả hợp đồng, báo cáo hoặc bảng tính vào ô phía trên để bắt đầu.": "No documents in this category yet. Drop a contract, report, or spreadsheet above to get started.",
+  "Nestor đọc kỹ các tài liệu trong danh mục này, rồi viết báo cáo gồm: tóm tắt, yêu cầu chính, rủi ro, các phương án, khuyến nghị và các bước thực hiện, kèm nguồn. Việc này chạy nền (có thể mất vài phút); kết quả xem ở trang Tác vụ.": "Nestor carefully reads the documents in this category, then writes a report with: a summary, key requirements, risks, options, a recommendation, and next steps, with sources. This runs in the background (may take a few minutes); see the result on the Tasks page.",
+
+  "Tìm danh mục hoặc tài liệu…": "Search categories or documents…",
+  "Tìm danh mục hoặc tài liệu": "Search categories or documents",
+  "Không tìm thấy danh mục hoặc tài liệu.": "No categories or documents found.",
+  "1 tài liệu": "1 document",
+  "1 trang con": "1 subpage",
+  "Hoàn tất": "Completed",
+  "Xem": "View",
+  "Xem file gốc": "View original file",
+  "Thêm tùy chọn": "More options",
+
+  "Đổi biểu tượng": "Change icon",
+  "Emoji cho khối này:": "Emoji for this block:",
+  "Thu gọn/mở rộng": "Collapse/expand",
+  "Không có khối phù hợp": "No matching block",
 }
 
 export default dict

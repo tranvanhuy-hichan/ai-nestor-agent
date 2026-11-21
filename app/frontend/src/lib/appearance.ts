@@ -12,8 +12,10 @@ export type Theme = keyof typeof themes
 export type Font = keyof typeof fonts
 
 const event = 'nestor-appearance'
+const sessionValues = new Map<string, string>()
 const read = (key: string, fallback: string) => {
-  try { return localStorage.getItem(key) ?? fallback } catch { return fallback }
+  try { return sessionValues.get(key) ?? localStorage.getItem(key) ?? fallback }
+  catch { return fallback }
 }
 const theme = (): Theme => {
   const value = read('theme', 'dark')
@@ -31,12 +33,30 @@ const listen = (fn: () => void) => {
 }
 
 const write = (key: string, value: string) => {
-  try { localStorage.setItem(key, value) } catch { /* storage unavailable */ }
+  try {
+    localStorage.setItem(key, value)
+    sessionValues.delete(key)
+  } catch {
+    sessionValues.set(key, value)
+  }
   window.dispatchEvent(new Event(event))
 }
 export const setTheme = (value: Theme) => write('theme', value)
 export const setFont = (value: Font) => write('mono-font', value)
 export const setLigatures = (value: boolean) => write('mono-ligatures', value ? '1' : '0')
+
+export function installAppearance() {
+  const apply = () => {
+    const root = document.documentElement
+    const current = theme()
+    root.classList.toggle('light', current === 'light')
+    root.dataset.theme = current
+    root.dataset.mono = font()
+    root.dataset.ligatures = ligatures() ? 'on' : 'off'
+  }
+  apply()
+  return listen(apply)
+}
 
 export function useAppearance() {
   return {

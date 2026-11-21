@@ -1,8 +1,8 @@
 import { AppearanceCard } from '@/features/settings/AppearanceCard'
-import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Download, Upload } from 'lucide-react'
+import { ArrowUpRight, Bot, Brain, DatabaseBackup, Download, Globe, Image, Network, Palette, Shield, Upload, Wrench } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -13,10 +13,14 @@ import { Switch } from '@/components/ui/Switch'
 import { useToast } from '@/components/ui/Toast'
 import { useConfig, useSaveConfig } from '@/lib/queries'
 import type { AppConfig, ExtraCfg, SecretsStatus, ToolInfo } from '@/lib/types'
-import { errMsg } from '@/lib/utils'
+import { cn, errMsg } from '@/lib/utils'
 import { t, tk } from '@/lib/i18n.ts'
-import { Tabs } from '@/components/ui/Tabs'
+import { SearchBox } from '@/components/ui/SearchBox'
+import { paginate, Pagination } from '@/components/ui/Pagination'
+import { searchableText } from '@/lib/featureCatalog'
 import { FeaturesTab } from './FeaturesTab'
+
+const TOOLS_PER_PAGE = 10
 
 const RISK: Record<ToolInfo['risk'], { label: string; tone: 'ok' | 'info' | 'warn' | 'bad' }> = {
   safe: { label: tk('An toàn'), tone: 'ok' },
@@ -85,7 +89,7 @@ function BackupRestoreCard() {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }))
-        throw new Error(err.detail || 'Lỗi khôi phục')
+        throw new Error(err.detail || t('Lỗi khôi phục'))
       }
       toast(t('Khôi phục thành công! Đang tải lại dữ liệu...'))
       setTimeout(() => {
@@ -143,121 +147,160 @@ function BackupRestoreCard() {
 }
 
 
+const SECTIONS = [
+  { id: 'appearance', label: tk('Giao diện'), Icon: Palette, terms: [tk('Giao diện sáng'), tk('Giao diện tối'), tk('Phông chữ mã nguồn')] },
+  { id: 'agent', label: tk('Agent'), Icon: Bot, terms: [tk('Model nhanh cho câu đơn giản'), tk('Số bước tối đa mỗi lượt'), tk('Thư mục workspace'), tk('Gợi ý tạo kỹ năng từ việc lặp lại')] },
+  { id: 'memory', label: tk('Bộ nhớ & Ngữ cảnh'), Icon: Brain, terms: [tk('Số tin nhắn gửi kèm'), tk('Tóm tắt hội thoại khi vượt quá (ký tự)'), tk('Tìm kiếm theo nghĩa (embedding)'), tk('Tự lập chỉ mục tin nhắn mới')] },
+  { id: 'browser', label: tk('Trình duyệt & Máy tính'), Icon: Globe, terms: [tk('Đường dẫn Chromium/Chrome'), tk('Chạy ẩn'), tk('Cho phép địa chỉ nội bộ'), tk('Điều khiển máy tính')] },
+  { id: 'media', label: tk('Ảnh và hình ảnh'), Icon: Image, terms: [tk('Provider tạo ảnh'), tk('Model tạo ảnh'), tk('Provider để xem ảnh')] },
+  { id: 'delegation', label: tk('Agent con và việc dài'), Icon: Network, terms: [tk('Chạy song song'), tk('Độ sâu tối đa'), tk('Vai trò của agent con')] },
+  { id: 'tools', label: tk('Công cụ'), Icon: Wrench, terms: ['ClawHub', 'MCP'] },
+  { id: 'security', label: tk('An toàn & Bảo mật'), Icon: Shield, terms: [tk('Xác nhận trước khi chạy lệnh shell'), tk('Mật khẩu'), tk('Sandbox chạy lệnh (Docker)'), tk('Mã hóa khóa bí mật')] },
+  { id: 'backup', label: tk('Sao lưu & Khôi phục'), Icon: DatabaseBackup, terms: [tk('Sao lưu'), tk('Khôi phục')] },
+] as const
+
+function extraConfig({ browser, memory, media, computer, agents }: AppConfig): ExtraCfg {
+  return { browser, memory, media, computer, agents }
+}
+
 export function SettingsPage() {
   const cfg = useConfig()
   const save = useSaveConfig()
   const toast = useToast()
-  const [agent, setAgent] = useState<AppConfig['agent'] | null>(null)
-  const [hub, setHub] = useState('')
-  const [extra, setExtra] = useState<ExtraCfg | null>(null)
+  const [agentEdit, setAgentEdit] = useState<AppConfig['agent'] | null>(null)
+  const [hubEdit, setHubEdit] = useState<string | null>(null)
+  const [extraEdit, setExtraEdit] = useState<ExtraCfg | null>(null)
+  const [query, setQuery] = useState('')
+  const [toolQuery, setToolQuery] = useState('')
+  const [toolPage, setToolPage] = useState(0)
   const [params, setParams] = useSearchParams()
-  const tab = (['agent', 'features', 'tools', 'security'] as const).find((t) => t === params.get('tab')) ?? 'agent'
+  const requested = params.get('tab')
+  const active = SECTIONS.find((section) => section.id === (requested === 'features' ? 'browser' : requested)) ?? SECTIONS[0]
+  const tab = active.id
 
-  useEffect(() => { if (cfg.data) { setAgent(cfg.data.config.agent); setHub(cfg.data.config.clawhub_url); const c = cfg.data.config; setExtra({ browser: c.browser, memory: c.memory, media: c.media, computer: c.computer, agents: c.agents }) } }, [cfg.data])
-  if (cfg.error) return <Page><ErrorNote error={cfg.error} /></Page>
-  if (!agent || !extra || !cfg.data) return <Loading />
-  const dirty = JSON.stringify(agent) !== JSON.stringify(cfg.data.config.agent) || hub !== cfg.data.config.clawhub_url || JSON.stringify(extra) !== JSON.stringify((({ browser, memory, media, computer, agents }) => ({ browser, memory, media, computer, agents }))(cfg.data.config))
-  const num = (k: 'max_steps' | 'max_history') => (e: React.ChangeEvent<HTMLInputElement>) => setAgent({ ...agent, [k]: Number(e.target.value) })
-
-  const TAB_ITEMS = [
-    { id: 'agent' as const, label: t('Cơ bản') },
-    { id: 'features' as const, label: t('Tính năng & Trí nhớ') },
-    { id: 'tools' as const, label: t('Công cụ') },
-    { id: 'security' as const, label: t('An toàn & Bảo mật') },
-  ]
+  if (cfg.error && !cfg.data) return <Page><ErrorNote error={cfg.error} /></Page>
+  if (!cfg.data) return <Loading />
+  const { config, tools, secrets } = cfg.data
+  const agent = agentEdit ?? config.agent
+  const hub = hubEdit ?? config.clawhub_url
+  const extra = extraEdit ?? extraConfig(config)
+  const dirty = JSON.stringify(agent) !== JSON.stringify(config.agent) || hub !== config.clawhub_url || JSON.stringify(extra) !== JSON.stringify(extraConfig(config))
+  const reset = () => { setAgentEdit(null); setHubEdit(null); setExtraEdit(null) }
+  const num = (k: 'max_steps' | 'max_history' | 'compact_chars') => (e: React.ChangeEvent<HTMLInputElement>) => setAgentEdit({ ...agent, [k]: Number(e.target.value) })
+  const searchWords = searchableText(query.trim()).split(/\s+/).filter(Boolean)
+  const matches = SECTIONS.filter(({ label, terms }) => {
+    const index = searchableText([t(label), ...terms.map((term) => t(term))].join(' '))
+    return searchWords.every((word) => index.includes(word))
+  })
+  const select = (id: typeof tab) => setParams(id === 'appearance' ? {} : { tab: id })
+  const filteredTools = tools.filter((tool) => searchableText(`${tool.name} ${t(tool.description)}`).includes(searchableText(toolQuery.trim())))
+  const page = Math.min(toolPage, Math.max(0, Math.ceil(filteredTools.length / TOOLS_PER_PAGE) - 1))
 
   return (
     <Page>
-      <PageHeader title={t('Cài đặt')} action={
-        <Button variant="primary" disabled={!dirty} loading={save.isPending}
-          onClick={() => save.mutate({ ...cfg.data.config, ...extra, agent, clawhub_url: hub }, { onSuccess: () => toast(t('Đã lưu cài đặt')), onError: (e) => toast(errMsg(e), 'bad') })}>{t('Lưu thay đổi')}</Button>
-      } />
-      <div className="mb-4"><AppearanceCard /></div>
-
-      <Tabs
-        value={tab}
-        onChange={(id) => setParams(id === 'agent' ? {} : { tab: id }, { replace: true })}
-        tabs={TAB_ITEMS}
-      />
-
-      <div className="mt-5 w-full space-y-4">
-        {tab === 'agent' && (
-          <>
-        <Card>
-          <CardHeader title={t('Agent')} />
-          <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="-mx-5 flex items-center justify-between gap-4 border-b border-line/60 px-5 pb-4 last:border-b-0 last:pb-0 col-span-full">
-              <div>
-                <p className="text-sm font-medium">{t('Xác nhận trước khi chạy lệnh shell')}</p>
+      <PageHeader title={t('Cài đặt')} action={dirty && <div className="flex flex-wrap gap-2">
+        <Button disabled={save.isPending} onClick={reset}>{t('Bỏ thay đổi')}</Button>
+        <Button variant="primary" loading={save.isPending}
+          onClick={() => save.mutate({ ...config, ...extra, agent, clawhub_url: hub }, {
+            onSuccess: () => { reset(); toast(t('Đã lưu cài đặt')) }, onError: (e) => toast(errMsg(e), 'bad'),
+          })}>{t('Lưu thay đổi')}</Button>
+      </div>} />
+      <div className="grid items-start gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]">
+        <Card className="min-w-0 space-y-2 p-2.5 [&>div]:!w-full">
+          <SearchBox value={query} onChange={setQuery} placeholder={t('Tìm cài đặt…')} label={t('Tìm cài đặt')} />
+          <nav aria-label={t('Nhóm cài đặt')} className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+            {matches.map(({ id, label, Icon }) => (
+              <button key={id} type="button" onClick={() => select(id)} aria-current={tab === id ? 'page' : undefined}
+                className={cn('flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-2 text-left text-sm transition',
+                  tab === id ? 'bg-accent/12 font-medium text-accent' : 'text-muted hover:bg-panel2 hover:text-fg')}>
+                <Icon className="size-4 shrink-0" />{t(label)}
+              </button>
+            ))}
+          </nav>
+          {!matches.length && <p className="px-2 py-1 text-sm text-muted">{t('Không tìm thấy mục cài đặt.')}</p>}
+        </Card>
+        <section aria-labelledby="settings-section" className="min-w-0 space-y-4">
+          <h2 id="settings-section" className={tab === 'appearance' ? 'sr-only' : 'text-lg font-semibold'}>{t(active.label)}</h2>
+          <fieldset disabled={save.isPending} className="min-w-0 space-y-4">
+            {tab === 'appearance' && <AppearanceCard />}
+            {tab === 'agent' && <Card>
+              <CardHeader title={t('Thực thi')} action={<Link to="/providers" className="inline-flex items-center gap-1 text-sm text-accent hover:underline">{t('Mô hình AI')}<ArrowUpRight className="size-4" /></Link>} />
+              <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="-mx-5 flex flex-wrap items-center justify-between gap-4 border-b border-line/60 px-5 pb-4 col-span-full">
+                  <div className="max-w-md">
+                    <p className="text-sm font-medium">{t('Model nhanh cho câu đơn giản')}</p>
+                    <p className="text-xs text-muted">{t('Khi đang dùng model mặc định, câu ngắn và đơn giản (chào hỏi, hỏi đáp nhanh) sẽ dùng model này để nhanh và rẻ hơn. Việc code, file, nhiều bước vẫn dùng model chính.')}</p>
+                  </div>
+                  <Select value={agent.fast_provider ?? ''} onChange={(e) => setAgentEdit({ ...agent, fast_provider: e.target.value })} className="w-56">
+                    <option value="">{t('Tắt')}</option>
+                    {Object.keys(config.providers).filter((n) => n !== config.default_provider).map((n) => <option key={n} value={n}>{n}</option>)}
+                  </Select>
+                </div>
+                <div className="-mx-5 flex items-center justify-between gap-4 border-b border-line/60 px-5 pb-4 last:border-b-0 last:pb-0 col-span-full">
+                  <p className="text-sm font-medium">{t('Gợi ý tạo kỹ năng từ việc lặp lại')}</p>
+                  <Switch checked={agent.suggest_habits} onChange={(v) => setAgentEdit({ ...agent, suggest_habits: v })} label={t('Gợi ý kỹ năng')} />
+                </div>
+                <Field label={t('Số bước tối đa mỗi lượt')}><Input type="number" min={1} max={50} value={agent.max_steps} onChange={num('max_steps')} /></Field>
+                <div className="col-span-full"><Field label={t('Thư mục workspace')}><Input value={agent.workspace} onChange={(e) => setAgentEdit({ ...agent, workspace: e.target.value })} /></Field></div>
               </div>
-              <Switch checked={agent.confirm_exec} onChange={(v) => setAgent({ ...agent, confirm_exec: v })} label={t('Xác nhận lệnh shell')} />
-            </div>
-            <div className="-mx-5 flex flex-wrap items-center justify-between gap-4 border-b border-line/60 px-5 pb-4 col-span-full">
-              <div className="max-w-md">
-                <p className="text-sm font-medium">{t('Model nhanh cho câu đơn giản')}</p>
-                <p className="text-xs text-muted">{t('Khi đang dùng model mặc định, câu ngắn và đơn giản (chào hỏi, hỏi đáp nhanh) sẽ dùng model này để nhanh và rẻ hơn. Việc code, file, nhiều bước vẫn dùng model chính.')}</p>
+            </Card>}
+            {tab === 'memory' && <Card>
+              <CardHeader title={t('Ngữ cảnh hội thoại')} />
+              <div className="grid gap-4 p-5 sm:grid-cols-2">
+                <Field label={t('Số tin nhắn gửi kèm')}><Input type="number" min={4} max={500} value={agent.max_history} onChange={num('max_history')} /></Field>
+                <div className="col-span-full"><Field label={t('Tóm tắt hội thoại khi vượt quá (ký tự)')}><Input type="number" min={4000} step={1000} value={agent.compact_chars} onChange={num('compact_chars')} /></Field></div>
               </div>
-              <Select value={agent.fast_provider ?? ''} onChange={(e) => setAgent({ ...agent, fast_provider: e.target.value })} className="w-56">
-                <option value="">{t('Tắt')}</option>
-                {Object.keys(cfg.data.config.providers).filter((n) => n !== cfg.data.config.default_provider).map((n) => <option key={n} value={n}>{n}</option>)}
-              </Select>
-            </div>
-            <div className="-mx-5 flex items-center justify-between gap-4 border-b border-line/60 px-5 pb-4 last:border-b-0 last:pb-0 col-span-full">
-              <p className="text-sm font-medium">{t('Gợi ý tạo kỹ năng từ việc lặp lại')}</p>
-              <Switch checked={agent.suggest_habits} onChange={(v) => setAgent({ ...agent, suggest_habits: v })} label={t('Gợi ý kỹ năng')} />
-            </div>
-          </div>
-          <details className="group border-t border-line">
-            <summary className="cursor-pointer select-none px-5 py-3 text-sm font-medium text-muted hover:text-fg">{t('Tùy chọn nâng cao')}<span className="ml-2 text-xs font-normal">{t('Mặc định đã ổn, chỉ chỉnh khi bạn biết mình đang làm gì.')}</span></summary>
-            <div className="grid gap-4 px-5 pb-5 sm:grid-cols-2">
-              <Field label={t('Số bước tối đa mỗi lượt')}><Input type="number" min={1} max={50} value={agent.max_steps} onChange={num('max_steps')} /></Field>
-              <Field label={t('Số tin nhắn gửi kèm')}><Input type="number" min={4} max={500} value={agent.max_history} onChange={num('max_history')} /></Field>
-              <div className="col-span-full"><Field label={t('Thư mục workspace')}><Input value={agent.workspace} onChange={(e) => setAgent({ ...agent, workspace: e.target.value })} /></Field></div>
-              <div className="col-span-full"><Field label={t('Tóm tắt hội thoại khi vượt quá (ký tự)')}><Input type="number" min={4000} step={1000} value={agent.compact_chars} onChange={(e) => setAgent({ ...agent, compact_chars: Number(e.target.value) })} /></Field></div>
-            </div>
-          </details>
-        </Card>
-        <Card>
-          <CardHeader title="ClawHub" />
-          <div className="p-5"><Field label="URL"><Input value={hub} onChange={(e) => setHub(e.target.value)} /></Field></div>
-        </Card>
-          </>
-        )}
-        {tab === 'features' && <FeaturesTab value={extra} onChange={setExtra} providers={Object.keys(cfg.data.config.providers)} tools={cfg.data.tools.map((x) => x.name)} />}
-        {tab === 'tools' && (
-          <>
-        <Card>
-          <CardHeader title={t('Công cụ')} />
-          {cfg.data.tools.map((tool) => (
-            <div key={tool.name} className="flex items-center gap-4 border-b border-line px-5 py-3 last:border-b-0">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2"><span className="font-mono text-[13px] font-medium">{tool.name}</span><Badge tone={RISK[tool.risk].tone}>{t(RISK[tool.risk].label)}</Badge></div>
-                <p className="text-xs text-muted">{t(tool.description)}</p>
-              </div>
-              <Switch checked={agent.tools_enabled[tool.name] !== false} onChange={(v) => setAgent({ ...agent, tools_enabled: { ...agent.tools_enabled, [tool.name]: v } })} label={t('Bật tool {name}', { name: tool.name })} />
-            </div>
-          ))}
-        </Card>
-          </>
-        )}
-        {tab === 'security' && (
-          <>
-        <Card>
-          <CardHeader title={t('Sandbox chạy lệnh (Docker)')} />
-          <div className="grid gap-4 p-5 sm:grid-cols-2">
-            <Field label={t('Chế độ')}><Select value={agent.exec_sandbox} onChange={(e) => setAgent({ ...agent, exec_sandbox: e.target.value as 'none' | 'docker' })}><option value="none">{t('Tắt (chạy trực tiếp trên máy)')}</option><option value="docker">Docker</option></Select></Field>
-            <Field label={t('Image')}><Input value={agent.sandbox_image} disabled={agent.exec_sandbox !== 'docker'} onChange={(e) => setAgent({ ...agent, sandbox_image: e.target.value })} className="font-mono" /></Field>
-            <div className="-mx-5 flex items-center justify-between gap-4 border-b border-line/60 px-5 pb-4 last:border-b-0 last:pb-0 col-span-full">
-              <div><p className="text-sm font-medium">{t('Cho phép container dùng mạng')}</p></div>
-              <Switch checked={agent.sandbox_network} onChange={(v) => setAgent({ ...agent, sandbox_network: v })} label={t('Mạng trong sandbox')} disabled={agent.exec_sandbox !== 'docker'} />
-            </div>
-          </div>
-        </Card>
-        <PasswordCard has={cfg.data.config.auth.has_password} />
-        <SecretsCard s={cfg.data.secrets} />
-        <BackupRestoreCard />
-          </>
-        )}
+            </Card>}
+            {(tab === 'browser' || tab === 'memory' || tab === 'media' || tab === 'delegation') && (
+              <FeaturesTab section={tab} value={extra} onChange={setExtraEdit} providers={Object.keys(config.providers)} tools={tools.map((tool) => tool.name)} />
+            )}
+            {tab === 'tools' && (
+              <>
+                <Card>
+                  <CardHeader title={t('Công cụ')} action={<SearchBox value={toolQuery} onChange={(value) => { setToolQuery(value); setToolPage(0) }} placeholder={t('Tìm công cụ…')} label={t('Tìm công cụ')} />} />
+                  {!filteredTools.length && <p className="px-5 pb-4 text-sm text-muted">{t('Không có công cụ phù hợp.')}</p>}
+                  <div className="divide-y divide-line">
+                    {paginate(filteredTools, page, TOOLS_PER_PAGE).map((tool) => (
+                      <div key={tool.name} className="flex items-center gap-4 px-5 py-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2"><span className="font-mono text-[13px] font-medium">{tool.name}</span><Badge tone={RISK[tool.risk].tone}>{t(RISK[tool.risk].label)}</Badge></div>
+                          <p className="text-xs text-muted">{t(tool.description)}</p>
+                        </div>
+                        <Switch checked={agent.tools_enabled[tool.name] !== false} onChange={(v) => setAgentEdit({ ...agent, tools_enabled: { ...agent.tools_enabled, [tool.name]: v } })} label={t('Bật tool {name}', { name: tool.name })} />
+                      </div>
+                    ))}
+                  </div>
+                  <Pagination page={page} pageSize={TOOLS_PER_PAGE} total={filteredTools.length} onPageChange={setToolPage} />
+                </Card>
+                <Card><CardHeader title="ClawHub" /><div className="p-5"><Field label="URL"><Input value={hub} onChange={(e) => setHubEdit(e.target.value)} /></Field></div></Card>
+              </>
+            )}
+            {tab === 'security' && (
+              <>
+                <Card>
+                  <CardHeader title={t('An toàn khi chạy lệnh')} />
+                  <div className="grid gap-4 p-5 sm:grid-cols-2">
+                    <div className="-mx-5 flex items-center justify-between gap-4 border-b border-line/60 px-5 pb-4 last:border-b-0 last:pb-0 col-span-full">
+                      <div>
+                        <p className="text-sm font-medium">{t('Xác nhận trước khi chạy lệnh shell')}</p>
+                      </div>
+                      <Switch checked={agent.confirm_exec} onChange={(v) => setAgentEdit({ ...agent, confirm_exec: v })} label={t('Xác nhận lệnh shell')} />
+                    </div>
+                    <Field label={t('Sandbox chạy lệnh (Docker)')}><Select value={agent.exec_sandbox} onChange={(e) => setAgentEdit({ ...agent, exec_sandbox: e.target.value as 'none' | 'docker' })}><option value="none">{t('Tắt (chạy trực tiếp trên máy)')}</option><option value="docker">Docker</option></Select></Field>
+                    <Field label={t('Image')}><Input value={agent.sandbox_image} disabled={agent.exec_sandbox !== 'docker'} onChange={(e) => setAgentEdit({ ...agent, sandbox_image: e.target.value })} className="font-mono" /></Field>
+                    <div className="-mx-5 flex items-center justify-between gap-4 border-b border-line/60 px-5 pb-4 last:border-b-0 last:pb-0 col-span-full">
+                      <div><p className="text-sm font-medium">{t('Cho phép container dùng mạng')}</p></div>
+                      <Switch checked={agent.sandbox_network} onChange={(v) => setAgentEdit({ ...agent, sandbox_network: v })} label={t('Mạng trong sandbox')} disabled={agent.exec_sandbox !== 'docker'} />
+                    </div>
+                  </div>
+                </Card>
+                <PasswordCard has={config.auth.has_password} />
+                <SecretsCard s={secrets} />
+              </>
+            )}
+            {tab === 'backup' && <BackupRestoreCard />}
+          </fieldset>
+        </section>
       </div>
     </Page>
   )

@@ -292,3 +292,77 @@ def test_telegram_reply_sources_become_footer():
     from nestor.services.telegram_channel import clean_reply
     out = clean_reply("Cần có ngân sách. [[src:ab12|bao-cao.docx|đoạn 1-32]] Và tiến độ. [[src:ab12|bao-cao.docx|đoạn 1-32]]")
     assert "[[" not in out and out.endswith("Nguồn: bao-cao.docx (đoạn 1-32)") and out.startswith("Cần có ngân sách. Và tiến độ.")
+
+
+# ---------- danh mục tài liệu (kiểu NotebookLM)
+def test_search_is_scoped_to_category(tmp_path):
+    a = knowledge.create_category("Hợp đồng A")
+    b = knowledge.create_category("Hợp đồng B")
+    (tmp_path / "a.txt").write_text("Điều khoản thanh toán của dự án Alpha là 30 ngày.", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("Điều khoản thanh toán của dự án Beta là 60 ngày.", encoding="utf-8")
+    knowledge.add_file(tmp_path / "a.txt", "a.txt", category_id=a["id"])
+    knowledge.add_file(tmp_path / "b.txt", "b.txt", category_id=b["id"])
+    hits_a = knowledge.search("dieu khoan thanh toan", 5, a["id"])
+    hits_b = knowledge.search("dieu khoan thanh toan", 5, b["id"])
+    assert {h["name"] for h in hits_a} == {"a.txt"}
+    assert {h["name"] for h in hits_b} == {"b.txt"}
+    assert {h["name"] for h in knowledge.search("dieu khoan thanh toan", 5)} == {"a.txt", "b.txt"}
+
+
+def test_ensure_schema_migrates_uncategorized_docs(tmp_path):
+    (tmp_path / "old.txt").write_text("tài liệu cũ trước khi có danh mục", encoding="utf-8")
+    knowledge.add_file(tmp_path / "old.txt", "old.txt")  # khong truyen category_id -> tu dong vao "Chua phan loai"
+    cats = knowledge.list_categories()
+    assert len(cats) == 1 and cats[0]["name"] == knowledge.UNCATEGORIZED_NAME and cats[0]["doc_count"] == 1
+    knowledge.ensure_schema()  # goi lai khong tao them danh muc trung
+    assert len(knowledge.list_categories()) == 1
+
+
+def test_category_chat_reuses_one_session(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from nestor.services import sessions
+
+    cat = knowledge.create_category("Nghiên cứu")
+    ids = []
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        ids = list(pool.map(lambda _: sessions.category_chat(cat["id"], cat["name"], create=True, previous=[]), range(3)))
+    assert len(set(ids)) == 1 and ids[0]
+
+
+def test_delete_category_cascades_documents(tmp_path):
+    cat = knowledge.create_category("Tạm")
+    (tmp_path / "x.txt").write_text("nội dung sẽ bị xóa theo danh mục", encoding="utf-8")
+    knowledge.add_file(tmp_path / "x.txt", "x.txt", category_id=cat["id"])
+    assert len(knowledge.list_docs(cat["id"])) == 1
+    deleted = knowledge.delete_category(cat["id"])
+    assert deleted == 1 and knowledge.list_docs(cat["id"]) == [] and knowledge.get_category(cat["id"]) is None
+    assert knowledge.search("nội dung sẽ bị xóa") == []
+
+
+def test_kb_search_tool_respects_ctx_category_scope(tmp_path):
+    a = knowledge.create_category("A")
+    b = knowledge.create_category("B")
+    (tmp_path / "a.txt").write_text("Mật khẩu hệ thống A là bí mật nội bộ.", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("Mật khẩu hệ thống B khác hoàn toàn.", encoding="utf-8")
+    knowledge.add_file(tmp_path / "a.txt", "a.txt", category_id=a["id"])
+    knowledge.add_file(tmp_path / "b.txt", "b.txt", category_id=b["id"])
+    ctx = tools.ToolContext(workspace=cfgmod.load().workspace_path(), kb_category_id=a["id"])
+    out = tools.call(ctx, "kb_search", {"query": "mat khau he thong"})[0]
+    assert "a.txt" in out and "b.txt" not in out
+
+
+def test_category_crud_api(tmp_path):
+    from fastapi.testclient import TestClient
+    from nestor.main import app
+    c = TestClient(app)
+    created = c.post("/api/knowledge/categories", json={"name": "Dự án X", "icon": "📘"}).json()
+    assert created["name"] == "Dự án X"
+    cid = created["id"]
+    assert c.get("/api/knowledge/categories").json()[0]["id"] == cid
+    updated = c.put(f"/api/knowledge/categories/{cid}", json={"name": "Dự án Y"}).json()
+    assert updated["name"] == "Dự án Y"
+    up = c.post("/api/knowledge/upload", params={"name": "f.txt", "category_id": cid}, content=b"noi dung")
+    assert up.status_code == 200
+    assert c.get("/api/knowledge", params={"category_id": cid}).json()["docs"][0]["name"] == "f.txt"
+    assert c.delete(f"/api/knowledge/categories/{cid}").json()["deleted"] == 1
+    assert c.put(f"/api/knowledge/categories/{cid}", json={"name": "x"}).status_code == 404

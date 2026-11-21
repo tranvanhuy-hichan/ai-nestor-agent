@@ -159,21 +159,38 @@ class ChatBody(BaseModel):
 
 def _context(ctx: str) -> str:
     """Giao dien chi gui nhan ngu canh ('page:<ma>'); noi dung that do backend dung, khong nhan van ban tuy y."""
-    if ctx.startswith("page:"):
+    kind, _, pid = ctx.partition(":")
+    if kind in ("page", "page-draft"):
         from ..services import pages
-        return pages.chat_context(ctx[5:].strip())
+        return pages.chat_context(pid.strip(), draft=kind == "page-draft")
+    if kind == "kb-category":
+        from ..services import knowledge
+        return knowledge.category_chat_context(pid.strip())
     return ""
+
+
+def _kb_category(ctx: str) -> str | None:
+    kind, _, cid = ctx.partition(":")
+    return cid.strip() if kind == "kb-category" and cid.strip() else None
 
 
 @router.post("/chat")
 def chat(body: ChatBody):
     stored = (sessions.get(body.session) or {}).get("assistant") if body.session else ""
     eff = body.assistant if body.assistant is not None else stored  # khong gui thi dung tro ly da luu cua phien
+    draft = body.context.startswith("page-draft:")
+    kb_category_id = _kb_category(body.context)
+    tool_allow = assistants.tool_allow(eff)
+    if draft:
+        page_tools = {"page_read", "page_list", "page_search"}
+        tool_allow = sorted(page_tools if tool_allow is None else page_tools.intersection(tool_allow))
+
     def gen():
-        for ev in chat_runner.stream_chat(body.session, body.text, body.provider, attachments=body.attachments, permission=body.permission,
-                                            effort=None if body.effort == "auto" else body.effort, docs=body.docs,
+        for ev in chat_runner.stream_chat(body.session, body.text, body.provider, attachments=body.attachments, permission="readonly" if draft else body.permission,
+                                            effort=None if body.effort == "auto" else body.effort, docs=body.docs or bool(kb_category_id),
                                             temperature=body.temperature, max_tokens=body.max_tokens, detach=True,
-                                            system_extra="\n\n".join(x for x in (assistants.prompt_for(eff), _context(body.context)) if x), tool_allow=assistants.tool_allow(eff), assistant=body.assistant):
+                                            system_extra="\n\n".join(x for x in (assistants.prompt_for(eff), _context(body.context)) if x), tool_allow=tool_allow, assistant=body.assistant,
+                                            kb_category_id=kb_category_id):
             yield _sse(ev)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)

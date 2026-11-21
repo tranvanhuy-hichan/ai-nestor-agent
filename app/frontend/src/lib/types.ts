@@ -152,7 +152,8 @@ export interface GitStatus { repo: boolean; branch: string; files: GitFile[]; up
 export interface BrowseResult { path: string; parent: string | null; git: boolean; dirs: { name: string; path: string; git: boolean }[] }
 export interface RecentProject { path: string; name: string; ts: number; git?: boolean; branch?: string }
 
-export interface KbDoc { id: string; name: string; ext: string; size: number; pages: number; chunks: number; status: 'indexing' | 'ready' | 'error'; note: string | null; source: string; added: number }
+export interface KbDoc { id: string; name: string; ext: string; size: number; pages: number; chunks: number; status: 'indexing' | 'ready' | 'error'; note: string | null; source: string; added: number; category_id: string }
+export interface KbCategory { id: string; name: string; icon: string; created: number; updated: number; doc_count: number }
 export interface KbPassage { doc_id: string; name: string; loc: string; text: string; score: number; how: string[] }
 
 export interface LimitWindow { kind: 'session' | 'week'; model: string; used: number; resets: string }

@@ -10,8 +10,8 @@ import { HermesPluginsTab } from './HermesPluginsTab'
 /** Tiện ích & Plugin: Kho 2.500+ plugin Hermes offline kèm các dịch vụ đám mây MCP (Google, Notion, Canva…) */
 export function PluginsPage() {
   const [params, setParams] = useSearchParams()
-  const tab = params.get('tab') === 'services' ? 'services' : 'hermes'
-  const setTab = (t: 'hermes' | 'services') => setParams(t === 'hermes' ? {} : { tab: t }, { replace: true })
+  const tab = params.get('tab') === 'hermes' ? 'hermes' : 'services'
+  const setTab = (next: 'hermes' | 'services') => setParams(next === 'services' ? {} : { tab: next }, { replace: true })
   const [q, setQ] = useState('')
 
   return (
@@ -35,8 +35,8 @@ export function PluginsPage() {
         value={tab}
         onChange={setTab}
         tabs={[
-          { id: 'hermes', label: t('Kho 2.500+ Plugin Hermes'), count: 2514 },
           { id: 'services', label: t('Dịch vụ đám mây & OAuth') },
+          { id: 'hermes', label: t('Kho 2.500+ Plugin Hermes'), count: 2514 },
         ]}
       />
       <div className="mt-5">

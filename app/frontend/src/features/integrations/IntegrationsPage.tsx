@@ -19,8 +19,8 @@ export function IntegrationsPage() {
     <Page>
       <PageHeader title={t('Tích hợp')} />
       <Tabs value={tab} onChange={(v) => { setAdd(0); setParams(v === 'mcp' ? {} : { tab: v }, { replace: true }) }} tabs={[{ id: 'mcp', label: t('MCP server') }, { id: 'channels', label: t('Kênh chat') }, { id: 'api', label: t('API & Token') }]}
-        right={tab === 'mcp' || tab === 'api' ? <Button variant="primary" onClick={() => setAdd(add + 1)}><Plus className="size-4" />{tab === 'mcp' ? t('Thêm MCP server') : t('Tạo token')}</Button> : undefined} />
-      <div className="mt-5">{tab === 'api' ? <ApiTab addSignal={add} /> : tab === 'channels' ? <ChannelsTab /> : <McpTab addSignal={add} />}</div>
+        right={<Button variant="primary" onClick={() => setAdd(add + 1)}><Plus className="size-4" />{tab === 'mcp' ? t('Thêm MCP server') : tab === 'channels' ? t('Thêm kênh') : t('Tạo token')}</Button>} />
+      <div className="mt-5">{tab === 'api' ? <ApiTab addSignal={add} /> : tab === 'channels' ? <ChannelsTab choosing={add > 0} onClosePicker={() => setAdd(0)} /> : <McpTab addSignal={add} />}</div>
     </Page>
   )
 }

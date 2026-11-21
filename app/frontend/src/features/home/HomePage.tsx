@@ -1,25 +1,26 @@
 import { lazy, Suspense, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowRight, ArrowUp, Bell, CheckCircle2, Circle, Clock, FolderCog, HeartPulse, ListTodo, MessageSquare, Plug, Puzzle, Send, type LucideIcon } from 'lucide-react'
+import { ArrowRight, ArrowUp, Bell, CheckCircle2, Circle, Clock, Columns3, Download, FileSearch, FileText, HeartPulse, MessageSquare, NotebookText, Send, type LucideIcon } from 'lucide-react'
+import { assistantIcon } from '@/lib/assistantIcons'
+import { FALLBACK_ASSISTANTS, FEATURED, useAssistants } from '@/lib/assistants'
+import { coreFeatures } from '@/lib/featureCatalog'
 import { AgentLogoStacked } from '@/components/ui/AgentMark'
 import { Loading, Page } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import { t, tk } from '@/lib/i18n.ts'
 import { useConfig, useDashboard, useHeartbeat, useJobs, useMcp, useSkills } from '@/lib/queries'
-import type { NotificationItem, TelegramStatus } from '@/lib/types'
+import type { FileEntry, NotificationItem, TelegramStatus } from '@/lib/types'
 import { cn, fmtDateTime, fmtNum, timeAgo } from '@/lib/utils'
 import { HabitSuggestions } from './HabitSuggestions'
 
 const Spark = lazy(() => import('./HomeCharts').then((m) => ({ default: m.Spark })))
 
 const QUICK: { to: string; icon: LucideIcon; label: string }[] = [
-  { to: '/tasks', icon: ListTodo, label: tk('Giao việc dài') },
-  { to: '/automations', icon: Clock, label: tk('Tự động hóa mới') },
-  { to: '/skills?tab=discover', icon: Puzzle, label: tk('Cài kỹ năng') },
-  { to: '/integrations?tab=channels', icon: Send, label: tk('Nối Telegram') },
-  { to: '/providers', icon: Plug, label: tk('Thêm model') },
-  { to: '/workspace', icon: FolderCog, label: tk('Mở workspace') },
+  { to: '/kanban', icon: Columns3, label: tk('Bảng Kanban') },
+  { to: '/automations', icon: Clock, label: tk('Tự động hóa') },
+  { to: '/documents', icon: FileSearch, label: tk('Tài liệu') },
+  { to: '/pages', icon: NotebookText, label: tk('Sổ tay') },
 ]
 
 /** Tiêu đề một vùng nội dung: chữ + liên kết, không hộp bao quanh. */
@@ -46,6 +47,21 @@ export function HomePage() {
   const nav = useNavigate()
   const cfg = useConfig()
   const dash = useDashboard(7)
+  const assistants = useAssistants()
+  const featured = coreFeatures(assistants.data ?? FALLBACK_ASSISTANTS)
+    .filter((tool) => FEATURED.includes(tool.id)).slice(0, 4)
+  const recentIds = (dash.data?.recent_sessions ?? []).slice(0, 5).map((session) => session.id)
+  const outputs = useQuery({
+    queryKey: ['home-outputs', recentIds],
+    enabled: recentIds.length > 0,
+    queryFn: async () => {
+      const lists = await Promise.allSettled(recentIds.map(async (sid) => {
+        const files = await api.get<FileEntry[]>(`/api/sessions/${sid}/files`)
+        return files.filter((file) => !file.dir && /\.(docx|xlsx|pptx|pdf)$/i.test(file.path)).map((file) => ({ ...file, sid }))
+      }))
+      return lists.flatMap((result) => result.status === 'fulfilled' ? result.value : []).sort((a, b) => b.mtime - a.mtime).slice(0, 4)
+    },
+  })
   const skills = useSkills()
   const mcp = useMcp()
   const hb = useHeartbeat()
@@ -116,9 +132,7 @@ export function HomePage() {
           </div>
         </section>
 
-        <HabitSuggestions />
-
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {QUICK.map(({ to, icon: Icon, label }) => (
             <Link key={to} to={to} className="flex items-center gap-2.5 rounded-xl border border-line bg-panel px-3.5 py-3 text-sm transition hover:border-accent/60">
               <Icon className="size-[18px] shrink-0 text-accent" /><span className="truncate">{t(label)}</span>
@@ -126,7 +140,25 @@ export function HomePage() {
           ))}
         </div>
 
-        <div className="grid items-stretch gap-4 lg:grid-cols-3">
+        {featured.length > 0 && <section aria-labelledby="featured-tools" className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="featured-tools" className="text-base font-semibold">{t('Công cụ gợi ý')}</h2>
+            <Link to="/f" className="flex items-center gap-1.5 text-sm text-accent hover:underline">{t('Tất cả chức năng')}<ArrowRight className="size-4" /></Link>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {featured.map((tool) => {
+              const Icon = assistantIcon(tool.icon)
+              return <Link key={tool.id} to={`/f/${tool.id}`} className="flex min-w-0 items-start gap-3 rounded-xl border border-line bg-panel p-3.5 transition hover:border-accent/60 focus-visible:outline-2 focus-visible:outline-accent">
+                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent"><Icon className="size-[18px]" /></span>
+                <span className="min-w-0"><span className="block text-sm font-semibold">{t(tool.name)}</span><span className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">{t(tool.description)}</span></span>
+              </Link>
+            })}
+          </div>
+        </section>}
+
+        <HabitSuggestions />
+
+        <div className="grid items-stretch gap-4 md:grid-cols-2 2xl:grid-cols-4">
           <Block title={t('Hội thoại gần đây')} to="/chat" cta={t('Xem tất cả')}>
             {d.recent_sessions.length === 0 ? <Muted>{t('Chưa có hội thoại nào.')}</Muted> : d.recent_sessions.slice(0, 5).map((s) => {
               const Icon = sourceIcon(s.source)
@@ -137,6 +169,20 @@ export function HomePage() {
                 </Link>
               )
             })}
+          </Block>
+
+          <Block title={t('Kết quả gần đây')} to="/tasks" cta={t('Xem việc đã làm')}>
+            {outputs.isLoading ? <p className="py-3 text-sm text-muted">{t('Đang tải…')}</p> : !outputs.data?.length
+              ? <Muted>{t('Các file Word, Excel, PowerPoint tôi làm cho bạn sẽ hiện ở đây.')}</Muted>
+              : outputs.data.map((file) => {
+                const name = file.path.split('/').pop() ?? file.path
+                return <div key={`${file.sid}/${file.path}`} className={rowCls}>
+                  <Link to={`/chat?session=${file.sid}`} className="flex min-w-0 items-center gap-2 hover:text-accent" title={t('Mở cuộc trò chuyện tạo ra file này')}>
+                    <FileText className="size-4 shrink-0 text-muted" /><span className="truncate">{name}</span>
+                  </Link>
+                  <a href={`/api/sessions/${file.sid}/file?path=${encodeURIComponent(file.path)}&raw=true`} download={name} aria-label={t('Tải về')} className="shrink-0 rounded-md p-1 text-accent hover:bg-panel2"><Download className="size-4" /></a>
+                </div>
+              })}
           </Block>
 
           <Block title={t('Thông báo mới')} to="/notifications" cta={(inbox.data?.unread ?? 0) > 0 ? `${t('Hộp thư')} · ${inbox.data?.unread}` : t('Hộp thư')}>
@@ -196,7 +242,7 @@ export function HomePage() {
                   <CheckCircle2 className="size-4 shrink-0" />
                   <span className="font-medium">{t('Đã sẵn sàng hoạt động')}</span>
                 </div>
-                <p className="text-xs text-muted">{t('Tất cả các bước thiết lập cơ bản đã hoàn tất. Agent đang hoạt động tốt với model mặc định {def}.', { def: def || 'chính' })}</p>
+                <p className="text-xs text-muted">{t('Tất cả các bước thiết lập cơ bản đã hoàn tất. Agent đang hoạt động tốt với model mặc định {def}.', { def: def || '—' })}</p>
                 <div className="border-t border-line/60 pt-2 text-xs text-muted space-y-1.5">
                   <div className="flex justify-between"><span>{t('Mô hình mặc định:')}</span><span className="font-mono text-fg">{def}</span></div>
                   <div className="flex justify-between"><span>{t('Kỹ năng đã kích hoạt:')}</span><span className="font-medium text-fg">{skills.data?.filter((s) => s.enabled).length ?? 0}</span></div>

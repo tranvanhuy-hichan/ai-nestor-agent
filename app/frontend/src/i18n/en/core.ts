@@ -1,6 +1,11 @@
 const dict: Record<string, string> = {
   // --- Khung giao dien
   'Trang chủ': 'Home',
+  'Chuyển sang {name}': 'Switch to {name}',
+  'Quản trị': 'Administration',
+  'Công cụ gợi ý': 'Suggested tools',
+  'Phiên dịch YouTube trực tiếp': 'Live YouTube translation',
+  'Nghe âm thanh tab YouTube, xem phụ đề nhiều ngôn ngữ và phát giọng dịch. Tải phụ đề SRT sau khi xem.': 'Listen to a YouTube tab, view multilingual subtitles, and play spoken translations. Download the subtitles as SRT.',
   'Trò chuyện': 'Chat',
   'Bảng điều khiển': 'Dashboard',
   'Tự động hóa': 'Automations',

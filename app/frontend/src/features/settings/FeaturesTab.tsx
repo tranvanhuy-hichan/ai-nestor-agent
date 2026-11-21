@@ -9,13 +9,13 @@ function Row({ title, children }: { title: string; children: React.ReactNode }) 
   return <div className="-mx-5 flex items-center justify-between gap-4 border-b border-line/60 px-5 pb-4 last:border-b-0 last:pb-0 col-span-full"><p className="text-sm font-medium">{title}</p>{children}</div>
 }
 
-export function FeaturesTab({ value, onChange, providers, tools }: { value: ExtraCfg; onChange: (v: ExtraCfg) => void; providers: string[]; tools: string[] }) {
+export function FeaturesTab({ section, value, onChange, providers, tools }: { section: 'browser' | 'memory' | 'media' | 'delegation'; value: ExtraCfg; onChange: (v: ExtraCfg) => void; providers: string[]; tools: string[] }) {
   const set = <K extends keyof ExtraCfg>(k: K, patch: Partial<ExtraCfg[K]>) => onChange({ ...value, [k]: { ...value[k], ...patch } })
   const provOpts = (blank: string) => <><option value="">{blank}</option>{providers.map((p) => <option key={p} value={p}>{p}</option>)}</>
-  const { browser, media, computer, agents } = value
+  const { browser, memory, media, computer, agents } = value
   return (
     <>
-      <Card>
+      {section === 'browser' && <Card>
         <CardHeader title={t('Trình duyệt')} />
         <div className="grid gap-4 p-5 sm:grid-cols-2">
           <Row title={t('Bật điều khiển trình duyệt')}><Switch checked={browser.enabled} onChange={(v) => set('browser', { enabled: v })} label={t('Bật trình duyệt')} /></Row>
@@ -24,31 +24,34 @@ export function FeaturesTab({ value, onChange, providers, tools }: { value: Extr
           <Field label={t('Đường dẫn Chromium/Chrome')}><Input value={browser.executable} className="font-mono" onChange={(e) => set('browser', { executable: e.target.value })} /></Field>
           <Field label={t('Tự đóng sau (phút không dùng)')}><Input type="number" min={1} max={240} value={browser.idle_minutes} onChange={(e) => set('browser', { idle_minutes: Number(e.target.value) })} /></Field>
         </div>
-      </Card>
+      </Card>}
 
-      <Card>
+      {section === 'memory' && <Card>
         <CardHeader title={t('Tìm kiếm theo nghĩa (embedding)')} />
-        <p className="px-5 pb-4 text-sm text-muted">{t('Model embedding được cấu hình cùng các mô hình AI khác.')} <Link to="/providers?tab=embedding" className="text-accent hover:underline">{t('Mở Mô hình AI, tab Embedding')}</Link></p>
-      </Card>
+        <div className="space-y-4 px-5 pb-5">
+          <Row title={t('Tự lập chỉ mục tin nhắn mới')}><Switch checked={memory.auto_index} onChange={(v) => set('memory', { auto_index: v })} label={t('Tự lập chỉ mục')} /></Row>
+          <p className="text-sm text-muted">{t('Model embedding được cấu hình cùng các mô hình AI khác.')} <Link to="/providers?tab=embedding" className="text-accent hover:underline">{t('Mở Mô hình AI, tab Embedding')}</Link></p>
+        </div>
+      </Card>}
 
-      <Card>
+      {section === 'media' && <Card>
         <CardHeader title={t('Ảnh và hình ảnh')} />
         <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
           <Field label={t('Provider tạo ảnh')}><Select value={media.image_provider ?? ''} onChange={(e) => set('media', { image_provider: e.target.value || null })}>{provOpts(t('Chưa chọn'))}</Select></Field>
           <Field label={t('Model tạo ảnh')}><Input value={media.image_model} className="font-mono" onChange={(e) => set('media', { image_model: e.target.value })} /></Field>
           <Field label={t('Provider để xem ảnh')}><Select value={media.vision_provider ?? ''} onChange={(e) => set('media', { vision_provider: e.target.value || null })}>{provOpts(t('Tự chọn'))}</Select></Field>
         </div>
-      </Card>
+      </Card>}
 
-      <Card>
+      {section === 'browser' && <Card>
         <CardHeader title={t('Điều khiển máy tính')} />
         <div className="space-y-3 p-5">
           <Row title={t('Bật điều khiển máy tính')}><Switch checked={computer.enabled} onChange={(v) => set('computer', { enabled: v })} label={t('Bật điều khiển máy tính')} /></Row>
           {computer.enabled && <p className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">{t('Cẩn thận: agent có thể bấm vào bất cứ thứ gì trên màn hình, kể cả cửa sổ chứa mật khẩu. Chỉ bật khi bạn ngồi canh, và đừng để ở chế độ Toàn quyền khi vắng mặt. Trên Linux cần xdotool (X11) hoặc ydotool + wtype (Wayland).')}</p>}
         </div>
-      </Card>
+      </Card>}
 
-      <Card>
+      {section === 'delegation' && <Card>
         <CardHeader title={t('Agent con và việc dài')} />
         <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
           <Field label={t('Độ sâu tối đa')}><Input type="number" min={0} max={4} value={agents.max_depth} onChange={(e) => set('agents', { max_depth: Number(e.target.value) })} /></Field>
@@ -69,7 +72,7 @@ export function FeaturesTab({ value, onChange, providers, tools }: { value: Extr
             </div>
           ))}
         </details>
-      </Card>
+      </Card>}
     </>
   )
 }

@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { openLogin } from '../integrations/ServicesTab'
-import { useUiMode } from '@/lib/uiMode'
 import { useState } from 'react'
 import { AgentMark } from '../../components/ui/AgentMark'
 import { Brain, Cable, CircleCheck, HelpCircle, Undo2, Check, ChevronRight, ExternalLink, Eye, FileText, Globe, Info, Paperclip, Pencil, RefreshCw, ShieldAlert, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
@@ -9,7 +8,6 @@ import { Badge } from '@/components/ui/Badge'
 import { BrandIcon, detectBrand } from '@/components/ui/BrandIcon'
 import { Button } from '@/components/ui/Button'
 import { t, tk } from '@/lib/i18n.ts'
-import { T } from '@/lib/T.tsx'
 import { cn } from '@/lib/utils'
 import { Markdown } from './Markdown'
 import { Images, SpeakButton } from './Media'
@@ -17,7 +15,6 @@ import { stripImageMarks } from './session'
 import type { FormQuestion } from '@/lib/chatStream'
 import type { Item, ToolItem } from './useChat'
 
-const KIND_LABEL: Record<string, string> = { http_request: tk('gửi yêu cầu HTTP thay đổi dữ liệu'), mcp: tk('gọi tool MCP'), exec: tk('chạy lệnh shell'), file_read: tk('đọc file ngoài workspace'), file_write: tk('ghi file'), browser: tk('điều khiển trình duyệt'), image: tk('tạo ảnh (có thể tốn phí)'), computer: tk('điều khiển máy tính (chuột, bàn phím, màn hình)') }
 const FRIENDLY_LABEL: Record<string, string> = { http_request: tk('gửi dữ liệu lên một trang web'), mcp: tk('dùng một ứng dụng bên ngoài'), exec: tk('chạy một chương trình trên máy bạn'), file_read: tk('đọc một file ngoài thư mục làm việc'), file_write: tk('lưu hoặc sửa một file'), browser: tk('mở và thao tác trên trình duyệt'), image: tk('tạo ảnh (có thể tốn phí)'), computer: tk('điều khiển chuột và bàn phím của máy bạn') }
 const RISK_ICON = { exec: Terminal, file: FileText, network: Globe, mcp: Cable } as const
 
@@ -181,19 +178,20 @@ function Thinking({ text, streaming, provider }: { text: string; streaming: bool
 }
 
 function ApprovalCard({ item, onDecide }: { item: Extract<Item, { kind: 'approval' }>; onDecide: (aid: string, ok: boolean) => void }) {
-  const simple = useUiMode() === 'simple'
   return (
     <div className="fade-in ml-10 rounded-lg border border-warn/40 bg-warn/5 p-3.5">
-      <div className="flex items-center gap-2 text-sm font-medium"><ShieldAlert className="size-4 text-warn" />{simple
-        ? <span>{t('Trợ lý xin phép {action}. Bạn có đồng ý không?', { action: FRIENDLY_LABEL[item.approvalKind] ? t(FRIENDLY_LABEL[item.approvalKind]) : item.approvalKind })}</span>
-        : <T k="Agent muốn {action}" v={{ action: KIND_LABEL[item.approvalKind] ? t(KIND_LABEL[item.approvalKind]) : item.approvalKind }} />}</div>
-      {simple
-        ? <details className="my-2 text-xs text-muted"><summary className="cursor-pointer">{t('Xem chi tiết')}</summary><pre className="mt-1.5 overflow-x-auto whitespace-pre-wrap rounded-md bg-bg p-2.5 font-mono">{item.detail}</pre></details>
-        : <pre className="my-2.5 overflow-x-auto whitespace-pre-wrap rounded-md bg-bg p-2.5 font-mono text-xs">{item.detail}</pre>}
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <ShieldAlert className="size-4 shrink-0 text-warn" />
+        {t('Trợ lý xin phép {action}. Bạn có đồng ý không?', { action: t(FRIENDLY_LABEL[item.approvalKind] ?? item.approvalKind) })}
+      </div>
+      <details open={item.status === 'pending'} className="my-2 text-xs text-muted">
+        <summary className="cursor-pointer">{t('Xem chi tiết')}</summary>
+        <pre className="mt-1.5 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md bg-bg p-2.5 font-mono">{item.detail}</pre>
+      </details>
       {item.status === 'pending' ? (
         <div className="flex gap-2">
-          <Button size="sm" variant="primary" onClick={() => onDecide(item.aid, true)}>{simple ? t('Đồng ý') : t('Cho phép')}</Button>
-          <Button size="sm" onClick={() => onDecide(item.aid, false)}>{simple ? t('Không đồng ý') : t('Từ chối')}</Button>
+          <Button size="sm" variant="primary" onClick={() => onDecide(item.aid, true)}>{t('Cho phép')}</Button>
+          <Button size="sm" onClick={() => onDecide(item.aid, false)}>{t('Từ chối')}</Button>
         </div>
       ) : (
         <Badge tone={item.status === 'allowed' ? 'ok' : 'bad'}>{item.status === 'allowed' ? t('Đã cho phép') : t('Đã từ chối')}</Badge>

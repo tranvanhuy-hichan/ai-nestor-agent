@@ -15,4 +15,4 @@ def format_hits(hits: list[dict]) -> str:
       "Mỗi đoạn trả về kèm một thẻ nguồn dạng [[src:...]]; khi trả lời chèn nguyên văn thẻ đó ở cuối ý tương ứng.",
       {"query": ("string", "câu hỏi hoặc từ khóa cần tìm trong tài liệu"), "limit": ("integer", "số đoạn tối đa (mặc định 6)")}, required=["query"])
 def kb_search(ctx, query, limit=6):
-    return format_hits(knowledge.search(query, int(limit))) or "không tìm thấy đoạn nào liên quan trong kho tài liệu"
+    return format_hits(knowledge.search(query, int(limit), ctx.kb_category_id)) or "không tìm thấy đoạn nào liên quan trong kho tài liệu"

@@ -81,6 +81,7 @@ MIGRATIONS = [
     ("cron_jobs", "notify", "INTEGER DEFAULT 1"),
     ("api_tokens", "allow_docs", "INTEGER DEFAULT 0"),
     ("usage", "context_report", "TEXT"),
+    ("jobs", "kb_category_id", "TEXT"),
 ]
 
 fts_enabled = False

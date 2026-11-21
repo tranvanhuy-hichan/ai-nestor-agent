@@ -3,11 +3,8 @@ import { AgentLogoStacked } from '../../components/ui/AgentMark'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Activity, Copy, Download, FileCode, FileSearch, FileText, Folder, FolderTree, GitCompare, LoaderCircle, PanelLeft, Shield, Terminal, Upload } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useUiMode } from '@/lib/uiMode'
-import { SkillDraftButton } from '@/features/simple/SkillDraftButton'
-import { SimpleChatTools } from '@/features/simple/SimpleChatTools'
-import { AssistantChip, AssistantStart, useAssistant } from '@/features/simple/AssistantStart'
-import { useAssistants } from '@/lib/assistants'
+import { FALLBACK_ASSISTANTS, useAssistants } from '@/lib/assistants'
+import { ConversationTools } from './ConversationTools'
 import { Select } from '@/components/ui/Form'
 import { ContextBanner } from './ContextBanner'
 import { ToolPolicyDrawer } from './ToolPolicyDrawer'
@@ -31,6 +28,7 @@ import { SessionList } from './SessionList'
 import { useChat, type Item } from './useChat'
 import { WorkspacePanel, type PanelTab } from './WorkspacePanel'
 
+const NEW_CHAT_PERMISSION: Permission = 'guarded'
 const DOC_SUGGESTIONS = [tk('Tóm tắt các tài liệu này trong 5 ý chính'), tk('Những mốc thời gian hoặc hạn chót nào được nhắc đến?'), tk('Có những con số hoặc chi phí quan trọng nào?'), tk('Có điều khoản hay yêu cầu nào tôi cần đặc biệt lưu ý?')]
 const SUGGESTIONS = [tk('Bạn làm được những gì?'), tk('Soạn giúp tôi một email chuyên nghiệp xin dời lịch họp sang tuần sau'), tk('Tìm trên web tin mới nhất về Python 3.14 và tóm tắt'), tk('Viết script Python đọc file CSV tôi đính kèm và vẽ biểu đồ, lưu ra file .png'), tk('Sắp xếp và đặt tên lại các file trong thư mục làm việc theo loại'), tk('Lập kế hoạch học tiếng Anh 30 ngày, lưu thành file Excel')]
 
@@ -77,7 +75,6 @@ function exportJson(items: Item[], sessionTitle?: string): string {
 
 export function ChatPage() {
   const chat = useChat()
-  const simple = useUiMode() === 'simple'
   const cfg = useConfig()
   const allSessions = useSessions()
   const sessions = allSessions
@@ -90,14 +87,9 @@ export function ChatPage() {
   const [assistantId, setAssistantId] = useState<string | undefined>((location.state as { assistant?: string } | null)?.assistant)
   const assistantRef = useRef(assistantId)
   assistantRef.current = assistantId
-  const activeAssistant = useAssistant(assistantId)
   const registeredAssistants = useAssistants()
+  const activeAssistant = (registeredAssistants.data ?? FALLBACK_ASSISTANTS).find((assistant) => assistant.id === assistantId)
   const [toolsOpen, setToolsOpen] = useState(false)
-  const clearAssistant = () => {
-    if (activeAssistant?.scoped && chat.items.length) { onNew(); return }
-    setAssistantId(undefined)
-    if (chat.sessionId) void api.put(`/api/sessions/${chat.sessionId}/assistant`, { assistant: '' }).then(() => qc.invalidateQueries({ queryKey: ['sessions'] })).catch((error) => toast(errMsg(error), 'bad'))
-  }
   const [params, setParams] = useSearchParams()
   const selectedProfile = params.get('profile')
   const [text, setText] = useState('')
@@ -111,7 +103,7 @@ export function ChatPage() {
     setProvider(null)
     setSkill(null)
   }, [openChat])
-  const [permission, setPermission] = useState<Permission>('default') // moi hoi thoai bat dau o 'Mac dinh', khong luu lai
+  const [permission, setPermission] = useState<Permission>(NEW_CHAT_PERMISSION)
   const changePermission = (p: Permission) => { setPermission(p); permStore.set(chat.sessionId, p) }
   useEffect(() => { // hoi thoai moi vua co id: giu quyen da chon luc chua co id
     const sid = chat.sessionId
@@ -162,7 +154,9 @@ export function ChatPage() {
       const st = location.state as { session?: string; attachments?: string[] } | null
       void (async () => {
         if (st?.session) await chat.open(st.session) // phiên đã tạo sẵn (kèm file tải lên) từ trang chức năng
-        void chat.send(initial, null, st?.attachments ?? [], { assistant: assistantRef.current, ...(simple ? { permission: 'guarded' } : {}) })
+        const initialPermission = permStore.get(st?.session ?? null) ?? NEW_CHAT_PERMISSION
+        setPermission(initialPermission)
+        void chat.send(initial, null, st?.attachments ?? [], { assistant: assistantRef.current, permission: initialPermission })
       })()
     }
   }, [initial, cfg.data, chat, nav])
@@ -182,14 +176,14 @@ export function ChatPage() {
     if (restored.current || wanted || initial || selectedProfile) return
     restored.current = true
     const last = store.get('last-session', '')
-    if (last && !chat.sessionId) { setPermission(permStore.get(last) ?? 'default'); void openSession(last).catch(() => store.set('last-session', '')) }
+    if (last && !chat.sessionId) { setPermission(permStore.get(last) ?? NEW_CHAT_PERMISSION); void openSession(last).catch(() => store.set('last-session', '')) }
   }, [wanted, initial, chat.sessionId, openSession, selectedProfile])
   useEffect(() => { if (chat.sessionId) store.set('last-session', chat.sessionId) }, [chat.sessionId])
   useEffect(() => {
     if (!wanted) return
     restored.current = true // đã có phiên được chỉ định: không được khôi phục 'phiên cuối' đè lên sau khi xóa ?session
     store.set('last-session', wanted)
-    setPermission(permStore.get(wanted) ?? 'default')
+    setPermission(permStore.get(wanted) ?? NEW_CHAT_PERMISSION)
     void openSession(wanted).catch((error) => toast(errMsg(error), 'bad'))
     setParams({}, { replace: true })
   }, [wanted, openSession, setParams, toast])
@@ -230,7 +224,7 @@ export function ChatPage() {
     setSkill(null)
     setAttachments([])
     setOpenPath(null)
-    setPermission('default')
+    setPermission(NEW_CHAT_PERMISSION)
     permStore.clear(null)
     setUseDocs(false)
   }, [resetChat])
@@ -259,7 +253,7 @@ export function ChatPage() {
   const onOpen = (id: string) => {
     setOpenPath(null)
     setAttachments([])
-    setPermission(permStore.get(id) ?? 'default')
+    setPermission(permStore.get(id) ?? NEW_CHAT_PERMISSION)
     void openSession(id).catch((error) => toast(errMsg(error), 'bad'))
   }
 
@@ -293,7 +287,7 @@ export function ChatPage() {
     const raw = override ?? text
     if (!raw.trim() || chat.busy || uploading) return
     stick.current = true
-    void chat.send(skill && override === undefined ? `${t('Dùng skill `{name}`: ', { name: skill })}${raw}` : raw, active, attachments, { permission: simple && permission === 'default' ? 'guarded' : permission, effort, docs: isDocs, temperature, max_tokens: maxTokens, assistant: assistantRef.current })
+    void chat.send(skill && override === undefined ? `${t('Dùng skill `{name}`: ', { name: skill })}${raw}` : raw, active, attachments, { permission, effort, docs: isDocs, temperature, max_tokens: maxTokens, assistant: assistantRef.current })
     if (override === undefined) setText('')
     setSkill(null)
     setAttachments([])
@@ -371,7 +365,7 @@ export function ChatPage() {
           <div className="flex min-w-0 items-center gap-2 text-sm">
             <button onClick={() => setSessionsOpen(!sessionsOpen)} aria-pressed={sessionsOpen} aria-label={t('Danh sách hội thoại')} title={t('Danh sách hội thoại')}
               className="hidden rounded-lg p-1.5 text-muted transition hover:bg-panel2 hover:text-fg lg:block"><PanelLeft className="size-4" /></button>
-            {!simple && <><Folder className="size-4 shrink-0 text-muted" aria-hidden />
+            {project && <><Folder className="size-4 shrink-0 text-muted" aria-hidden />
             <span className="hidden max-w-[16rem] truncate text-muted sm:inline" title={project || undefined}>{project ? project.replace(/^\/home\/[^/]+/, '~') : t('Không gian làm việc')}</span>
             <span className="hidden text-muted/60 sm:inline" aria-hidden>/</span></>}
             <h1 className="truncate font-medium">{sessions.data?.find((s) => s.id === chat.sessionId)?.title ?? t('Cuộc trò chuyện mới')}</h1>
@@ -411,14 +405,11 @@ export function ChatPage() {
               onChange={(event) => event.target.value === '__manage__' ? nav('/profiles') : selectProfile(event.target.value)}>
               <option value="">{t('Trợ lý mặc định')}</option>
               {assistantId && !activeAssistant && <option value={assistantId}>{assistantId}</option>}
-              {registeredAssistants.data?.map((assistant) => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}
+              {registeredAssistants.data?.map((assistant) => <option key={assistant.id} value={assistant.id}>{t(assistant.name)}</option>)}
               <option value="__manage__">{t('Quản lý hồ sơ')}</option>
             </Select>
-            {!simple && <button type="button" onClick={() => setToolsOpen(true)} className="rounded-lg p-2 text-muted hover:bg-panel2 hover:text-fg" aria-label={t('Quyền công cụ')} title={t('Quyền công cụ')}><Shield className="size-4" /></button>}
-            {simple && activeAssistant && !activeAssistant.scoped && <AssistantChip a={activeAssistant} onClear={clearAssistant} />}
-            {chat.sessionId && chat.items.length > 0 && (simple
-              ? <SimpleChatTools key={chat.sessionId} sid={chat.sessionId} busy={chat.busy} />
-              : <SkillDraftButton key={chat.sessionId} sid={chat.sessionId} busy={chat.busy} />)}
+            <button type="button" onClick={() => setToolsOpen(true)} className="rounded-lg p-2 text-muted hover:bg-panel2 hover:text-fg" aria-label={t('Quyền công cụ')} title={t('Quyền công cụ')}><Shield className="size-4" /></button>
+            {chat.sessionId && chat.items.length > 0 && <ConversationTools key={chat.sessionId} sid={chat.sessionId} busy={chat.busy} />}
             <div className={cn('flex items-center gap-0.5')} role="group" aria-label={t('Không gian làm việc')}>
               {PANEL_BUTTONS.filter((x) => project || x.id !== 'changes').map(({ id, label, icon: Icon }) => {
                 const on = panelOpen && tab === id
@@ -437,15 +428,14 @@ export function ChatPage() {
 
         <div ref={scroller} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }} className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-4xl space-y-4 px-5 py-6">
-            {chat.items.length === 0 && simple && !isDocs ? (
-              <AssistantStart active={activeAssistant} />
-            ) : chat.items.length === 0 ? (
+            {chat.items.length === 0 ? (
               <div className="flex flex-col items-center pt-[10vh] text-center">
                 {isDocs ? <FileSearch className="mb-4 size-12 text-accent" /> : <AgentLogoStacked large className="mb-5" />}
                 <h2 className="text-xl font-semibold">{isDocs ? t('Hỏi đáp trên tài liệu của bạn') : t('Mình có thể giúp gì cho bạn?')}</h2>
+                {!isDocs && activeAssistant && <p className="mt-1 text-sm text-muted">{t('Đang dùng trợ lý {name}.', { name: t(activeAssistant.name) })}</p>}
                 {isDocs && <p className="mt-1 text-sm text-muted">{t('Nestor chỉ trả lời dựa trên tài liệu bạn đã thêm và ghi rõ nguồn.')}</p>}
                 <div className="mt-6 grid w-full max-w-xl gap-2 sm:grid-cols-2">
-                  {(isDocs ? DOC_SUGGESTIONS : SUGGESTIONS).map((s) => <button key={s} onClick={() => { stick.current = true; submit(t(s)) }} className="rounded-xl border border-line bg-panel px-3.5 py-3 text-left text-sm text-muted transition hover:border-accent/60 hover:text-fg">{t(s)}</button>)}
+                  {(isDocs ? DOC_SUGGESTIONS : activeAssistant?.starters.length ? activeAssistant.starters.slice(0, 4) : SUGGESTIONS.slice(0, 4)).map((s) => <button key={s} onClick={() => { stick.current = true; submit(t(s)) }} className="rounded-xl border border-line bg-panel px-3.5 py-3 text-left text-sm text-muted transition hover:border-accent/60 hover:text-fg">{t(s)}</button>)}
                 </div>
               </div>
             ) : (
@@ -473,7 +463,7 @@ export function ChatPage() {
         </div>}
         {chat.sessionId && <ContextBanner key={chat.sessionId} sid={chat.sessionId} size={chat.items.length} busy={chat.busy} provider={active} newSession={() => selectProfile(assistantId ?? '')} />}
         <PlanCard items={chat.plan} />
-        <Composer simple={simple} gitBadge={gitInfo.data?.repo ? { branch: gitInfo.data.branch, changes: gitInfo.data.files.length } : null} codeExtra={chat.sessionId ? <GitPanel sid={chat.sessionId} tick={chat.filesTick} /> : null} project={project} onCode={simple ? undefined : () => (project ? void setProject(null) : setPickOpen(true))} mentions={(mcp.data ?? []).filter((s) => s.config.enabled).map((s) => ({ name: s.name, brand: mcpBrand(s.config), status: s.status, tools: s.tools.length }))} value={text} onChange={setText} skill={skill} onSkill={setSkill} onSend={() => submit()} onRunCommand={(c) => submit(c)} files={mentionFiles.data} onStop={chat.stop} busy={chat.busy} attachments={attachments} uploading={uploading}
+        <Composer gitBadge={gitInfo.data?.repo ? { branch: gitInfo.data.branch, changes: gitInfo.data.files.length } : null} codeExtra={chat.sessionId ? <GitPanel sid={chat.sessionId} tick={chat.filesTick} /> : null} project={project} onCode={() => (project ? void setProject(null) : setPickOpen(true))} mentions={(mcp.data ?? []).filter((s) => s.config.enabled).map((s) => ({ name: s.name, brand: mcpBrand(s.config), status: s.status, tools: s.tools.length }))} value={text} onChange={setText} skill={skill} onSkill={setSkill} onSend={() => submit()} onRunCommand={(c) => submit(c)} files={mentionFiles.data} onStop={chat.stop} busy={chat.busy} attachments={attachments} uploading={uploading}
           onAttach={(f) => void upload(f)} onRemoveAttachment={(p) => setAttachments((a) => a.filter((x) => x !== p))} skills={(skills.data ?? []).filter((item) => !activeAssistant?.scoped || activeAssistant.skills?.includes(item.name))}
           docs={isDocs} onDocs={setUseDocs} docsReady={docsReady} permission={permission} onPermission={changePermission} provider={active} onProvider={setProvider} effort={effort} onEffort={setEffort}
           temperature={temperature} onTemperature={changeTemperature} maxTokens={maxTokens} onMaxTokens={changeMaxTokens}

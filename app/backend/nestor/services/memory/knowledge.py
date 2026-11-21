@@ -42,11 +42,18 @@ class KnowledgeError(ValueError):
     pass
 
 
+UNCATEGORIZED_NAME = "Chưa phân loại"
+
+
 def ensure_schema() -> None:
     with db() as c:
+        c.execute("""CREATE TABLE IF NOT EXISTS kb_categories(
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT DEFAULT '', created REAL, updated REAL)""")
         c.execute("""CREATE TABLE IF NOT EXISTS kb_docs(
             id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT, source TEXT, ext TEXT, size INTEGER, sha TEXT UNIQUE,
-            pages INTEGER DEFAULT 0, chunks INTEGER DEFAULT 0, status TEXT, note TEXT, added REAL)""")
+            pages INTEGER DEFAULT 0, chunks INTEGER DEFAULT 0, status TEXT, note TEXT, added REAL, category_id TEXT)""")
+        if "category_id" not in {r["name"] for r in c.execute("PRAGMA table_info(kb_docs)")}:
+            c.execute("ALTER TABLE kb_docs ADD COLUMN category_id TEXT")
         c.execute("""CREATE TABLE IF NOT EXISTS kb_chunks(
             id INTEGER PRIMARY KEY AUTOINCREMENT, doc_id TEXT NOT NULL, ord INTEGER, loc TEXT, text TEXT NOT NULL)""")
         c.execute("CREATE INDEX IF NOT EXISTS idx_kbc_doc ON kb_chunks(doc_id, ord)")
@@ -56,10 +63,82 @@ def ensure_schema() -> None:
             c.execute("CREATE VIRTUAL TABLE IF NOT EXISTS kb_fts USING fts5(folded, chunk_id UNINDEXED)")
         except Exception:  # noqa: BLE001 - không có FTS5 thì lùi về LIKE
             pass
+        orphans = c.execute("SELECT 1 FROM kb_docs WHERE category_id IS NULL OR category_id=''").fetchone()
+        if orphans:
+            row = c.execute("SELECT id FROM kb_categories WHERE name=?", (UNCATEGORIZED_NAME,)).fetchone()
+            cid = row["id"] if row else uuid.uuid4().hex[:8]
+            if not row:
+                now = time.time()
+                c.execute("INSERT INTO kb_categories(id,name,icon,created,updated) VALUES(?,?,?,?,?)", (cid, UNCATEGORIZED_NAME, "📁", now, now))
+            c.execute("UPDATE kb_docs SET category_id=? WHERE category_id IS NULL OR category_id=''", (cid,))
 
 
 def _fts(c) -> bool:
     return c.execute("SELECT 1 FROM sqlite_master WHERE name='kb_fts'").fetchone() is not None
+
+
+# ---------- danh mục (nhóm tài liệu kiểu NotebookLM)
+def list_categories() -> list[dict]:
+    ensure_schema()
+    with db() as c:
+        rows = c.execute("""SELECT k.*, COUNT(d.id) AS doc_count FROM kb_categories k
+            LEFT JOIN kb_docs d ON d.category_id=k.id GROUP BY k.id ORDER BY k.created DESC""").fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_category(cid: str) -> dict | None:
+    ensure_schema()
+    with db() as c:
+        r = c.execute("SELECT * FROM kb_categories WHERE id=?", (cid,)).fetchone()
+    return dict(r) if r else None
+
+
+def create_category(name: str, icon: str = "") -> dict:
+    ensure_schema()
+    cid, now = uuid.uuid4().hex[:8], time.time()
+    with db() as c:
+        c.execute("INSERT INTO kb_categories(id,name,icon,created,updated) VALUES(?,?,?,?,?)",
+                  (cid, (name or "Chưa đặt tên").strip()[:200], icon[:32], now, now))
+    return get_category(cid) or {}
+
+
+def update_category(cid: str, name: str | None = None, icon: str | None = None) -> dict:
+    ensure_schema()
+    cat = get_category(cid)
+    if not cat:
+        raise KnowledgeError("không có danh mục này")
+    with db() as c:
+        if name is not None:
+            c.execute("UPDATE kb_categories SET name=? WHERE id=?", ((name or "Chưa đặt tên").strip()[:200], cid))
+        if icon is not None:
+            c.execute("UPDATE kb_categories SET icon=? WHERE id=?", (icon[:32], cid))
+        c.execute("UPDATE kb_categories SET updated=? WHERE id=?", (time.time(), cid))
+    return get_category(cid) or {}
+
+
+def _default_category_id() -> str:
+    """Danh mục dùng khi caller không chỉ định (vd /v1/documents, MCP): tạo/lấy 'Chưa phân loại'."""
+    with db() as c:
+        row = c.execute("SELECT id FROM kb_categories WHERE name=?", (UNCATEGORIZED_NAME,)).fetchone()
+        if row:
+            return row["id"]
+        cid, now = uuid.uuid4().hex[:8], time.time()
+        c.execute("INSERT INTO kb_categories(id,name,icon,created,updated) VALUES(?,?,?,?,?)", (cid, UNCATEGORIZED_NAME, "📁", now, now))
+        return cid
+
+
+def delete_category(cid: str) -> int:
+    """Xóa danh mục và mọi tài liệu bên trong (cascade); trả về số tài liệu đã xóa."""
+    ensure_schema()
+    if not get_category(cid):
+        raise KnowledgeError("không có danh mục này")
+    with db() as c:
+        doc_ids = [r["id"] for r in c.execute("SELECT id FROM kb_docs WHERE category_id=?", (cid,))]
+    for did in doc_ids:
+        delete(did)
+    with db() as c:
+        c.execute("DELETE FROM kb_categories WHERE id=?", (cid,))
+    return len(doc_ids)
 
 
 # ---------- đọc từng loại file: trả về [(vị trí, văn bản)]
@@ -223,9 +302,13 @@ def _sha(path: Path) -> str:
     return h.hexdigest()
 
 
-def add_file(src: Path, name: str, source: str = "upload", *, keep_copy: bool = True) -> dict:
-    """Thêm một file vào kho. Trùng nội dung (sha256) thì trả lại tài liệu đã có. Việc đọc và lập chỉ mục chạy nền."""
+def add_file(src: Path, name: str, source: str = "upload", *, category_id: str | None = None, keep_copy: bool = True) -> dict:
+    """Thêm một file vào kho, trong một danh mục cụ thể (mặc định 'Chưa phân loại' nếu không chỉ định).
+    Trùng nội dung (sha256) thì trả lại tài liệu đã có. Việc đọc và lập chỉ mục chạy nền."""
     ensure_schema()
+    category_id = category_id or _default_category_id()
+    if not get_category(category_id):
+        raise KnowledgeError("không có danh mục này")
     ext = Path(name).suffix.lower()
     if ext not in SUPPORTED:
         raise KnowledgeError(f"chưa hỗ trợ định dạng {ext or 'này'} (hỗ trợ: PDF, Word .docx, Excel .xlsx, PowerPoint .pptx, văn bản)")
@@ -247,7 +330,8 @@ def add_file(src: Path, name: str, source: str = "upload", *, keep_copy: bool = 
         shutil.copyfile(src, dest)
         path = str(dest)
     with db() as c:
-        c.execute("INSERT INTO kb_docs(id,name,path,source,ext,size,sha,status,added) VALUES(?,?,?,?,?,?,?,?,?)", (did, name[:200], path, source, ext, size, sha, "indexing", time.time()))
+        c.execute("INSERT INTO kb_docs(id,name,path,source,ext,size,sha,status,added,category_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                  (did, name[:200], path, source, ext, size, sha, "indexing", time.time(), category_id))
     _spawn(_index, did)
     return get(did) or {}
 
@@ -333,7 +417,7 @@ def ensure_vectors() -> int:
         _ensuring.release()
 
 
-def add_bytes(name: str, data: bytes, source: str = "upload") -> dict:
+def add_bytes(name: str, data: bytes, source: str = "upload", *, category_id: str | None = None) -> dict:
     """Thêm tài liệu từ nội dung file thô (tải lên qua giao diện hoặc API)."""
     import tempfile
     if len(data) > MAX_UPLOAD:
@@ -342,7 +426,7 @@ def add_bytes(name: str, data: bytes, source: str = "upload") -> dict:
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / clean
         src.write_bytes(data)
-        return add_file(src, name.replace("\\", "/")[-200:], source)
+        return add_file(src, name.replace("\\", "/")[-200:], source, category_id=category_id)
 
 
 SRC_TAG = re.compile(r"\[\[src:([^|\]]+)\|([^|\]]+)\|([^\]]+)\]\]")
@@ -356,10 +440,14 @@ def plain_sources(text: str) -> tuple[str, list[dict]]:
     return SRC_TAG.sub(lambda m: f"[{m.group(2).strip()}, {m.group(3).strip()}]", text), list(seen.values())
 
 
-def add_folder(folder: Path) -> dict:
+def add_folder(folder: Path, *, category_id: str | None = None) -> dict:
     """Thêm mọi file được hỗ trợ trong một thư mục (đệ quy, bỏ thư mục ẩn). Giữ bản sao để file di chuyển cũng không mất."""
+    ensure_schema()
     if not folder.is_dir():
         raise KnowledgeError("không phải thư mục")
+    category_id = category_id or _default_category_id()
+    if not get_category(category_id):
+        raise KnowledgeError("không có danh mục này")
     added, dup, skipped = 0, 0, 0
     files = [p for p in sorted(folder.rglob("*")) if p.is_file() and not any(part.startswith(".") for part in p.relative_to(folder).parts)]
     for p in files:
@@ -370,7 +458,7 @@ def add_folder(folder: Path) -> dict:
             skipped += 1
             continue
         try:
-            r = add_file(p, str(p.relative_to(folder)), "folder")
+            r = add_file(p, str(p.relative_to(folder)), "folder", category_id=category_id)
             dup += 1 if r.get("duplicate") else 0
             added += 0 if r.get("duplicate") else 1
         except KnowledgeError:
@@ -385,16 +473,20 @@ def get(did: str) -> dict | None:
     return dict(r) if r else None
 
 
-def list_docs() -> list[dict]:
+def list_docs(category_id: str | None = None) -> list[dict]:
     ensure_schema()
     with db() as c:
+        if category_id:
+            return [dict(r) for r in c.execute("SELECT * FROM kb_docs WHERE category_id=? ORDER BY added DESC", (category_id,))]
         return [dict(r) for r in c.execute("SELECT * FROM kb_docs ORDER BY added DESC")]
 
 
-def has_docs() -> bool:
+def has_docs(category_id: str | None = None) -> bool:
     try:
         ensure_schema()
         with db() as c:
+            if category_id:
+                return c.execute("SELECT 1 FROM kb_docs WHERE status='ready' AND category_id=? LIMIT 1", (category_id,)).fetchone() is not None
             return c.execute("SELECT 1 FROM kb_docs WHERE status='ready' LIMIT 1").fetchone() is not None
     except Exception:  # noqa: BLE001
         return False
@@ -424,7 +516,7 @@ def _terms(query: str) -> list[str]:
     return [w for w in re.findall(r"[a-z0-9]+", fold(query)) if len(w) > 1][:12]
 
 
-def _keyword_hits(query: str, k: int) -> list[int]:
+def _keyword_hits(query: str, k: int, category_id: str | None = None) -> list[int]:
     terms = _terms(query)
     if not terms:
         return []
@@ -432,15 +524,23 @@ def _keyword_hits(query: str, k: int) -> list[int]:
         if _fts(c):
             try:
                 q = " OR ".join(f'"{t}"' for t in terms)
-                return [r["chunk_id"] for r in c.execute("SELECT chunk_id FROM kb_fts WHERE kb_fts MATCH ? ORDER BY rank LIMIT ?", (q, k))]
+                if category_id:
+                    rows = c.execute("""SELECT f.chunk_id FROM kb_fts f JOIN kb_chunks ch ON ch.id=f.chunk_id JOIN kb_docs d ON d.id=ch.doc_id
+                        WHERE kb_fts MATCH ? AND d.category_id=? ORDER BY rank LIMIT ?""", (q, category_id, k))
+                else:
+                    rows = c.execute("SELECT chunk_id FROM kb_fts WHERE kb_fts MATCH ? ORDER BY rank LIMIT ?", (q, k))
+                return [r["chunk_id"] for r in rows]
             except Exception:  # noqa: BLE001
                 pass
-        rows = c.execute("SELECT id, text FROM kb_chunks").fetchall()
+        if category_id:
+            rows = c.execute("SELECT c.id, c.text FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id WHERE d.category_id=?", (category_id,)).fetchall()
+        else:
+            rows = c.execute("SELECT id, text FROM kb_chunks").fetchall()
     scored = [(sum(fold(r["text"]).count(t) for t in terms), r["id"]) for r in rows]
     return [cid for s, cid in sorted(scored, reverse=True)[:k] if s > 0]
 
 
-def _vector_hits(query: str, k: int) -> list[int]:
+def _vector_hits(query: str, k: int, category_id: str | None = None) -> list[int]:
     cfg = cfgmod.load()
     try:
         e = embeddings.get_embedder(cfg)
@@ -448,10 +548,17 @@ def _vector_hits(query: str, k: int) -> list[int]:
             return []
         vecs, model = e.embed([query])
         with db() as c:
-            rows = c.execute("SELECT chunk_id, dim, vec FROM kb_vecs WHERE model=?", (model,)).fetchall()
+            if category_id:
+                rows = c.execute("""SELECT v.chunk_id, v.dim, v.vec FROM kb_vecs v JOIN kb_chunks ch ON ch.id=v.chunk_id JOIN kb_docs d ON d.id=ch.doc_id
+                    WHERE v.model=? AND d.category_id=?""", (model, category_id)).fetchall()
+            else:
+                rows = c.execute("SELECT chunk_id, dim, vec FROM kb_vecs WHERE model=?", (model,)).fetchall()
         rows = [r for r in rows if r["dim"] == len(vecs[0])]
         with db() as c:
-            total = c.execute("SELECT COUNT(*) n FROM kb_chunks").fetchone()["n"]
+            if category_id:
+                total = c.execute("SELECT COUNT(*) n FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id WHERE d.category_id=?", (category_id,)).fetchone()["n"]
+            else:
+                total = c.execute("SELECT COUNT(*) n FROM kb_chunks").fetchone()["n"]
         if len(rows) < total:  # còn đoạn chưa có vector của model này: nhúng nền để lần hỏi sau tìm theo nghĩa được đầy đủ
             _spawn(ensure_vectors)
         if not rows:
@@ -467,13 +574,14 @@ def _vector_hits(query: str, k: int) -> list[int]:
         return []
 
 
-def search(query: str, limit: int = 6) -> list[dict]:
-    """Gộp từ khóa và ngữ nghĩa bằng reciprocal-rank fusion; mỗi kết quả kèm tên file và vị trí."""
+def search(query: str, limit: int = 6, category_id: str | None = None) -> list[dict]:
+    """Gộp từ khóa và ngữ nghĩa bằng reciprocal-rank fusion; mỗi kết quả kèm tên file và vị trí.
+    Khi category_id được truyền, chỉ tìm trong tài liệu của danh mục đó."""
     ensure_schema()
     limit = max(1, min(int(limit), 15))
     score: dict[int, float] = {}
     how: dict[int, set[str]] = {}
-    for label, ids in (("từ khóa", _keyword_hits(query, limit * 3)), ("ngữ nghĩa", _vector_hits(query, limit * 3))):
+    for label, ids in (("từ khóa", _keyword_hits(query, limit * 3, category_id)), ("ngữ nghĩa", _vector_hits(query, limit * 3, category_id))):
         for rank, cid in enumerate(ids):
             score[cid] = score.get(cid, 0.0) + 1.0 / (RRF_K + rank)
             how.setdefault(cid, set()).add(label)
@@ -486,20 +594,37 @@ def search(query: str, limit: int = 6) -> list[dict]:
     return [{"doc_id": rows[i]["doc_id"], "name": rows[i]["name"], "loc": rows[i]["loc"], "text": rows[i]["text"], "score": round(score[i], 4), "how": sorted(how[i])} for i in top if i in rows]
 
 
-def overview(focus: str, per_doc: int = 3, limit: int = 16) -> list[dict]:
+def overview(focus: str, per_doc: int = 3, limit: int = 16, category_id: str | None = None) -> list[dict]:
     """Cho chế độ phân tích: phần mở đầu của từng tài liệu (để nắm tổng thể) cộng các đoạn khớp nhất với trọng tâm người dùng nêu."""
     ensure_schema()
     out, seen = [], set()
     with db() as c:
-        rows = c.execute("SELECT c.id, c.loc, c.text, d.id AS doc_id, d.name FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id "
-                         "WHERE d.status='ready' AND c.ord < ? ORDER BY d.added DESC, c.doc_id, c.ord", (per_doc,)).fetchall()
+        if category_id:
+            rows = c.execute("SELECT c.id, c.loc, c.text, d.id AS doc_id, d.name FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id "
+                             "WHERE d.status='ready' AND d.category_id=? AND c.ord < ? ORDER BY d.added DESC, c.doc_id, c.ord", (category_id, per_doc)).fetchall()
+        else:
+            rows = c.execute("SELECT c.id, c.loc, c.text, d.id AS doc_id, d.name FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id "
+                             "WHERE d.status='ready' AND c.ord < ? ORDER BY d.added DESC, c.doc_id, c.ord", (per_doc,)).fetchall()
     for r in rows:
         out.append({"doc_id": r["doc_id"], "name": r["name"], "loc": r["loc"], "text": r["text"]})
         seen.add((r["doc_id"], r["loc"], r["text"][:40]))
-    for h in search(focus, 10) if focus.strip() else []:
+    for h in search(focus, 10, category_id) if focus.strip() else []:
         if (h["doc_id"], h["loc"], h["text"][:40]) not in seen:
             out.append(h)
     return out[:limit]
+
+
+def category_chat_context(cid: str) -> str:
+    """Doan nhac them vao system prompt khi nguoi dung chat trong 1 danh muc tai lieu."""
+    cat = get_category(cid)
+    if not cat:
+        return ""
+    docs = list_docs(cid)
+    names = ", ".join(d["name"] for d in docs if d["status"] == "ready") or "chưa có tài liệu nào sẵn sàng"
+    return (f'Người dùng đang mở danh mục tài liệu "{cat["name"]}" (mã {cid}) và chat ở khung bên phải của danh mục đó. '
+            "CHỈ được trả lời dựa trên tài liệu của danh mục này (gọi kb_search để tìm, phạm vi đã tự động giới hạn đúng danh mục). "
+            "Không dùng kiến thức chung hay tài liệu của danh mục khác. Luôn chèn thẻ nguồn [[src:...]] sau mỗi ý dựa vào tài liệu. "
+            f"Tài liệu trong danh mục này: {names}.")
 
 
 def stats() -> dict:

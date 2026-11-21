@@ -39,7 +39,6 @@ interface Props {
   project?: string
   onCode?: () => void
   codeExtra?: React.ReactNode
-  simple?: boolean // chế độ Đơn giản: ẩn nút chỉnh model, quyền, tham số
   files?: { path: string; dir: boolean }[]
   onRunCommand?: (text: string) => void
   gitBadge?: { branch: string; changes: number } | null

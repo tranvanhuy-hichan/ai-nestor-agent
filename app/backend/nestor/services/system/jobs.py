@@ -55,14 +55,14 @@ def _update(job_id: str, **fields) -> None:
 
 
 def create(goal: str, *, kind: str = "task", title: str = "", role: str = "", parent_session: str | None = None, parent_job: str | None = None, depth: int = 0,
-           permission: str = "default", provider: str | None = None, max_steps: int | None = None, notify: bool = True) -> str:
+           permission: str = "default", provider: str | None = None, max_steps: int | None = None, notify: bool = True, kb_category_id: str | None = None) -> str:
     jid = uuid.uuid4().hex[:8]
     parent = (sessions.get(parent_session) or {}) if parent_session else {}
     scope = parent.get("assistant_scope", "")
     assistant = parent.get("assistant", "") if scope else ""
     with db() as c:
-        c.execute("""INSERT INTO jobs(id,kind,title,goal,role,status,parent_session,parent_job,depth,permission,provider,max_steps,notify,created,assistant,assistant_scope)
-                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (jid, kind, (title or goal)[:80], goal, role, "queued", parent_session, parent_job, depth, permission, provider, max_steps, int(notify), time.time(), assistant, scope))
+        c.execute("""INSERT INTO jobs(id,kind,title,goal,role,status,parent_session,parent_job,depth,permission,provider,max_steps,notify,created,assistant,assistant_scope,kb_category_id)
+                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (jid, kind, (title or goal)[:80], goal, role, "queued", parent_session, parent_job, depth, permission, provider, max_steps, int(notify), time.time(), assistant, scope, kb_category_id))
     return jid
 
 
@@ -141,10 +141,11 @@ def execute(job_id: str, approver: Callable[[str, str], bool] | None = None, can
             "Không hỏi lại người giao việc; tự quyết định hợp lý. Với việc nhiều bước, lập kế hoạch bằng plan_set. "
             "Khi xong, trả lời bằng KẾT QUẢ CUỐI CÙNG đầy đủ, ngắn gọn, đủ để người giao việc dùng ngay.")
         docs_pre = None
+        kb_category_id = job.get("kb_category_id")
         if analysis:
             from nestor.services import knowledge, tools_kb
             extra = f"{extra}\n\n{knowledge.ANALYSIS_PROMPT}"
-            docs_pre = tools_kb.format_hits(knowledge.overview(job["goal"]))
+            docs_pre = tools_kb.format_hits(knowledge.overview(job["goal"], category_id=kb_category_id))
         state = {"steps": 0, "last": "", "final": "", "error": None, "t": 0.0}
 
         def on_event(ev: dict) -> None:
@@ -164,7 +165,7 @@ def execute(job_id: str, approver: Callable[[str, str], bool] | None = None, can
                 _update(job_id, steps=state["steps"], progress=state["last"][:160])
 
         agent.run_turn(sid, job["goal"], provider, approver or (lambda kind, detail: False), on_event, cancel, only_tools=allowed, source=job["kind"],
-                       permission=job["permission"], system_extra=extra, max_steps=max_steps, depth=job["depth"] + (1 if job["kind"] == "subagent" else 0), job_id=job_id, workdir_sid=job["parent_session"], use_docs=analysis, docs_pre=docs_pre)
+                       permission=job["permission"], system_extra=extra, max_steps=max_steps, depth=job["depth"] + (1 if job["kind"] == "subagent" else 0), job_id=job_id, workdir_sid=job["parent_session"], use_docs=analysis, docs_pre=docs_pre, kb_category_id=kb_category_id)
         status = "cancelled" if cancel.is_set() or db_cancelled(job_id) else ("failed" if state["error"] else "done")
         _update(job_id, status=status, steps=state["steps"], result=state["final"][:20000], error=state["error"], finished=time.time(), progress=state["last"][:160])
     except Exception as e:  # noqa: BLE001 - mot job loi khong duoc lam sap server

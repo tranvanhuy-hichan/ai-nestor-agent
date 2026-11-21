@@ -56,6 +56,7 @@ class ToolContext:
     plan_restore: dict | None = None  # che do Ke hoach: danh sach tool bi tat de khoi phuc khi nguoi dung duyet ke hoach
     deferred_tools: set[str] = field(default_factory=set)
     loaded_tools: dict[str, None] = field(default_factory=dict)
+    kb_category_id: str | None = None  # gioi han kb_search vao 1 danh muc tai lieu (che do chat theo danh muc)
 
     @property
     def workdir(self) -> Path:
