@@ -22,6 +22,7 @@ import httpx
 from ..core.config import ToolPolicy
 
 from . import checkpoints, hooks
+from .truncation import truncate_middle
 
 
 _approved_context: ContextVar[object] = ContextVar("approved_tool_context", default=None)
@@ -179,7 +180,8 @@ def _html_to_text(raw: str) -> str:
 # ---------- tools
 @tool("read", "Đọc nội dung một file text. Đường dẫn tương đối tính từ workspace.", {"path": ("string", "đường dẫn file")}, risk="file")
 def read_file(ctx, path):
-    return _resolve(ctx, path, "read").read_text(errors="replace")[:20000]
+    content = _resolve(ctx, path, "read").read_text(errors="replace")
+    return truncate_middle(content, max_chars=24000, head_ratio=0.5)
 
 
 @tool("write", "Ghi nội dung vào file (ghi đè), tự tạo thư mục cha.", {"path": ("string", "đường dẫn file"), "content": ("string", "nội dung")}, risk="file")
@@ -289,7 +291,8 @@ def exec_tool(ctx, command, timeout=60):
         if isinstance(exc, _Cancelled):
             return "loi: da dung lenh theo yeu cau cua nguoi dung"
         return f"loi: lenh chay qua {limit}s va bi dung"
-    out = (r.stdout + r.stderr)[-6000:] or "(khong co output)"
+    raw = r.stdout + r.stderr
+    out = truncate_middle(raw, max_chars=16000, head_ratio=0.35) or "(khong co output)"
     out = out if r.returncode == 0 else f"{out}\n[exit code {r.returncode}]"
     return f"[sandbox docker]\n{out}" if sandboxed else out
 
@@ -490,7 +493,8 @@ def exec_read(ctx, job, wait=0):
     import time
     j = _bg_job(ctx, job)
     time.sleep(max(0, min(int(wait or 0), 30)))
-    out = j["log"].read_bytes()[-6000:].decode("utf-8", "replace") or "(chưa có output)"
+    raw = j["log"].read_bytes().decode("utf-8", "replace")
+    out = truncate_middle(raw, max_chars=16000, head_ratio=0.35) or "(chưa có output)"
     rc = j["proc"].poll()
     return f"[{'đang chạy' if rc is None else f'đã thoát, mã {rc}'}] {j['cmd']}\n{out}"
 
@@ -541,8 +545,48 @@ def skills_read(ctx, name):
         matches = difflib.get_close_matches(name, list(ctx.skills.keys()), n=4, cutoff=0.35)
         hint = f" Gợi ý skill tương tự: {', '.join(matches)}" if matches else ""
         return f"Không tìm thấy skill '{name}'.{hint} Hãy kiểm tra lại danh sách available_skills để chọn đúng tên."
+    from . import skill_curator
+    ws = getattr(ctx, "workspace", None)
+    usage_info = skill_curator.record_usage(name, action="read", base_dir=ws)
     files = sorted(str(p.relative_to(s.path)) for p in s.path.rglob("*") if p.is_file() and ".clawhub" not in p.parts)[:40]
-    return f"{s.instructions()}\n\n[Thư mục skill: {s.path}]\n[File đi kèm: {', '.join(files)}]"
+    scripts = [str(p.relative_to(s.path)) for p in (s.path / "scripts").glob("*") if p.is_file()] if (s.path / "scripts").is_dir() else []
+    templates = [str(p.relative_to(s.path)) for p in (s.path / "templates").glob("*") if p.is_file()] if (s.path / "templates").is_dir() else []
+    extra_notes = []
+    if scripts:
+        extra_notes.append(f"[Scripts sẵn có để chạy bằng exec: {', '.join(scripts)}]")
+    if templates:
+        extra_notes.append(f"[Templates mẫu: {', '.join(templates)}]")
+    extra_notes.append(f"[Lượt dùng: {usage_info.get('use_count', 1)} | Trạng thái: {usage_info.get('state', 'active')}]")
+    extra_str = "\n".join(extra_notes)
+    return f"{s.instructions()}\n\n[Thư mục skill: {s.path}]\n[File đi kèm: {', '.join(files)}]\n{extra_str}"
+
+
+@tool("skill_curate", "Quản lý vòng đời kỹ năng (Curator theo chuẩn Hermes): xem thống kê sử dụng, ghim (pin), lưu trữ skill cũ (archive) hoặc khôi phục (restore).",
+      {"action": ("string", "hành động: 'status' (xem lượt dùng), 'pin' (ghim), 'unpin' (bỏ ghim), 'archive' (lưu trữ skill cũ không dùng), 'restore' (khôi phục skill đã lưu trữ)"),
+       "name": ("string", "tên skill (khi dùng pin/unpin/restore)")}, required=["action"])
+def skill_curate(ctx, action="status", name=""):
+    from . import skill_curator
+    ws = getattr(ctx, "workspace", None)
+    skills_dir = ws / "skills" if ws else None
+    if action == "status":
+        stats = skill_curator.get_usage(name or None, base_dir=ws)
+        return json.dumps(stats, ensure_ascii=False, indent=2) if stats else "(chưa có dữ liệu sử dụng)"
+    if action in ("pin", "unpin"):
+        if not name:
+            return "Lỗi: Cần cung cấp tên skill để ghim hoặc bỏ ghim."
+        skill_curator.pin_skill(name, pinned=(action == "pin"), base_dir=ws)
+        return f"Đã {'ghim' if action == 'pin' else 'bỏ ghim'} skill '{name}' thành công."
+    if action == "archive":
+        if not skills_dir:
+            return "Lỗi: Không tìm thấy thư mục skills trong workspace."
+        archived = skill_curator.archive_stale_skills(skills_dir, stale_days=30, base_dir=ws)
+        return f"Đã lưu trữ {len(archived)} skill cũ không hoạt động: {', '.join(archived)}" if archived else "Không có skill cũ nào cần lưu trữ."
+    if action == "restore":
+        if not skills_dir or not name:
+            return "Lỗi: Cần tên skill để khôi phục."
+        ok = skill_curator.restore_archived(skills_dir, name, base_dir=ws)
+        return f"Đã khôi phục skill '{name}'." if ok else f"Không tìm thấy skill '{name}' trong .archive/."
+    return f"Hành động '{action}' không hợp lệ. Chọn: status, pin, unpin, archive, restore."
 
 
 @tool("skill_patch", "Sửa một đoạn trong file SKILL.md của một kỹ năng bằng cách thay đoạn cũ bằng đoạn mới (chuẩn Hermes Agent).",

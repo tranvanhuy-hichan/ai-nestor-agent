@@ -10,7 +10,9 @@ from threading import Event
 
 from ..core import config as cfgmod
 from . import assistants, audit, checkpoints, commands, compaction, knowledge, mcp_client, tools_kb, plans, sessions, skills as skillmod, tools, usage, workfiles
+from .loop_guard import LoopGuard
 from .providers import ProviderError, make_provider
+from .truncation import truncate_middle
 
 PROMPT_FILES = ("SOUL.md", "USER.md", "RULES.md", "MEMORY.md")  # RULES.md: quy tac nguoi dung "dung ket" tu hoi thoai (api/rules)
 RETRIES = 4  # tong so lan thu cho loi tam thoi (429/503/timeout)
@@ -244,7 +246,8 @@ def shrink_stale(messages: list[dict]) -> list[dict]:
             limit = STALE_BROWSER_CHARS if names.get(m.get("tool_call_id", ""), "").startswith("browser_") else STALE_CHARS
             c = m["content"]
             if len(c) > limit:
-                m = {**m, "content": c[:limit].rstrip() + f"\n…(đã rút gọn {len(c) - limit} ký tự của kết quả cũ; gọi lại công cụ nếu cần)"}
+                m = {**m, "content": truncate_middle(c, max_chars=limit, head_ratio=0.4,
+                                                     marker=f"\n…(đã rút gọn {len(c) - limit} ký tự ở giữa của kết quả cũ; gọi lại công cụ nếu cần)…\n")}
         out.append(m)
     return out
 
@@ -434,6 +437,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
     quality_before = snapshot(workdir) if quality_enabled else {}
     quality_retries = 0
     allow_blank = any(s in user_text.casefold() for s in ('mẫu trống', 'bảng trống', 'khung trống', 'phiếu trống'))
+    loop_guard = LoopGuard()
     for step in range(limit):
         if cancel and cancel.is_set():
             return
@@ -495,6 +499,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
                 if done_plan:
                     emit({"type": "plan", "items": done_plan})
             return
+        is_stuck, warn_msg, ui_notice = loop_guard.record_and_check(result["tool_calls"])
         parallel = {}  # nhieu delegate trong cung mot luot => chay dong thoi
         delegates = [c for c in result["tool_calls"] if c["name"] == "delegate"]
         if len(delegates) > 1 and "delegate" not in ctx.policies:
@@ -531,4 +536,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
             sessions.add_message(sid, tmsg)
             emit({"type": "tool_result", "id": c["id"], "result": out[:4000], "ok": ok, "duration_ms": ms, "decision": dec})
             emit({"type": "files"})
+        if is_stuck:
+            emit(ui_event("notice", ui_notice))
+            messages.append({"role": "user", "content": warn_msg})
     emit(ui_event("error", "Vượt quá số bước tối đa ({n})", n=limit))

@@ -256,15 +256,22 @@ def env_for(skills: dict[str, Skill], cfg: Config) -> dict[str, str]:
 
 def prompt_block(skills: dict[str, Skill], limit: int = 40000, bundled_limit: int = 18000) -> str:
     """Danh sach muc luc skill theo chuan Progressive Disclosure cua Hermes Agent.
-    Cap do 0: chi hien name va mo ta ngan de tiet kiem token.
+    Cap do 0: chi hien name, category va mo ta ngan (< 80 ky tu, co dau cham) de tiet kiem token.
     Cap do 1: agent chu dong goi tool `skills_read(name)` de nap huong dan chi tiet khi can."""
     usable = [s for s in skills.values() if s.active and not s.front.get("disable-model-invocation")]
     own, bundled = [s for s in usable if not s.bundled], [s for s in usable if s.bundled]
+
+    def _fmt(s: Skill, max_len: int = 80) -> str:
+        first_line = s.description.strip().splitlines()[0] if s.description else ""
+        desc = first_line[:max_len].strip()
+        if desc and not desc.endswith((".", "!", "?")):
+            desc += "."
+        cat = getattr(s, "category", "general") or "general"
+        return f'  <skill category="{cat}"><name>{s.name}</name><description>{desc}</description></skill>'
+
     lines, size = [], 0
     for s in own:
-        first_line = s.description.strip().splitlines()[0] if s.description else ""
-        desc = first_line[:140].strip()
-        line = f"  <skill><name>{s.name}</name><description>{desc}</description></skill>"
+        line = _fmt(s, max_len=80)
         if size + len(line) > limit:
             lines.append("  <!-- Cac skill khac xem them qua skills_read -->")
             break
@@ -272,9 +279,7 @@ def prompt_block(skills: dict[str, Skill], limit: int = 40000, bundled_limit: in
         size += len(line)
     blines, bsize = [], 0
     for s in bundled:
-        first_line = s.description.strip().splitlines()[0] if s.description else ""
-        desc = first_line[:105].strip()
-        line = f"  <skill><name>{s.name}</name><description>{desc}</description></skill>"
+        line = _fmt(s, max_len=75)
         if bsize + len(line) > bundled_limit:
             break
         blines.append(line)
