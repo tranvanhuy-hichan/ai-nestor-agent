@@ -173,7 +173,11 @@ class _Screen:
         self.n = 0
 
     def draw(self, lines: list[str]) -> None:
-        sys.stdout.write((f"\033[{self.n}A" if self.n else "") + "\r\033[J" + "\n".join(lines) + "\n")
+        move_up = f"\033[{self.n}A" if self.n else ""
+        surplus = max(0, self.n - len(lines))
+        rendered = "".join(f"\033[2K{line}\n" for line in lines)
+        clear_surplus = "\033[2K\n" * surplus + f"\033[{surplus}A" if surplus else ""
+        sys.stdout.write(move_up + "\r" + rendered + clear_surplus)
         sys.stdout.flush()
         self.n = len(lines)
 

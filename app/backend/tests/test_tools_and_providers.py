@@ -213,3 +213,71 @@ def test_openrouter_gets_default_max_tokens_and_retries_on_402(monkeypatch):
     monkeypatch.setattr(providers.httpx, "stream", lambda *a, **k: (other.append(k["json"].get("max_tokens")), FakeStream(sse({"choices": [{"delta": {"content": "ok"}}]})))[1])
     list(providers.OpenAICompat(ProviderCfg(base_url="http://x/v1", model="m")).stream([{"role": "user", "content": "hi"}], []))
     assert other == [None]
+
+
+def test_openrouter_retries_prompt_limit_with_complete_recent_turns(monkeypatch):
+    sent = []
+
+    def fake(*args, **kwargs):
+        sent.append(kwargs["json"])
+        if len(sent) == 1:
+            response = FakeStream([], status=402)
+            response.text = '{"error":{"message":"Prompt tokens limit exceeded: 47633 > 39761. To increase, visit https://openrouter.ai/private"}}'
+            return response
+        return FakeStream(sse({"choices": [{"delta": {"content": "ok"}}]}))
+
+    monkeypatch.setattr(providers.httpx, "stream", fake)
+    cfg = ProviderCfg(base_url="https://openrouter.ai/api/v1", model="anthropic/x")
+    current = {"role": "user", "content": "Viết chương trình Fibonacci"}
+    messages = [
+        {"role": "system", "content": "Chỉ dẫn hệ thống"},
+        {"role": "user", "content": "Một lượt cũ"},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "old", "name": "read", "args": {}}]},
+        {"role": "tool", "tool_call_id": "old", "content": "dữ liệu " * 20_000},
+        {"role": "user", "content": "Một lượt gần đây"},
+        {"role": "assistant", "content": "Phản hồi"},
+        current,
+    ]
+    tools = [{"name": "read", "description": "Read", "parameters": {}}]
+    updates = []
+
+    events = list(agent_mod._stream_with_retry("openrouter", cfg, messages, tools, updates.append, None, current=current))
+
+    assert events[-1]["content"] == "ok"
+    assert len(sent) == 2 and len(messages) == 7
+    assert sent[1]["messages"] == [messages[0], *messages[4:]]
+    assert sent[1]["tools"] == sent[0]["tools"]
+    assert updates[0]["type"] == "status"
+
+
+def test_openrouter_prompt_limit_error_does_not_expose_key_settings_url(monkeypatch):
+    response = FakeStream([], status=402)
+    response.text = '{"error":{"message":"Prompt tokens limit exceeded: 47633 > 39761. To increase, visit https://openrouter.ai/private"}}'
+    monkeypatch.setattr(providers.httpx, "stream", lambda *args, **kwargs: response)
+    cfg = ProviderCfg(base_url="https://openrouter.ai/api/v1", model="anthropic/x")
+    current = {"role": "user", "content": "Một yêu cầu"}
+
+    with pytest.raises(providers.PromptLimitError, match="47,633.*39,761") as exc:
+        list(agent_mod._stream_with_retry("openrouter", cfg, [{"role": "system", "content": ""}, current], [], lambda _: None, None, current=current))
+
+    assert "https://" not in str(exc.value)
+
+
+def test_prompt_limit_compacts_large_skill_catalog_without_dropping_short_history():
+    entry = '<skill category="office"><name>sample</name><description>Detailed guidance.</description></skill>'
+    system = "Preserve permissions.\n<available_skills>\n" + ("  " + entry + "\n") * 100 + "</available_skills>\nPreserve system instructions."
+    current = {"role": "user", "content": "Còn cách nào khác?"}
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": "Một câu hỏi ngắn"},
+        {"role": "assistant", "content": "Một câu trả lời ngắn"},
+        current,
+    ]
+
+    fitted = agent_mod._fit_prompt_limit(messages, [], current, providers.PromptLimitError(47_633, 39_761))
+
+    assert fitted[1:] == messages[1:] and fitted[-1] is current
+    assert "Preserve permissions." in fitted[0]["content"] and "Preserve system instructions." in fitted[0]["content"]
+    assert fitted[0]["content"].count("- sample") == 100
+    assert len(fitted[0]["content"]) < len(system)
+    assert messages[0]["content"] == system

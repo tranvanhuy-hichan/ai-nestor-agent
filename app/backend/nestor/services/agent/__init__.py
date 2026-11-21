@@ -1,5 +1,6 @@
 """Vong lap agent: dung prompt, goi LLM (stream, tu thu lai), chay tool, ghi lich su va nhat ky."""
 import base64
+import json
 import re
 import mimetypes
 import time
@@ -15,7 +16,7 @@ sys.modules[f"{__name__}.agent"] = agent
 from nestor.core import config as cfgmod
 from nestor.services import assistants, audit, checkpoints, commands, compaction, knowledge, mcp_client, tools_kb, plans, sessions, skills as skillmod, tools, usage, workfiles
 from .loop_guard import LoopGuard
-from nestor.services.providers import ProviderError, make_provider
+from nestor.services.providers import PromptLimitError, ProviderError, make_provider
 from .truncation import truncate_middle
 from .exemplars import get_dynamic_exemplars
 from .verification import is_mutating_tool, verify_turn_outputs
@@ -293,11 +294,69 @@ def _window(history: list[dict], limit: int) -> list[dict]:
     return rest
 
 
+def _prompt_weight(value) -> int:
+    return len(json.dumps(value, ensure_ascii=False).encode())
+
+
+def _fit_prompt_limit(messages: list[dict], schemas: list[dict], current: dict,
+                      error: PromptLimitError) -> list[dict]:
+    """Fit a rejected request without changing stored messages or splitting a tool exchange."""
+    sizes = [
+        _prompt_weight({k: v for k, v in msg.items() if k != "images"}) + 2_048 * len(msg.get("images") or [])
+        for msg in messages
+    ]
+    total = sum(sizes) + _prompt_weight(schemas[:128])
+    to_remove = total - int(total * (error.limit / max(error.actual, 1)) * 0.92)
+    current_index = next(i for i, msg in enumerate(messages) if msg is current)
+    system_message = messages[0]
+    if sum(sizes[1:current_index]) < to_remove:
+        system = system_message["content"]
+        before, marker, rest = system.partition("<available_skills>\n")
+        catalog, after_marker, after = rest.partition("\n</available_skills>")
+        if marker and after_marker:
+            names = re.findall(r'<skill category="[^"]*"><name>([^<]+)</name>', catalog)
+            if names:
+                compact_catalog = "\n".join(f"- {name}" for name in names)
+                system_message = {**system_message, "content": before + marker + compact_catalog + after_marker + after}
+                to_remove -= _prompt_weight(system) - _prompt_weight(system_message["content"])
+
+    cut = 1
+    for end in range(2, current_index + 1):
+        if to_remove <= 0:
+            break
+        if messages[end]["role"] != "user":
+            continue
+        to_remove -= sum(sizes[cut:end])
+        cut = end
+    fitted = [system_message, *messages[cut:]]
+    if to_remove <= 0:
+        return fitted
+
+    long_results = sorted(
+        (i for i, msg in enumerate(fitted) if msg["role"] == "tool" and len(msg["content"]) > 4_000),
+        key=lambda i: len(fitted[i]["content"]), reverse=True,
+    )
+    for i in long_results:
+        if to_remove <= 0:
+            break
+        original = fitted[i]["content"]
+        shorter = truncate_middle(original, max_chars=max(4_000, len(original) - to_remove), head_ratio=0.65)
+        saved = _prompt_weight(original) - _prompt_weight(shorter)
+        if saved > 0:
+            fitted[i] = {**fitted[i], "content": shorter}
+            to_remove -= saved
+    return fitted
+
+
 def _stream_with_retry(name: str, pcfg: cfgmod.ProviderCfg, messages: list[dict], schemas: list[dict],
                        emit: Callable[[dict], None], cancel: Event | None, effort: str | None = None,
-                       temperature: float | None = None, max_tokens: int | None = None) -> Iterator[dict]:
+                       temperature: float | None = None, max_tokens: int | None = None,
+                       current: dict | None = None) -> Iterator[dict]:
     delay = 1.5
+    context_retries = 0
     for attempt in range(RETRIES):
+        if cancel and cancel.is_set():
+            return
         started = False
         try:
             prov = make_provider(pcfg)
@@ -326,6 +385,16 @@ def _stream_with_retry(name: str, pcfg: cfgmod.ProviderCfg, messages: list[dict]
                 if close:
                     close()
             return
+        except PromptLimitError as e:
+            if started or current is None or context_retries == 2 or attempt == RETRIES - 1:
+                raise
+            fitted = _fit_prompt_limit(messages, schemas, current, e)
+            if fitted == messages:
+                raise
+            messages = fitted
+            context_retries += 1
+            emit(ui_event("status", "{name}: đang thử lại với ngữ cảnh gọn hơn ({limit} token tối đa)…",
+                          name=name, limit=e.limit))
         except ProviderError as e:
             if started or not e.retryable or attempt == RETRIES - 1:
                 raise
@@ -463,7 +532,8 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
             emit(ui_event("status", "Đang gọi {name} · {model}…", name=name, model=pcfg.model) if step == 0
                  else ui_event("status", "{name} đang xử lý kết quả tool…", name=name))
             try:
-                for ev in _stream_with_retry(name, pcfg, shrink_stale(messages), tools.schemas(ctx), emit, cancel, effort, temperature=temperature, max_tokens=max_tokens):
+                for ev in _stream_with_retry(name, pcfg, shrink_stale(messages), tools.schemas(ctx), emit, cancel, effort,
+                                             temperature=temperature, max_tokens=max_tokens, current=current):
                     if ev["type"] in ("delta", "thinking"):
                         started = True
                         emit(ev)

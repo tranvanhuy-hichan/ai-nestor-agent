@@ -16,6 +16,7 @@ TIMEOUT = httpx.Timeout(300, connect=10)
 
 OPENROUTER_DEFAULT_MAX = 16384
 _AFFORD = re.compile(r"can only afford (\d+)")
+_PROMPT_LIMIT = re.compile(r"Prompt tokens limit exceeded:\s*(\d+)\s*>\s*(\d+)", re.IGNORECASE)
 
 
 class ProviderError(Exception):
@@ -30,6 +31,13 @@ class ProviderError(Exception):
         if self.transient is not None:
             return self.transient
         return self.status in (408, 429, 500, 502, 503, 504)
+
+
+class PromptLimitError(ProviderError):
+    def __init__(self, actual: int, limit: int):
+        super().__init__(f"HTTP 402: Ngữ cảnh gửi đi có {actual:,} token, vượt giới hạn {limit:,} token của OpenRouter.", 402)
+        self.actual = actual
+        self.limit = limit
 
 
 def _transient(e: Exception) -> bool:
@@ -129,6 +137,8 @@ class OpenAICompat:
                     return
                 elif r.status_code >= 400:
                     r.read()
+                    if r.status_code == 402 and "openrouter.ai" in self.cfg.base_url and (limit := _PROMPT_LIMIT.search(r.text)):
+                        raise PromptLimitError(int(limit[1]), int(limit[2]))
                     raise ProviderError(f"HTTP {r.status_code}: {r.text[:300]}", r.status_code)
                 for line in r.iter_lines():
                     if not line.startswith("data:"):

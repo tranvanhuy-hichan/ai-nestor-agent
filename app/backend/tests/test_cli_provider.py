@@ -184,14 +184,24 @@ def test_agy_prompt_goes_last_after_all_flags_and_tool_call_is_parsed(tmp_env, m
     assert final["tool_calls"][0]["name"] == "list_dir" and final["usage"] == {"prompt": 105, "completion": 7}
 
 
-def test_agy_failure_and_prompt_size_guard(tmp_env, monkeypatch):
+def test_agy_failure(tmp_env, monkeypatch):
     cfg, _ = kind(tmp_env, monkeypatch, "agy", FAKE_AGY)
     monkeypatch.setenv("FAKE_MODE", "fail")
     with pytest.raises(providers.ProviderError, match="quota exceeded"):
         run(cfg, [{"role": "user", "content": "hi"}])
-    monkeypatch.delenv("FAKE_MODE")
-    with pytest.raises(providers.ProviderError, match="vượt giới hạn tham số"):
-        run(cfg, [{"role": "user", "content": "x" * (cli_provider.MAX_ARG + 10)}])
+
+
+@pytest.mark.parametrize("history", ["x" * 182_094, "ệ" * 50_000])
+def test_agy_sends_oversized_context_via_stdin(tmp_env, monkeypatch, history):
+    cfg, calls = kind(tmp_env, monkeypatch, "agy", FAKE_AGY)
+    messages = [{"role": "assistant", "content": history}, {"role": "user", "content": "xin chào"}]
+    assert run(cfg, messages, TOOLS)[-1]["type"] == "final"
+    call = calls()[-1]
+    assert call["argv"][-4:] == ["--input-format", "stream-json", "-p", ""]
+    assert len(call["stdin"].splitlines()) == 1
+    message = json.loads(call["stdin"])
+    assert message["event"] == "user"
+    assert message["message"]["content"] == [{"type": "text", "text": cli_provider.build_prompt(messages, TOOLS)}]
 
 
 def test_agy_lists_real_models(tmp_env, monkeypatch):

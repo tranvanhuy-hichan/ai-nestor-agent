@@ -21,7 +21,7 @@ from nestor.core.config import ProviderCfg
 TIMEOUT = 300
 OPEN, CLOSE = "<tool_call>", "</tool_call>"
 CLAUDE_MODELS = ["sonnet", "opus", "haiku"]
-MAX_ARG = 120_000  # CLI nhan loi nhac qua tham so dong lenh; Linux gioi han ~128 KB moi tham so
+MAX_ARG = 120_000  # Gioi han an toan theo byte cho moi tham so dong lenh tren Linux
 CLAUDE_SYSTEM = "You are a plain text completion engine. Follow the instructions in the user message exactly. You have no tools of your own."
 
 PROTOCOL = """You have NO tools of your own, but the host system can run the tools listed below for you.
@@ -93,9 +93,11 @@ def _claude_feed(d, run):
 
 
 def _agy_cmd(cfg, exe, prompt, run):
-    # agy coi tham so ngay sau -p la loi nhac: moi co khac phai dung TRUOC -p, -p dung cuoi cung. Loi nhac chi di qua tham so (khong doc stdin)
-    cmd = exe + ["--output-format", "stream-json", "--disable-slash-commands"] + (["--model", cfg.model] if cfg.model else []) + ["-p", prompt]
-    return cmd, None
+    cmd = exe + ["--output-format", "stream-json", "--disable-slash-commands"] + (["--model", cfg.model] if cfg.model else [])
+    if len(prompt.encode("utf-8")) <= MAX_ARG:
+        return cmd + ["-p", prompt], None
+    message = {"event": "user", "message": {"role": "user", "content": [{"type": "text", "text": prompt}]}}
+    return cmd + ["--input-format", "stream-json", "-p", ""], json.dumps(message, ensure_ascii=False) + "\n"
 
 
 def _agy_feed(d, run):
@@ -250,8 +252,8 @@ class CliProvider:
         prompt = build_prompt(messages, tools)
         run = _Run()
         cmd, stdin_text = make_cmd(self.cfg, exe, prompt, run)
-        if stdin_text is None and len(prompt) > MAX_ARG:
-            raise ProviderError(f"lời nhắc dài {len(prompt):,} ký tự, vượt giới hạn tham số dòng lệnh của CLI ({MAX_ARG:,}). Hãy mở hội thoại mới hoặc giảm \"Số tin nhắn gửi kèm\" trong Cài đặt.")
+        if stdin_text is None and (prompt_size := len(prompt.encode("utf-8"))) > MAX_ARG:
+            raise ProviderError(f"lời nhắc dài {prompt_size:,} byte, vượt giới hạn tham số dòng lệnh của CLI ({MAX_ARG:,} byte). Hãy mở hội thoại mới hoặc giảm \"Số tin nhắn gửi kèm\" trong Cài đặt.")
         try:
             proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=workdir, env=env, text=True, encoding="utf-8")
         except OSError as e:
