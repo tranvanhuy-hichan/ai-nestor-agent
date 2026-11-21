@@ -16,26 +16,60 @@ Trợ lý AI cá nhân **mã nguồn mở**, chạy trên máy bạn, dữ liệ
 
 ## Ảnh chụp màn hình
 
-<p align="center"><img src="docs/assets/screenshots/01-chat-cited-answer.png" alt="Câu trả lời có trích dẫn nguồn, tạo bởi model chạy cục bộ" width="880"></p>
+<p align="center"><img src="docs/assets/screenshots/vi/11-documents-category.png" alt="Tài liệu: mỗi danh mục có file riêng và khung chat chỉ trả lời từ các file đó, kèm trích dẫn nguồn" width="880"><br><sub><b>Tài liệu kiểu NotebookLM: mỗi danh mục có file riêng và khung chat chỉ trả lời từ các file đó, kèm trích dẫn bấm xem được</b></sub></p>
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/screenshots/02-documents-rag.png" alt="Tài liệu: file của bạn, lập chỉ mục tại máy"><br><sub><b>Tài liệu: file của bạn, lập chỉ mục tại máy</b></sub></td>
-    <td width="50%"><img src="docs/assets/screenshots/03-ai-models.png" alt="Mô hình AI: chạy cục bộ (Ollama) hoặc đám mây"><br><sub><b>Mô hình AI: chạy cục bộ (Ollama) hoặc đám mây</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/vi/01-home.png" alt="Trang chủ"><br><sub><b>Trang chủ: việc gần đây, thông báo, lịch chạy sắp tới</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/vi/02-chat.png" alt="Trò chuyện"><br><sub><b>Trò chuyện: câu trả lời Markdown, bảng, lệnh gọi công cụ hiện ngay trong chat</b></sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/assets/screenshots/04-plugins-mcp.png" alt="Plugin: dịch vụ MCP bật bằng một cú nhấp"><br><sub><b>Plugin: dịch vụ MCP bật bằng một cú nhấp</b></sub></td>
-    <td width="50%"><img src="docs/assets/screenshots/05-dashboard.png" alt="Trang chủ"><br><sub><b>Trang chủ</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/vi/05-kanban.png" alt="Bảng Kanban"><br><sub><b>Kanban: giao việc cho thẻ và xem thẻ chuyển sang Đã xong</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/vi/06-automations.png" alt="Việc theo lịch"><br><sub><b>Tự động hóa: việc theo lịch cron, Heartbeat, các mẫu có sẵn</b></sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/screenshots/vi/03-tools.png" alt="Công cụ"><br><sub><b>Công cụ: quy trình có hướng dẫn cho công việc văn phòng</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/vi/04-tasks.png" alt="Tác vụ"><br><sub><b>Tác vụ: giao việc dài cho agent rồi để nó chạy</b></sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/screenshots/vi/07-skills.png" alt="Kỹ năng"><br><sub><b>Kỹ năng: gói SKILL.md bật tắt tùy ý</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/vi/12-ai-models.png" alt="Mô hình AI"><br><sub><b>Mô hình AI: chạy cục bộ (Ollama) hoặc đám mây</b></sub></td>
   </tr>
 </table>
 
-<p align="center"><img src="docs/assets/screenshots/06-cli-banner.png" alt="Giao diện CLI tương tác nestor với banner ASCII cyberpunk" width="880"><br><sub><b>Giao diện CLI tương tác (<code>nestor</code>) với banner ASCII phong cách cyberpunk và thẻ trạng thái thời gian thực</b></sub></p>
+### Sổ tay kiểu Notion
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/screenshots/vi/08-notebook-editor.png" alt="Trình soạn thảo khối của Sổ tay với callout, danh sách việc, toggle, khối mã và bảng"><br><sub><b>Soạn thảo theo khối: callout, danh sách việc, toggle, mã có tô màu, bảng, trang con</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/vi/09-notebook-ai.png" alt="Sổ tay với khung chat AI"><br><sub><b>Khung AI: hỏi đáp hoặc để agent sửa thẳng vào ghi chú</b></sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/assets/screenshots/vi/10-notebook-slash.png" alt="Menu gõ dấu gạch chéo để chèn khối" width="440"><br><sub><b>Gõ <code>/</code> để chèn một khối</b></sub></td>
+  </tr>
+</table>
+
+### Terminal
+
+<p align="center"><img src="docs/assets/screenshots/vi/13-cli-chat.png" alt="Giao diện CLI tương tác nestor với banner ASCII cyberpunk" width="880"><br><sub><b>Giao diện CLI tương tác (<code>nestor</code>) với banner ASCII và thẻ trạng thái thời gian thực</b></sub></p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/screenshots/vi/14-cli-status.png" alt="nestor status"><br><sub><b><code>nestor status</code></b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshots/vi/15-cli-help.png" alt="nestor --help"><br><sub><b><code>nestor --help</code>: toàn bộ lệnh trong một màn hình</b></sub></td>
+  </tr>
+</table>
+
+> Ảnh chụp từ một không gian làm việc demo sạch với dữ liệu mẫu, không phải dữ liệu người dùng thật.
 
 ## Tính năng
 
 - **Model**: Ollama và server local (LM Studio, vLLM), Gemini, Claude, OpenAI, OpenRouter, DeepSeek (DeepSeek-R1, V3), Mistral, xAI, Groq, Cerebras, Together, Fireworks, Qwen và mọi API tương thích OpenAI. Có fallback, tự thử lại khi lỗi 429/503, ước tính chi phí. Trình duyệt và chọn mô hình local trực quan.
 - **Chat**: panel Workspace bên phải (Files, Terminal, Hoạt động), mọi lần gọi tool/MCP hiện ngay trong chat, hiển thị khối "suy nghĩ chuyên sâu" (Deep Thinking / `<think>`) tự động thu gọn/mở rộng, xem trước trực tiếp (Live Preview) cho file HTML/SVG do Agent tạo, đính kèm file/ảnh, nhập bằng giọng nói, sửa và tạo lại tin nhắn, lệnh `/skill`, `@dịch vụ`. Mỗi phiên có thư mục làm việc riêng (`user-data/workspace/sessions/<id>/`).
 - **Kho tài liệu & RAG (Knowledge Base)**: nạp và lập chỉ mục đa định dạng (PDF, Word `.docx`, Excel `.xlsx`, `.csv`, PowerPoint `.pptx`, Markdown, Text) với thanh tiến trình nạp trực quan. Bật chế độ "Hỏi từ tài liệu" ngay trên thanh chat để Agent đối chiếu tri thức và trả lời kèm trích dẫn nguồn gốc tương tác `[1]`, `[2]` (bấm vào xem ngay câu trích và số trang gốc).
+- **Danh mục tài liệu (kiểu NotebookLM)**: nhóm file theo danh mục. Mở một danh mục sẽ thấy danh sách file bên trái và khung chat bên phải **chỉ trả lời từ tài liệu của danh mục đó**, kèm trích dẫn nguồn bấm xem được. Menu ba chấm ở mỗi file mở file gốc ở tab mới, kéo thanh phân cách để đổi độ rộng khung chat, còn nút **Hỏi toàn bộ kho** vẫn tìm trong mọi tài liệu. File đã thêm từ trước được tự gom vào một danh mục mặc định.
+- **Sổ tay (kiểu Notion)**: trình soạn thảo theo khối với menu `/` để chèn tiêu đề, danh sách đầu dòng/đánh số/việc cần làm, toggle, callout, khối mã có tô màu cú pháp, bảng, ảnh và trang con; chế độ xem toàn chiều rộng cho từng trang; xuất Markdown một chạm. Khung AI bên phải đọc được ghi chú, sửa thẳng vào đó hoặc tạo trang con có liên kết. Ghi chú lưu dạng JSON theo khối ở `workspace/pages/<id>.json`; ghi chú của các phiên bản trước (`.md`) vẫn nằm nguyên trên đĩa nhưng không tự động chuyển đổi.
+- **Kanban & tác vụ**: lên kế hoạch bằng thẻ, kéo-thả sắp xếp, bấm Giao việc để chạy thẻ ở nền; thẻ chuyển qua Việc cần làm, Đang làm, Chặn/Lỗi và Đã xong theo tiến trình chạy. Việc dài có thể giao ở trang Tác vụ và theo dõi tại đó.
 - **Thanh công cụ tinh gọn & Tùy biến sâu**:
   - Chọn model AI trực tiếp với nhãn chi tiết.
   - Nút **Mức suy luận & Tham số**: chọn mức suy nghĩ (`Tự động`, `Suy nghĩ chuyên sâu`, `Thấp`, `Vừa`, `Cao`), thanh trượt **Nhiệt độ (Temperature)** (0.0 - 1.5) và **Độ dài tối đa (Max Tokens)** (1k - 8k).

@@ -272,6 +272,18 @@ Bấm **Xem bản nháp**, chỉnh nếu muốn (kể cả đổi loại) rồi 
 
 Mục **Tài liệu** (thanh bên, nhóm Công việc) là kho tri thức riêng của bạn. Kéo thả vào đó **file hoặc cả thư mục** hợp đồng, báo cáo, bảng tính, bài thuyết trình hay tài liệu kỹ thuật, hoặc bấm **Chọn file** và **Chọn thư mục**.
 
+### Danh mục tài liệu (kiểu NotebookLM)
+
+Tài liệu được chia theo **danh mục**. Ở trang **Tài liệu**, bấm **Tạo danh mục**, đặt tên (ví dụ "Hợp đồng dự án A") rồi bấm vào danh mục để mở. Ô tìm kiếm ở đầu trang lọc theo tên danh mục hoặc tên file bên trong.
+
+Trong một danh mục:
+- **Bên trái** là danh sách file của danh mục đó và vùng kéo thả để thêm file. Menu ba chấm ở mỗi file có: **Xem file gốc** (mở ở tab mới), **Xem các đoạn trích**, **Tải về file gốc** và **Xóa tài liệu**.
+- **Bên phải** là khung chat chỉ trả lời **từ tài liệu của danh mục này**, kèm trích dẫn bấm xem được. Mỗi danh mục có một cuộc trò chuyện riêng. Kéo thanh phân cách để đổi độ rộng khung chat; độ rộng được nhớ cho lần sau.
+- Nút **Phân tích tài liệu** chỉ đọc các tài liệu của danh mục đang mở.
+- Xóa một danh mục sẽ xóa luôn các tài liệu bên trong.
+
+Nút **Hỏi toàn bộ kho** ở trang Tài liệu (và nút **Hỏi từ tài liệu** trong chat thường) vẫn tìm trên **mọi** tài liệu, không phân biệt danh mục. Các file đã thêm trước khi có danh mục được gom vào một danh mục mặc định ("Chưa phân loại").
+
 ### Các định dạng hỗ trợ
 
 - **Văn bản & Sách**: PDF (tự động phân trang, trích xuất text), Word (`.docx`), Markdown (`.md`), Text (`.txt`).
@@ -291,7 +303,7 @@ Tìm kiếm kết hợp hai cơ chế:
 ### Hỏi đáp và Trích dẫn nguồn gốc tương tác (Citations)
 
 Có hai cách hỏi tài liệu:
-- Ở trang **Tài liệu**, bấm **Hỏi đáp về tài liệu**: mở cuộc trò chuyện mới với chế độ tra cứu bật sẵn.
+- Mở một danh mục ở trang **Tài liệu** rồi hỏi ở khung chat bên phải (chỉ tìm trong danh mục đó), hoặc bấm **Hỏi toàn bộ kho** để mở cuộc trò chuyện mới với chế độ tra cứu bật sẵn trên mọi tài liệu.
 - Trong bất kỳ cuộc trò chuyện nào, bật nút **Hỏi từ tài liệu** bên cạnh dấu `+` ở thanh công cụ.
 
 Khi bật:
@@ -301,7 +313,20 @@ Khi bật:
 
 ### Phân tích tài liệu và đề xuất phương án
 
-Nút **Phân tích tài liệu** ở trang Tài liệu giao cho agent một việc nền: đọc kỹ các tài liệu (phần mở đầu từng file cùng các đoạn khớp với điều bạn muốn phân tích), tìm thêm các mục còn thiếu rồi viết báo cáo gồm **Tóm tắt, Yêu cầu và ràng buộc, Rủi ro và điểm chưa rõ, Phương án đề xuất (2-3 phương án, có ưu và nhược), Khuyến nghị, Các bước thực hiện**, mỗi ý kèm nguồn. Bạn có thể gõ trọng tâm (ví dụ "phân tích rủi ro và đề xuất phương án thực hiện trong 90 ngày"). Việc chạy nền nên có thể mất vài phút; kết quả xem ở trang **Tác vụ** và có thông báo khi xong.
+Nút **Phân tích tài liệu** trong mỗi danh mục giao cho agent một việc nền: đọc kỹ các tài liệu (phần mở đầu từng file cùng các đoạn khớp với điều bạn muốn phân tích), tìm thêm các mục còn thiếu rồi viết báo cáo gồm **Tóm tắt, Yêu cầu và ràng buộc, Rủi ro và điểm chưa rõ, Phương án đề xuất (2-3 phương án, có ưu và nhược), Khuyến nghị, Các bước thực hiện**, mỗi ý kèm nguồn. Bạn có thể gõ trọng tâm (ví dụ "phân tích rủi ro và đề xuất phương án thực hiện trong 90 ngày"). Việc chạy nền nên có thể mất vài phút; kết quả xem ở trang **Tác vụ** và có thông báo khi xong.
+
+### Sổ tay kiểu Notion (Notebook)
+
+Mục **Sổ tay** là nơi ghi chú theo khối. Ở trang danh sách, bấm **Tạo sổ tay** (hoặc tìm theo tên và nội dung); bấm vào một sổ tay để mở.
+
+- **Chèn khối bằng `/`**: gõ `/` ở đầu dòng rồi chọn tiêu đề, danh sách đầu dòng, danh sách đánh số, danh sách việc cần làm, **khối gập (toggle)**, **khối ghi chú nổi bật (callout)**, khối mã có tô màu cú pháp, trích dẫn, bảng, đường kẻ hoặc trang con. Thanh công cụ phía trên có đủ các nút tương ứng.
+- **Callout** đổi biểu tượng khi bấm vào emoji và đổi màu bằng chấm màu hiện ra khi rê chuột. **Toggle** gập/mở bằng mũi tên trước dòng đầu và nhớ trạng thái.
+- **Trang con** nằm trong sổ tay và hiện thành một thẻ liên kết bấm mở được.
+- **Chế độ xem**: nút mũi tên ở góc trên chuyển giữa độ rộng vừa phải và toàn chiều rộng; lựa chọn được lưu riêng cho từng trang.
+- **Hỏi AI**: mở khung bên phải để hỏi hoặc để agent đọc, sửa thẳng vào ghi chú, tạo trang con có liên kết. Ở chế độ **Sửa trực tiếp** agent ghi vào trang; ở chế độ **Xem bản nháp** agent chỉ đề xuất trong chat để bạn tự chèn. Kéo thanh phân cách để đổi độ rộng khung.
+- **Xuất Markdown** tải ghi chú về dạng `.md`.
+
+Ghi chú lưu dạng JSON theo khối ở `workspace/pages/<id>.json`. Ghi chú của các phiên bản trước (`.md`) vẫn nằm nguyên trong thư mục đó nhưng không tự động chuyển đổi; muốn dùng lại, mở file `.md` và dán nội dung vào sổ tay mới.
 
 ### Dùng kho tài liệu từ ứng dụng khác (API và MCP)
 
