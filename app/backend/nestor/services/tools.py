@@ -371,7 +371,7 @@ def grep_tool(ctx, pattern, path=".", include="", ignore_case=False):
     return "\n".join(out) or "(không có kết quả)"
 
 
-@tool("ask_user", "Hỏi người dùng khi thiếu thông tin thật sự không thể tự suy ra. Một câu: dùng question (+ options 2-4 lựa chọn để bấm nhanh). Nhiều câu cần hỏi cùng lúc: dùng questions (JSON mảng [{\"question\":\"...\",\"options\":[\"...\"],\"multi\":false}]) để người dùng trả lời một lần trên các tab, KHÔNG gọi ask_user nhiều lần liên tiếp. Không dùng cho việc bạn tự quyết được.",
+@tool("ask_user", "Hỏi người dùng khi thiếu thông tin cá nhân hoặc yêu cầu kinh doanh mà bạn hoàn toàn không thể tự kiểm tra được. TUYỆT ĐỐI KHÔNG dùng tool này để bảo người dùng tự chạy lệnh terminal, mở htop/top hay kiểm tra file/tiến trình hộ bạn (hãy tự dùng `exec`, `read`, `ps`...). Một câu: dùng question (+ options 2-4 lựa chọn để bấm nhanh). Nhiều câu cần hỏi cùng lúc: dùng questions (JSON mảng [{\"question\":\"...\",\"options\":[\"...\"],\"multi\":false}]) để người dùng trả lời một lần trên các tab, KHÔNG gọi ask_user nhiều lần liên tiếp. Không dùng cho việc bạn tự quyết được.",
       {"question": ("string", "câu hỏi ngắn gọn (khi chỉ hỏi một câu)"), "options": ("array", "các lựa chọn gợi ý (tùy chọn)"),
        "questions": ("string", "JSON mảng nhiều câu hỏi, mỗi câu {question, options?, multi?}; tối đa 8 câu")}, required=[])
 def ask_user(ctx, question="", options=None, questions=None):

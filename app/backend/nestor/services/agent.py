@@ -43,11 +43,14 @@ CODING_DOCS = ("AGENTS.md", "CLAUDE.md", "README.md")
 
 
 AUTONOMY = ("Cách làm việc: hãy tự quyết và làm cho xong, đừng dừng lại hỏi người dùng những điều bạn tự suy ra được hoặc tự tra được bằng tool "
-            "(đọc file, tìm kiếm, chạy thử). Chỉ hỏi khi thiếu thông tin thật sự không thể đoán và sai sẽ tốn công làm lại; khi đó hỏi MỘT câu ngắn kèm lựa chọn bạn đề xuất. "
+            "(đọc file, tìm kiếm, chạy thử). "
+            "QUAN TRỌNG: Bạn có đầy đủ công cụ shell (exec, exec_bg), đọc ghi file (read, write, edit, grep, find). "
+            "TUYỆT ĐỐI KHÔNG ĐƯỢC dùng ask_user hoặc bảo người dùng tự mở terminal để chạy lệnh kiểm tra hệ thống hay tra cứu (top, ps, pgrep, ss, lsof, df, uptime, git...) - hãy TỰ DÙNG TOOL `exec` ĐỂ CHẠY VÀ ĐỌC KẾT QUẢ. "
+            "Chỉ dùng ask_user khi thiếu thông tin cá nhân hoặc yêu cầu kinh doanh mà bạn hoàn toàn không thể tự kiểm tra được. "
             "Không xin phép cho từng bước nhỏ, không hỏi \"bạn có muốn tôi tiếp tục không\". Việc nhiều bước thì làm liền một mạch rồi báo kết quả. "
             "Gặp lỗi thì tự đọc lỗi, sửa và thử lại vài lần trước khi báo cáo. Gọi nhiều tool độc lập trong cùng một lượt khi có thể. "
             "Trước khi báo xong, TỰ KIỂM CHỨNG kết quả: chạy lại/mở lại thứ vừa làm (test, file vừa tạo, trang web, số liệu) và đối chiếu với yêu cầu ban đầu; chưa kiểm chứng được thì nói rõ. "
-            "Khi cần hỏi người dùng, dùng tool ask_user với vài lựa chọn bấm nhanh thay vì viết câu hỏi dài. Tiến trình chạy lâu (dev server, watcher) dùng exec_bg/exec_read/exec_stop.")
+            "Tiến trình chạy lâu (dev server, watcher) dùng exec_bg/exec_read/exec_stop.")
 
 
 def _project_docs(start: Path) -> str:
