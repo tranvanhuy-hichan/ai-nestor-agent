@@ -25,6 +25,7 @@ class ThinkingSpinner:
         self._thread: threading.Thread | None = None
         self._t0 = time.time()
         self._isatty = sys.stdout.isatty()
+        self._lock = threading.Lock()
 
     def start(self, message: str | None = None) -> None:
         if not self._isatty:
@@ -49,11 +50,14 @@ class ThinkingSpinner:
             elapsed = time.time() - self._t0
             sec = f" ({elapsed:.1f}s)" if elapsed >= 1.0 else ""
             line = f"\r  {cyan(frame)} {dim(self.message)}{dim(sec)} \033[K"
-            try:
-                sys.stdout.write(line)
-                sys.stdout.flush()
-            except Exception:
-                pass
+            with self._lock:
+                if self._stop.is_set():
+                    break
+                try:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+                except Exception:
+                    pass
             idx += 1
             time.sleep(0.08)
 
@@ -62,14 +66,15 @@ class ThinkingSpinner:
             return
         self._stop.set()
         if self._thread:
-            self._thread.join(timeout=0.2)
+            self._thread.join(timeout=0.3)
         self._active = False
-        if clear and self._isatty:
-            try:
-                sys.stdout.write("\r\033[K")
-                sys.stdout.flush()
-            except Exception:
-                pass
+        with self._lock:
+            if clear and self._isatty:
+                try:
+                    sys.stdout.write("\r\033[K")
+                    sys.stdout.flush()
+                except Exception:
+                    pass
 
 
 def _trace(ev: dict) -> str | None:
@@ -87,34 +92,61 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
     """Doc su kien tu stream_chat. live=True: in chu khi model dang sinh; ask=True: hoi y/N khi can phe duyet."""
     out = {"session": None, "output": "", "error": None, "timed_out": False, "provider": None, "usage": {"prompt": 0, "completion": 0}}
     streamed = False
+    in_thinking = False
     try:
         for ev in events:
             t = ev["type"]
             if t == "session":
                 out["session"] = ev["id"]
+            elif t == "status":
+                msg = ev.get("text") or ev.get("message") or ""
+                if msg and spinner:
+                    spinner.set_message(msg)
+            elif t == "thinking":
+                if spinner:
+                    spinner.stop(clear=True)
+                if live:
+                    if not in_thinking:
+                        in_thinking = True
+                        sys.stdout.write(dim("💭 "))
+                    sys.stdout.write(dim(ev["text"]))
+                    sys.stdout.flush()
+                    streamed = True
+                elif verbose:
+                    print(dim(ev["text"]), end="", file=sys.stderr, flush=True)
             elif t == "delta" and live:
                 if spinner:
                     spinner.stop(clear=True)
-                print(ev["text"], end="", flush=True)
+                if in_thinking:
+                    in_thinking = False
+                    sys.stdout.write("\n\n")
+                    sys.stdout.flush()
+                sys.stdout.write(ev["text"])
+                sys.stdout.flush()
                 streamed = True
-            elif t == "thinking":
-                if spinner:
-                    spinner.set_message(L("Nestor đang suy nghĩ...", "Nestor is thinking..."))
-                if verbose:
-                    print(dim(ev["text"]), end="", file=sys.stderr, flush=True)
             elif t == "assistant":
                 if spinner:
                     spinner.stop(clear=True)
+                if in_thinking:
+                    in_thinking = False
+                    sys.stdout.write("\n\n")
+                    sys.stdout.flush()
                 out["output"], out["provider"] = ev["content"], ev["provider"]
                 out["usage"] = {k: out["usage"][k] + ev["usage"][k] for k in out["usage"]}
                 if live and streamed:
-                    print()
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
                 elif live and ev["content"]:
-                    print(ev["content"])
+                    sys.stdout.write(ev["content"] + "\n")
+                    sys.stdout.flush()
                 streamed = False
             elif t in ("tool", "tool_result") and (verbose or live):
                 if spinner:
                     spinner.stop(clear=True)
+                if in_thinking:
+                    in_thinking = False
+                    sys.stdout.write("\n\n")
+                    sys.stdout.flush()
                 line = _trace(ev)
                 if line:
                     print(dim(line), file=sys.stdout if live else sys.stderr, flush=True)
@@ -123,6 +155,10 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
             elif t == "approval":
                 if spinner:
                     spinner.stop(clear=True)
+                if in_thinking:
+                    in_thinking = False
+                    sys.stdout.write("\n\n")
+                    sys.stdout.flush()
                 label = KIND.get(ev["kind"], (ev["kind"], ev["kind"]))
                 print(f"\n{yellow('⚠')} {L('Agent muốn', 'The agent wants to')} {bold(L(label[0], label[1]))}:\n  {ev['detail'][:500]}", file=sys.stderr if not live else sys.stdout)
                 allowed = ask and ask_yes_no(L("Cho phép?", "Allow?"), False)
@@ -132,6 +168,10 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
             elif t == "error":
                 if spinner:
                     spinner.stop(clear=True)
+                if in_thinking:
+                    in_thinking = False
+                    sys.stdout.write("\n\n")
+                    sys.stdout.flush()
                 out["error"] = ev["message"]
             if deadline and time.time() > deadline:
                 out["timed_out"], out["error"] = True, out["error"] or L("hết thời gian chờ", "timed out")
@@ -172,11 +212,9 @@ def run(args) -> int:
     spinner = ThinkingSpinner(L("Nestor đang xử lý...", "Nestor is working..."))
     spinner.start()
     try:
-        res = consume(events, live=False, verbose=args.verbose, ask=args.ask, deadline=time.time() + args.timeout, spinner=spinner)
+        res = consume(events, live=True, verbose=args.verbose, ask=args.ask, deadline=time.time() + args.timeout, spinner=spinner)
     finally:
         spinner.stop(clear=True)
-    if res["output"]:
-        print(res["output"])
     if res["error"]:
         err(res["error"])
         return 1

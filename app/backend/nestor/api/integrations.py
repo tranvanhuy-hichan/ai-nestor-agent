@@ -63,6 +63,21 @@ def mcp_registry_search(q: str = "", cursor: str = ""):
     return mcp_registry.search(q, cursor, limit=50)
 
 
+@router.get("/plugins/catalog")
+def plugins_catalog_list(q: str = "", category: str = "all", page: int = 0, limit: int = 24):
+    """Liet ke kho 2.500+ plugin Hermes voi bo loc danh muc va phan trang."""
+    return mcp_registry.list_hermes_plugins(q=q, category=category, page=page, limit=limit)
+
+
+@router.get("/plugins/catalog/{name:path}")
+def plugins_catalog_get(name: str):
+    """Chi tiet ve mot plugin trong kho Hermes."""
+    p = mcp_registry.get_hermes_plugin(name)
+    if not p:
+        raise HTTPException(404, "không tìm thấy plugin")
+    return p
+
+
 class ProbeBody(BaseModel):
     url: str
 

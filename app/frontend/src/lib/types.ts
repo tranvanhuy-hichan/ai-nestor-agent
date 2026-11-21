@@ -26,6 +26,32 @@ export interface CatalogService {
 }
 export interface Catalog { groups: { id: string; label: { vi: string; en: string } }[]; services: CatalogService[] }
 export interface RegistryItem { id: string; name: string; description: string; website: string; url: string; transport: 'http' | 'sse'; publisher: string; community: boolean; needs_header: string[] }
+export interface HermesPlugin {
+  name: string
+  title?: string
+  description?: string
+  maintainer?: string
+  tier?: string
+  category?: string
+  version?: string
+  repo?: string
+  docs_url?: string
+  image?: string
+  capabilities?: {
+    provides_tools?: string[]
+    provides_hooks?: string[]
+    provides_middleware?: string[]
+    requires_env?: string[]
+  }
+}
+export interface HermesCatalogResponse {
+  items: HermesPlugin[]
+  total: number
+  page: number
+  limit: number
+  total_pages: number
+  categories: { id: string; label: { vi: string; en: string }; count: number }[]
+}
 export interface McpTool { name: string; full_name: string; description: string; read_only: boolean }
 export interface McpServerInfo { name: string; config: McpServerCfg; status: 'connecting' | 'connected' | 'error' | 'disabled' | 'needs_auth'; error: string; tools: McpTool[]; oauth?: boolean; logged_in?: boolean; auth_url?: string }
 export interface ApiToken { id: string; name: string; prefix: string; allow_exec: boolean; allow_docs?: boolean; created: number; last_used: number | null }

@@ -145,3 +145,22 @@ def test_new_plugins_are_in_catalog_with_valid_shape():
         s = by_id[sid]
         assert s["url"].startswith("https://") and s["group"] in groups and s["auth"] in ("oauth", "open", "token") and s["desc"]["vi"] and s["desc"]["en"]
     assert by_id["godaddy"]["auth"] == "open" and by_id["buildkite"]["auth"] == "oauth"
+
+
+def test_hermes_plugins_catalog_api(client):
+    r = client.get("/api/plugins/catalog?limit=10")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] >= 2500
+    assert len(data["items"]) == 10
+    assert len(data["categories"]) >= 5
+    # Tìm kiếm theo từ khóa
+    r_search = client.get("/api/plugins/catalog?q=docker&limit=5")
+    assert r_search.status_code == 200
+    s_data = r_search.json()
+    assert s_data["total"] >= 1
+    # Chi tiết plugin
+    first_name = data["items"][0]["name"]
+    r_detail = client.get(f"/api/plugins/catalog/{first_name}")
+    assert r_detail.status_code == 200
+    assert r_detail.json()["name"] == first_name
