@@ -119,7 +119,7 @@ export function FlowRunner({ a, flow, provider = null, navigation, renderSidebar
         if (p.data?.photo?.startsWith('data:image/')) {
           const blob = await (await fetch(p.data.photo)).blob()
           const r = await fetch(`/api/sessions/${sid}/upload?name=cv-portrait.jpg`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: blob })
-          if (!r.ok) throw new Error('Không tải được ảnh chân dung')
+          if (!r.ok) throw new Error(t('Không tải được ảnh chân dung'))
           p.data.photo_path = (await r.json()).path
           delete p.data.photo
           p.visible = [...(p.visible ?? []), 'photo_path']

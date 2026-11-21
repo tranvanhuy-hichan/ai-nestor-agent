@@ -17,6 +17,8 @@ const VI = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềế
 const args = process.argv.slice(2)
 const english = args.includes('--english')
 const filters = args.filter((a) => !a.startsWith('--'))
+// Hai module co he thong ngon ngu rieng (bo CV tao CV theo ngon ngu tai lieu, trang dich truc tiep co ten ngon ngu ban dia), bo chon ngon ngu (ten ban dia) va doc giong noi theo ngon ngu nen khong kiem o day
+const EXEMPT = ['src/components/cv/', 'src/lib/cv/', 'src/features/translate/', 'src/components/layout/LangSwitcher.tsx', 'src/features/chat/speech.ts']
 
 const { EN } = await import(pathToFileURL(join(src, 'i18n/en/index.ts')).href)
 
@@ -46,6 +48,7 @@ let keys = 0
 for (const file of walk(src)) {
   const rel = relative(root, file)
   if (filters.length && !filters.some((f) => rel.startsWith(f))) continue
+  if (EXEMPT.some((p) => rel.startsWith(p))) continue
   const original = readFileSync(file, 'utf8')
   const blank = (c) => c.replace(/[^\n]/g, ' ')
   // bo comment (giu nguyen vi tri/dong) de vi du trong comment khong bi tinh la khoa hay chuoi chua dich

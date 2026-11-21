@@ -225,7 +225,7 @@ export function SkillsPage() {
                 <div className="mb-3 flex items-center justify-between text-xs text-muted">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-fg">
-                      {t(CATEGORIES.find((c) => c.id === cat)?.label || 'Tất cả')}
+                      {t(CATEGORIES.find((c) => c.id === cat)?.label ?? tk('Tất cả'))}
                     </span>
                     <span>·</span>
                     <span>{t('{n} kỹ năng', { n: list.length })}</span>

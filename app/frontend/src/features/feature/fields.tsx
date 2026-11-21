@@ -44,8 +44,8 @@ export function renderField(f: FormField, values: Values, files: Files, set: (k:
   const hint = f.hint ? t(f.hint) : undefined
   const ph = f.placeholder ? t(f.placeholder) : undefined
   const v = values[f.key] ?? ''
-  if (f.type === 'cv-template') return <div><p className="mb-2 text-sm font-medium">{label}</p><Suspense fallback={<p>Đang tải mẫu CV…</p>}><CvTemplatePicker value={v} onChange={(id) => set(f.key, id)} /></Suspense></div>
-  if (f.type === 'cv-profile') return <div><h3 className="mb-2 text-sm font-medium">{label}</h3><Suspense fallback={<p>Đang tải hồ sơ…</p>}><CvProfileForm template={values.mau_cv ?? ''} value={v} onChange={(data) => set(f.key, data)} /></Suspense></div>
+  if (f.type === 'cv-template') return <div><p className="mb-2 text-sm font-medium">{label}</p><Suspense fallback={<p>{t('Đang tải mẫu CV…')}</p>}><CvTemplatePicker value={v} onChange={(id) => set(f.key, id)} /></Suspense></div>
+  if (f.type === 'cv-profile') return <div><h3 className="mb-2 text-sm font-medium">{label}</h3><Suspense fallback={<p>{t('Đang tải hồ sơ…')}</p>}><CvProfileForm template={values.mau_cv ?? ''} value={v} onChange={(data) => set(f.key, data)} /></Suspense></div>
   if (f.type === 'file') return <Field key={f.key} label={label} hint={hint}><FileField f={f} files={files[f.key] ?? []} onChange={(x) => { setFiles(f.key, x); if (!f.multiple) set(`_uploaded:${f.key}`, '[]') }} />{storedFiles(values, f.key).map((path) => <span key={path} className="mt-2 flex items-center gap-2 rounded-md bg-panel2 px-3 py-2 text-xs"><FileText className="size-3.5 text-accent" /><span className="min-w-0 flex-1 truncate">{path.split('/').pop()} · {t('Đã tải lên, sẽ dùng lại')}</span><button type="button" aria-label={t('Bỏ {name}', { name: path })} onClick={() => set(`_uploaded:${f.key}`, JSON.stringify(storedFiles(values, f.key).filter((p) => p !== path)))}><X className="size-3.5" /></button></span>)}</Field>
   if (f.type === 'textarea') return <Field key={f.key} label={label} hint={hint}><Textarea rows={5} value={v} placeholder={ph} onChange={(e) => set(f.key, e.target.value)} className="font-sans text-sm" /></Field>
   if (f.type === 'select') return (

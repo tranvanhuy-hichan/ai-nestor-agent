@@ -159,6 +159,7 @@ def test_scrolls_transcript_with_footer_still_on_screen(scroll_input, older_row)
     with (
         create_pipe_input() as terminal_input,
         create_app_session(input=terminal_input, output=output),
+        patch("prompt_toolkit.output.create_output", return_value=output),  # chat tu tao output rieng khi co transcript
         patch("sys.stdin.isatty", return_value=True),
         patch("sys.stdout.isatty", return_value=True),
         patch("prompt_toolkit.shortcuts.prompt.is_dumb_terminal", return_value=False),

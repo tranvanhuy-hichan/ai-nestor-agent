@@ -10,5 +10,5 @@ export function coreFeatures(list: Assistant[]): Assistant[] {
   return list.filter((a) => CORE.has(a.id) || a.builtin === false)
 }
 export function searchableText(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase()
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u0111/g, 'd').replace(/\u0110/g, 'D').toLowerCase()
 }

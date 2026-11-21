@@ -9,7 +9,7 @@ import { t, tk } from '@/lib/i18n.ts'
 import { cn } from '@/lib/utils'
 
 export function FeatureHub() {
-  const list = [...coreFeatures(useAssistants().data ?? FALLBACK_ASSISTANTS), { id: 'youtube-translate', name: tk('Phiên dịch YouTube trực tiếp'), icon: 'languages', group: 'Cá nhân', description: tk('Nghe âm thanh tab YouTube, xem phụ đề nhiều ngôn ngữ và phát giọng dịch. Tải phụ đề SRT sau khi xem.'), starters: [], form: { flows: [] } }]
+  const list = [...coreFeatures(useAssistants().data ?? FALLBACK_ASSISTANTS), { id: 'youtube-translate', name: tk('Phiên dịch YouTube trực tiếp'), icon: 'languages', group: tk('Cá nhân'), description: tk('Nghe âm thanh tab YouTube, xem phụ đề nhiều ngôn ngữ và phát giọng dịch. Tải phụ đề SRT sau khi xem.'), starters: [], form: { flows: [] } }]
   const [q, setQ] = useState('')
   const [group, setGroup] = useState('')
   const groups = [...GROUP_ORDER, ...new Set(list.map((a) => a.group).filter((g) => !GROUP_ORDER.includes(g)))].filter((g) => list.some((a) => a.group === g))

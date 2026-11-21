@@ -43,6 +43,7 @@ def test_disabled_features_hide_their_tool_schemas(tmp_env, monkeypatch):
 
         def stream(self, messages, schemas, effort=None):
             seen["names"] = {s["name"] for s in schemas}
+            seen["search"] = next((s["description"] for s in schemas if s["name"] == "tool_search"), "")
             yield {"type": "final", "content": "ok", "tool_calls": [], "usage": {"prompt": 1, "completion": 1}}
 
     monkeypatch.setattr(agent_mod, "make_provider", Fake)
@@ -51,9 +52,11 @@ def test_disabled_features_hide_their_tool_schemas(tmp_env, monkeypatch):
     sid = sessions.create("x")
     agent_mod.run_turn(sid, "hi", None, lambda k, d: True, lambda e: None)
     assert not any(n.startswith("computer_") for n in seen["names"])  # computer.enabled mac dinh tat
-    assert any(n.startswith("browser_") for n in seen["names"])
+    assert not any(n.startswith("browser_") for n in seen["names"])  # tool trinh duyet chi nap khi can
+    assert "Browser" in seen["search"]  # nhung van tim duoc qua tool_search
     cfg = cfgmod.load()
     cfg.browser.enabled = False
     cfgmod.save(cfg)
     agent_mod.run_turn(sid, "hi", None, lambda k, d: True, lambda e: None)
     assert not any(n.startswith("browser_") for n in seen["names"])
+    assert "Browser" not in seen["search"]  # tat tinh nang thi khong con quang cao nhom nay

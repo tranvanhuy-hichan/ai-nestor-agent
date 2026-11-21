@@ -727,6 +727,9 @@ const dict: Record<string, string> = {
   "Bao gồm các script, file báo cáo, bảng dữ liệu hoặc kết quả do Agent tạo ra trong quá trình làm việc.": "Includes scripts, reports, data tables and other results the agent produced while working.",
   "Chưa có tệp nào trong không gian làm việc.": "No files in the workspace yet.",
   "Tệp đã tạo": "Created files",
+  "Đang tải mẫu CV…": "Loading CV templates…",
+  "Đang tải hồ sơ…": "Loading profile…",
+  "Không tải được ảnh chân dung": "Could not load the portrait photo",
 }
 
 export default dict
