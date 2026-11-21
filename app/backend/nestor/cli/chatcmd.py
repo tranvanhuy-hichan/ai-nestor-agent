@@ -1,5 +1,7 @@
 """nestor chat (REPL) va nestor run (mot lan): chay agent ngay trong tien trinh, khong can server."""
 import json
+import select
+import shutil
 import sys
 import threading
 import time
@@ -235,13 +237,69 @@ HELP = {
 }
 
 
+def get_cursor_row() -> int | None:
+    """Lấy dòng hiện tại của con trỏ terminal qua mã ANSI DSR (Device Status Report: \\033[6n)."""
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return None
+    try:
+        import termios
+        import tty
+
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            sys.stdout.write("\033[6n")
+            sys.stdout.flush()
+            r, _, _ = select.select([fd], [], [], 0.05)
+            if not r:
+                return None
+            first = sys.stdin.read(1)
+            if first != "\033":
+                return None
+            resp = first
+            while True:
+                r, _, _ = select.select([fd], [], [], 0.05)
+                if not r:
+                    return None
+                ch = sys.stdin.read(1)
+                resp += ch
+                if ch == "R":
+                    break
+            if resp.startswith("\033[") and ";" in resp:
+                row_str = resp[2:].split(";")[0]
+                return int(row_str)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    except Exception:
+        return None
+    return None
+
+
+def pad_to_bottom(reserve_lines: int = 3) -> None:
+    """Đẩy con trỏ xuống sát đáy terminal để hộp nhập chat luôn hiển thị ở dưới màn hình giống Claude Code."""
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return
+    try:
+        lines = shutil.get_terminal_size((80, 24)).lines
+        row = get_cursor_row()
+        if row is not None:
+            target_row = max(1, lines - reserve_lines + 1)
+            if row < target_row:
+                sys.stdout.write("\n" * (target_row - row))
+                sys.stdout.flush()
+    except Exception:
+        pass
+
+
 def _make_reader(cfg, st):
-    """Tra ve ham doc 1 dong. Co prompt_toolkit: go "/" la hien menu goi y lenh (kem mo ta). Khong co: input() thuong."""
+    """Trả về hàm đọc dòng có giao diện hộp nhập dưới cùng phong cách Claude Code (kèm autocomplete lệnh)."""
     try:
         from prompt_toolkit import PromptSession
         from prompt_toolkit.completion import Completer, Completion
         from prompt_toolkit.formatted_text import ANSI
         from prompt_toolkit.history import InMemoryHistory
+        from prompt_toolkit.styles import Style
     except ImportError:
         return None
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
@@ -273,10 +331,39 @@ def _make_reader(cfg, st):
                 if name.startswith(partial):
                     yield Completion(name, start_position=-len(partial), display_meta=meta)
 
-    session = PromptSession(completer=SlashCompleter(), complete_while_typing=True, history=InMemoryHistory(), reserve_space_for_menu=8)
+    style = Style.from_dict({
+        "bottom-toolbar": "noreverse",
+        "bottom-toolbar.text": "noreverse #666666",
+    })
+    session = PromptSession(
+        completer=SlashCompleter(),
+        complete_while_typing=True,
+        history=InMemoryHistory(),
+        reserve_space_for_menu=0,
+        style=style,
+    )
 
-    def read(first: str, cont: str) -> str:
-        return session.prompt(ANSI(first if not cont else cont))
+    def read(first: str = "", cont: str = "") -> str:
+        cols = shutil.get_terminal_size((80, 24)).columns
+        border = "─" * cols
+        top_line = f"\033[90m{border}\033[0m\n"
+        prompt_text = first or (f"\033[36m>\033[0m " if not cont else cont)
+        if not cont:
+            msg = ANSI(top_line + prompt_text)
+            bottom_tb = lambda: ANSI(f"\033[90m{'─' * shutil.get_terminal_size((80, 24)).columns}\033[0m")
+        else:
+            msg = ANSI(cont)
+            bottom_tb = None
+
+        res = session.prompt(msg, bottom_toolbar=bottom_tb)
+        if not cont and sys.stdout.isatty():
+            try:
+                curr_cols = shutil.get_terminal_size((80, 24)).columns
+                sys.stdout.write(f"\033[90m{'─' * curr_cols}\033[0m\n")
+                sys.stdout.flush()
+            except Exception:
+                pass
+        return res
 
     return read
 
@@ -296,16 +383,23 @@ def chat(args) -> int:
     from .banner import print_chat_banner
     print_chat_banner(cfg, st["provider"], st["perm"], st["sid"])
     reader = _make_reader(cfg, st)
+    prompt_str = f"{cyan('>')} "
     while True:
         try:
+            pad_to_bottom(reserve_lines=3)
             if reader:
-                print()
-                line = reader(f"{cyan('nestor')} {bold('›')} ", "").strip()
+                line = reader(prompt_str, "").strip()
                 while line.endswith("\\"):
                     line = line[:-1] + "\n" + reader("", dim("  … ")).rstrip()
             else:
-                print(f"\n{cyan('nestor')} {bold('›')} ", end="", flush=True)
+                cols = shutil.get_terminal_size((80, 24)).columns
+                border = "─" * cols
+                if sys.stdout.isatty():
+                    print(f"\033[90m{border}\033[0m")
+                print(prompt_str, end="", flush=True)
                 line = input().strip()
+                if sys.stdout.isatty():
+                    print(f"\033[90m{border}\033[0m")
                 while line.endswith("\\"):
                     print(dim("  … "), end="", flush=True)
                     line = line[:-1] + "\n" + input().rstrip()
@@ -416,7 +510,7 @@ def chat(args) -> int:
                 sessions.truncate_from(st["sid"], cut)
                 print(dim(L(f"Đã lùi lại {n} tin. Sửa và Enter để gửi lại (trống = hủy):", f"Rewound {n} message(s). Edit and press Enter to resend (empty = cancel):")))
                 try:
-                    edited = (reader(f"{cyan('›')} ", "") if reader else input(f"{cyan('›')} ")).strip() if interactive() else prior_text
+                    edited = (reader(prompt_str, "") if reader else input(prompt_str)).strip() if interactive() else prior_text
                 except (EOFError, KeyboardInterrupt):
                     print()
                     continue
