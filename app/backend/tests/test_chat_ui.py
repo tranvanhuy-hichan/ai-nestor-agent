@@ -44,3 +44,16 @@ def test_make_reader_slash_completer():
     with patch("sys.stdin.isatty", return_value=True), patch("sys.stdout.isatty", return_value=True):
         reader = chatcmd._make_reader(cfg, st)
         assert callable(reader)
+
+def test_cursor_row_parses_dsr_response():
+    # Gia lap terminal tra ve \033[18;1R qua os.read
+    with patch("sys.stdin.isatty", return_value=True), patch("sys.stdout.isatty", return_value=True), \
+         patch("sys.stdin.fileno", return_value=0), \
+         patch("termios.tcgetattr", return_value=[]), \
+         patch("tty.setraw"), \
+         patch("termios.tcsetattr"), \
+         patch("select.select", side_effect=[([0], [], []), ([], [], [])]), \
+         patch("os.read", return_value=b"\033[18;1R"), \
+         patch("sys.stdout.write"), \
+         patch("sys.stdout.flush"):
+        assert chatcmd.get_cursor_row() == 18

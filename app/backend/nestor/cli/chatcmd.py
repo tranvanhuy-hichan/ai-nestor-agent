@@ -242,6 +242,7 @@ def get_cursor_row() -> int | None:
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         return None
     try:
+        import os
         import termios
         import tty
 
@@ -251,24 +252,24 @@ def get_cursor_row() -> int | None:
             tty.setraw(fd)
             sys.stdout.write("\033[6n")
             sys.stdout.flush()
-            r, _, _ = select.select([fd], [], [], 0.05)
-            if not r:
-                return None
-            first = sys.stdin.read(1)
-            if first != "\033":
-                return None
-            resp = first
+            resp = b""
             while True:
-                r, _, _ = select.select([fd], [], [], 0.05)
+                r, _, _ = select.select([fd], [], [], 0.15)
                 if not r:
-                    return None
-                ch = sys.stdin.read(1)
-                resp += ch
-                if ch == "R":
                     break
-            if resp.startswith("\033[") and ";" in resp:
-                row_str = resp[2:].split(";")[0]
-                return int(row_str)
+                chunk = os.read(fd, 32)
+                if not chunk:
+                    break
+                resp += chunk
+                if b"R" in resp:
+                    break
+            text = resp.decode("ascii", "ignore")
+            if "\033[" in text and "R" in text:
+                part = text.split("\033[", 1)[1].split("R", 1)[0]
+                if ";" in part:
+                    row_str = part.split(";")[0]
+                    if row_str.isdigit():
+                        return int(row_str)
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old)
     except Exception:
@@ -297,9 +298,11 @@ def _make_reader(cfg, st):
     try:
         from prompt_toolkit import PromptSession
         from prompt_toolkit.completion import Completer, Completion
+        from prompt_toolkit.filters import Condition
         from prompt_toolkit.formatted_text import ANSI
         from prompt_toolkit.history import InMemoryHistory
-        from prompt_toolkit.styles import Style
+        from prompt_toolkit.layout.containers import ConditionalContainer, Window
+        from prompt_toolkit.layout.controls import FormattedTextControl
     except ImportError:
         return None
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
@@ -331,16 +334,36 @@ def _make_reader(cfg, st):
                 if name.startswith(partial):
                     yield Completion(name, start_position=-len(partial), display_meta=meta)
 
-    style = Style.from_dict({
-        "bottom-toolbar": "noreverse",
-        "bottom-toolbar.text": "noreverse #666666",
-    })
-    session = PromptSession(
+    class ClaudePromptSession(PromptSession):
+        def __init__(self, *args, **kwargs):
+            self.show_borders = True
+            super().__init__(*args, **kwargs)
+
+        def _create_layout(self):
+            layout = super()._create_layout()
+            main_split = layout.container.children[0]
+            hsplit = main_split.content if hasattr(main_split, "content") else main_split
+
+            def get_bottom_border():
+                cols = shutil.get_terminal_size((80, 24)).columns
+                return ANSI(f"\033[90m{'─' * cols}\033[0m")
+
+            bottom_window = ConditionalContainer(
+                Window(
+                    FormattedTextControl(get_bottom_border),
+                    dont_extend_height=True,
+                    height=1,
+                ),
+                filter=Condition(lambda: self.show_borders),
+            )
+            hsplit.children.append(bottom_window)
+            return layout
+
+    session = ClaudePromptSession(
         completer=SlashCompleter(),
         complete_while_typing=True,
         history=InMemoryHistory(),
         reserve_space_for_menu=0,
-        style=style,
     )
 
     def read(first: str = "", cont: str = "") -> str:
@@ -349,13 +372,13 @@ def _make_reader(cfg, st):
         top_line = f"\033[90m{border}\033[0m\n"
         prompt_text = first or (f"\033[36m>\033[0m " if not cont else cont)
         if not cont:
+            session.show_borders = True
             msg = ANSI(top_line + prompt_text)
-            bottom_tb = lambda: ANSI(f"\033[90m{'─' * shutil.get_terminal_size((80, 24)).columns}\033[0m")
         else:
+            session.show_borders = False
             msg = ANSI(cont)
-            bottom_tb = None
 
-        res = session.prompt(msg, bottom_toolbar=bottom_tb)
+        res = session.prompt(msg)
         if not cont and sys.stdout.isatty():
             try:
                 curr_cols = shutil.get_terminal_size((80, 24)).columns
