@@ -2,7 +2,7 @@ const dict: Record<string, string> = {
   'Danh mục': 'Categories',
   'Danh mục kỹ năng': 'Skill categories',
   'Không tìm thấy skill phù hợp': 'No matching skills found',
-  'Xóa bộ lọc': 'Clear filter',
+  'Xóa bộ lọc': 'Clear filters',
   '{n} kỹ năng': '{n} skills',
   'Tìm kiếm': 'Search',
   'Không bắt buộc': 'Optional',

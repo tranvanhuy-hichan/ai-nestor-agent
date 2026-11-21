@@ -273,7 +273,8 @@ def find_skills(skills: dict[str, Skill], query: str, limit: int = 8) -> list[Sk
     terms = {term for term in words(query) - _SKILL_QUERY_COMMON if len(term) > 1 or term.isdigit()}
     if not terms:
         return []
-    query_words = f" {' '.join(re.findall(r'[^\W_]+', fold(query)))} "
+    folded_words = " ".join(re.findall(r"[^\W_]+", fold(query)))
+    query_words = f" {folded_words} "
     ranked = []
     for skill in skills.values():
         if not skill.active or skill.front.get("disable-model-invocation"):
