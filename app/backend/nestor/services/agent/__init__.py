@@ -201,10 +201,11 @@ def _augment(m: dict, workdir=None) -> dict:
     return {"role": "user", "content": content} if content != m["content"] else {k: v for k, v in m.items() if k not in ("attachments", "_id")}
 
 
-def _prompt_message(msg: dict, workdir, can_read_results: bool) -> dict:
+def _prompt_message(msg: dict, workdir, can_read_results: bool, *, older_turn: bool = False) -> dict:
     result = _augment(msg, workdir)
-    if can_read_results and msg["role"] == "tool" and msg.get("_id") and len(result["content"]) > 8_000:
-        preview = truncate_middle(result["content"], max_chars=2_000, head_ratio=0.7)
+    threshold, preview_chars = (1_200, 480) if older_turn else (8_000, 2_000)
+    if can_read_results and msg["role"] == "tool" and msg.get("_id") and len(result["content"]) > threshold:
+        preview = truncate_middle(result["content"], max_chars=preview_chars, head_ratio=0.7, marker="\n[…]\n")
         result["content"] = (
             f"[Kết quả đầy đủ đã lưu. Dùng tool_result_read(message_id={msg['_id']}, offset=0) để đọc từng phần.]\n"
             + preview
@@ -604,8 +605,11 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
     )
     system = "\n\n".join(part for part in (system, perm_note, mention_note, system_extra, exemplars, discovery_note) if part)
     can_read_results = tools.tool_enabled(ctx, "tool_result_read")
+    window = _window(history, cfg.agent.max_history)
+    latest_turn = max((i for i, message in enumerate(window) if message["role"] == "user"), default=0)
     messages = [{"role": "system", "content": system}] \
-        + [_prompt_message(m, workdir, can_read_results) for m in _window(history, cfg.agent.max_history)] + [current]
+        + [_prompt_message(m, workdir, can_read_results, older_turn=i < latest_turn)
+           for i, m in enumerate(window)] + [current]
 
     limit = max_steps or cfg.agent.max_steps
     empty_retries = 0

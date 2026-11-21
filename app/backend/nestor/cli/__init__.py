@@ -4,7 +4,7 @@ import sys
 
 from .ui import L, err, lang, set_lang
 
-VERSION = "0.6.3"
+VERSION = "0.7.0"
 
 
 def _pre_lang(argv: list[str]) -> None:

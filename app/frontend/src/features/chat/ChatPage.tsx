@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { Activity, Copy, Download, FileCode, FileSearch, FileText, Folder, FolderTree, GitCompare, LoaderCircle, PanelLeft, Shield, Terminal, Upload } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useUiMode } from '@/lib/uiMode'
+import { SkillDraftButton } from '@/features/simple/SkillDraftButton'
 import { SimpleChatTools } from '@/features/simple/SimpleChatTools'
 import { AssistantChip, AssistantStart, useAssistant } from '@/features/simple/AssistantStart'
 import { useAssistants } from '@/lib/assistants'
@@ -415,7 +416,9 @@ export function ChatPage() {
             </Select>
             {!simple && <button type="button" onClick={() => setToolsOpen(true)} className="rounded-lg p-2 text-muted hover:bg-panel2 hover:text-fg" aria-label={t('Quyền công cụ')} title={t('Quyền công cụ')}><Shield className="size-4" /></button>}
             {simple && activeAssistant && !activeAssistant.scoped && <AssistantChip a={activeAssistant} onClear={clearAssistant} />}
-            {simple && chat.sessionId && chat.items.length > 0 && <SimpleChatTools sid={chat.sessionId} busy={chat.busy} />}
+            {chat.sessionId && chat.items.length > 0 && (simple
+              ? <SimpleChatTools key={chat.sessionId} sid={chat.sessionId} busy={chat.busy} />
+              : <SkillDraftButton key={chat.sessionId} sid={chat.sessionId} busy={chat.busy} />)}
             <div className={cn('flex items-center gap-0.5')} role="group" aria-label={t('Không gian làm việc')}>
               {PANEL_BUTTONS.filter((x) => project || x.id !== 'changes').map(({ id, label, icon: Icon }) => {
                 const on = panelOpen && tab === id

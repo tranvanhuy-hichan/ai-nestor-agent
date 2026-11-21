@@ -1,7 +1,7 @@
 import type { PlanItem } from './types'
 
 export type ChatEvent =
-  | { type: 'session'; id: string }
+  | { type: 'session'; id: string; run_id?: string }
   | { type: 'status'; text: string; tpl?: string; vars?: Record<string, string | number> }
   | { type: 'thinking'; text: string }
   | { type: 'delta'; text: string }
@@ -26,30 +26,15 @@ export async function streamChat(
   signal: AbortSignal,
 ) {
   const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal })
-  if (r.status === 401) window.dispatchEvent(new Event('auth-required'))
-  if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}`)
-  const reader = r.body.getReader()
-  const dec = new TextDecoder()
-  let buf = ''
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buf += dec.decode(value, { stream: true })
-    let i: number
-    while ((i = buf.indexOf('\n\n')) >= 0) {
-      const frame = buf.slice(0, i)
-      buf = buf.slice(i + 2)
-      if (frame.startsWith('data: ')) onEvent(JSON.parse(frame.slice(6)) as ChatEvent)
-    }
-  }
+  return readSse(r, onEvent)
 }
 
 export type FormQuestion = { question: string; options: string[]; multi?: boolean }
-export type RunState = { active: boolean; cursor: number; pending: { id: string; kind: string; detail: string }[]; questions?: { id: string; question: string; options: string[]; form?: FormQuestion[] }[] }
+export type RunState = { active: boolean; cursor: number; run_id: string | null; base_count: number; user: { text: string; attachments: string[] } | null }
 
 async function readSse(r: Response, onEvent: (e: ChatEvent) => void) {
   if (r.status === 401) window.dispatchEvent(new Event('auth-required'))
-  if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}`)
+  if (!r.ok || !r.body) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status })
   const reader = r.body.getReader()
   const dec = new TextDecoder()
   let buf = ''
@@ -61,12 +46,40 @@ async function readSse(r: Response, onEvent: (e: ChatEvent) => void) {
     while ((i = buf.indexOf('\n\n')) >= 0) {
       const frame = buf.slice(0, i)
       buf = buf.slice(i + 2)
-      if (frame.startsWith('data: ')) onEvent(JSON.parse(frame.slice(6)) as ChatEvent)
+      if (frame.startsWith('data: ')) {
+        const event = JSON.parse(frame.slice(6)) as ChatEvent
+        onEvent(event)
+        if (event.type === 'done') {
+          void reader.cancel().catch(() => {})
+          return true
+        }
+      }
     }
   }
+  return false
 }
 
 /** Noi lai luong cua luot dang chay tren server (sau khi doi trang / doi phien). */
-export async function attachChat(sid: string, start: number, onEvent: (e: ChatEvent) => void, signal: AbortSignal) {
-  await readSse(await fetch(`/api/sessions/${sid}/attach?start=${start}`, { signal }), onEvent)
+export async function attachChat(sid: string, runId: string, start: number, onEvent: (e: ChatEvent) => void, signal: AbortSignal, onReconnect: () => void) {
+  let cursor = start
+  for (let attempt = 0; attempt < 5 && !signal.aborted; attempt++) {
+    if (attempt) {
+      onReconnect()
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt))
+      if (signal.aborted) return
+    }
+    try {
+      const url = `/api/sessions/${sid}/attach?start=${cursor}&run_id=${encodeURIComponent(runId)}`
+      const complete = await readSse(await fetch(url, { signal }), (event) => {
+        cursor += 1
+        onEvent(event)
+      })
+      if (complete || signal.aborted) return
+    } catch (error) {
+      if (signal.aborted) return
+      if (error instanceof Error && 'status' in error && [401, 403, 404, 409].includes(Number(error.status))) throw error
+      if (attempt === 4) throw error
+    }
+  }
+  if (!signal.aborted) throw new Error('Chat stream disconnected')
 }

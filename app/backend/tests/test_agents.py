@@ -138,6 +138,19 @@ def test_agent_discovers_mcp_tool_and_reads_long_result_in_pages(llm, monkeypatc
     assert marker not in tools.tool_result_read(target, saved["_id"], 5_000)
 
 
+def test_old_tool_result_preview_preserves_reference_and_tail():
+    content = "start" + "x" * 2_000 + "final error"
+    message = {"role": "tool", "_id": 73, "tool_call_id": "call-1", "content": content}
+    preview = agent_mod._prompt_message(message, None, True, older_turn=True)
+    assert preview["tool_call_id"] == "call-1"
+    assert "tool_result_read(message_id=73" in preview["content"]
+    assert "start" in preview["content"] and preview["content"].endswith("final error")
+    assert len(preview["content"]) < 700
+    assert agent_mod._prompt_message(message, None, True)["content"] == content
+    assert agent_mod._prompt_message(message, None, False, older_turn=True)["content"] == content
+    assert message["content"] == content
+
+
 @pytest.mark.parametrize("steps,err", [([], "ít nhất"), (["x"] * 26, "tối đa")])
 def test_plan_validation(tmp_env, steps, err):
     sid = sessions.create("p")

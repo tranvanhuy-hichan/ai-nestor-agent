@@ -31,7 +31,10 @@ async def lifespan(_: FastAPI):
     log_capture = gateway.start_log_capture()
     db.init()
     ensure_workspace(cfgmod.load())
+    from .services.system import work_runs
+
     jobs.recover_interrupted()
+    work_runs.recover_interrupted()
     scheduler.start()
     mcp_manager.start()
     cfg = cfgmod.load()
@@ -48,7 +51,7 @@ async def lifespan(_: FastAPI):
         gateway.stop_log_capture(log_capture)
 
 
-app = FastAPI(title="Nestor Agent", version="0.4.0", lifespan=lifespan)
+app = FastAPI(title="Nestor Agent", version="0.7.0", lifespan=lifespan)
 
 
 @app.middleware("http")

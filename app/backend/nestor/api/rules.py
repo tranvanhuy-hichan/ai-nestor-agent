@@ -2,7 +2,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..services import distill, rules
 
@@ -46,3 +46,34 @@ def distill_session(sid: str, b: DistillBody):
         return distill.distill(sid, b.kind, b.name, b.provider)
     except distill.DistillError as e:
         raise HTTPException(400, str(e)) from e
+
+
+
+class SkillDraftRequest(BaseModel):
+    name: str = Field("", max_length=120)
+    provider: str | None = None
+
+
+class SkillDraftSave(BaseModel):
+    name: str = Field(max_length=80)
+    description: str = Field(max_length=500)
+    body: str = Field(max_length=100_000)
+    revision: str | None = Field(None, min_length=64, max_length=64)
+
+
+@router.post("/sessions/{sid}/skill-draft")
+def draft_skill(sid: str, body: SkillDraftRequest):
+    try:
+        return distill.draft_skill(sid, body.name, body.provider)
+    except distill.DistillError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/skills/draft/save")
+def save_skill_draft(body: SkillDraftSave):
+    try:
+        return distill.save_draft(body.name, body.description, body.body, body.revision)
+    except distill.DraftConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except distill.DistillError as exc:
+        raise HTTPException(400, str(exc)) from exc

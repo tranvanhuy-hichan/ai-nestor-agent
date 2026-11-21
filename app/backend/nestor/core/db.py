@@ -45,6 +45,14 @@ CREATE TABLE IF NOT EXISTS jobs(
   progress TEXT, result TEXT, error TEXT, cancel_requested INTEGER DEFAULT 0, notify INTEGER DEFAULT 1,
   created REAL, started REAL, finished REAL);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, created);
+CREATE TABLE IF NOT EXISTS work_runs(
+  id TEXT PRIMARY KEY, kind TEXT NOT NULL, job_id TEXT, title TEXT NOT NULL, session_id TEXT,
+  trigger TEXT NOT NULL, status TEXT NOT NULL, started REAL NOT NULL, finished REAL,
+  output TEXT NOT NULL DEFAULT '', files TEXT NOT NULL DEFAULT '[]');
+CREATE INDEX IF NOT EXISTS idx_work_runs_kind_job ON work_runs(kind, job_id, started DESC);
+CREATE INDEX IF NOT EXISTS idx_work_runs_started ON work_runs(started DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_work_runs_cron_active ON work_runs(job_id)
+  WHERE kind='cron' AND status='running';
 CREATE TABLE IF NOT EXISTS habit_requests(
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, session_id TEXT, text TEXT NOT NULL, tokens TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_habit_ts ON habit_requests(ts);

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nestor-agent"
-version = "0.6.3"
+version = "0.7.0"
 description = "Nestor Agent: personal AI agent gateway with web UI, CLI, skills, MCP and Telegram"
 license = {text = "AGPL-3.0-or-later"}
 authors = [{name = "tranvanhuy-hichan"}]

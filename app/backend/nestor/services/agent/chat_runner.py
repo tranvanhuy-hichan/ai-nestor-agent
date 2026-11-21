@@ -1,19 +1,35 @@
 """Chay mot luot chat trong thread rieng va day su kien ra queue (cho SSE). Quan ly xin phep (approval)."""
-import queue
 import re
 from contextlib import contextmanager
 import threading
 import uuid
 from collections.abc import Iterator
+from pathlib import Path
 
 import time
 
-from nestor.services import agent, sessions
+from nestor.core import config as cfgmod
+from nestor.core.db import db
+from nestor.services import agent, sessions, workfiles
+from nestor.services.system import work_runs
 
 APPROVAL_TIMEOUT = 300
 _approvals: dict[str, dict] = {}
 _questions: dict[str, dict] = {}
 QUESTION_TIMEOUT = 900
+
+
+def _output_files(sid: str, events: list[dict]) -> list[str]:
+    paths = [item["path"] for event in events if event["type"] == "turn_summary" for item in event["files"]]
+    if not paths:
+        return []
+    root = workfiles.workdir_for(cfgmod.load(), sid).resolve()
+    files = []
+    for name in paths:
+        path = (root / Path(name)).resolve()
+        if root in path.parents and path.is_file():
+            files.append(path.relative_to(root).as_posix())
+    return list(dict.fromkeys(files))
 
 
 def _auto_name_session(sid: str, user_text: str, provider: str | None) -> None:
@@ -67,8 +83,11 @@ def resolve_approval(aid: str, ok: bool) -> bool:
 class Run:
     """Mot luot chay agent song doc lap voi ket noi HTTP: su kien duoc luu lai de client doi trang roi noi lai (attach) van xem tiep duoc."""
 
-    def __init__(self, sid: str) -> None:
+    def __init__(self, sid: str, text: str, attachments: list[str], base_count: int) -> None:
+        self.id = uuid.uuid4().hex
         self.sid, self.events, self.done = sid, [], False
+        self.user = {"text": text, "attachments": attachments}
+        self.base_count = base_count
         self.cond = threading.Condition()
         self.cancel = threading.Event()
         self.finished_at = 0.0
@@ -112,9 +131,11 @@ def _gc() -> None:
 def state(sid: str) -> dict:
     """Trang thai cho client noi lai: dang chay khong, da co bao nhieu su kien (cursor), xin phep dang cho."""
     r = _runs.get(sid)
-    pending = [{"id": k, "kind": a["kind"], "detail": a["detail"]} for k, a in _approvals.items() if a.get("sid") == sid]
-    questions = [{"id": k, "question": q["question"], "options": q["options"], **({"form": q["form"]} if q.get("form") else {})} for k, q in _questions.items() if q.get("sid") == sid]
-    return {"active": bool(r and not r.done), "cursor": len(r.events) if r else 0, "pending": pending, "questions": questions}
+    pending = [{"id": k, "kind": a["kind"], "detail": a["detail"]} for k, a in _approvals.copy().items() if a.get("sid") == sid]
+    questions = [{"id": k, "question": q["question"], "options": q["options"], **({"form": q["form"]} if q.get("form") else {})} for k, q in _questions.copy().items() if q.get("sid") == sid]
+    return {"active": bool(r and not r.done), "cursor": len(r.events) if r else 0,
+            "run_id": r.id if r else None, "base_count": r.base_count if r else 0,
+            "user": r.user if r else None, "pending": pending, "questions": questions}
 
 
 def active(sid: str) -> bool:
@@ -137,24 +158,36 @@ def edit_idle_session(sid: str):
                 _session_edits.remove(sid)
 
 
-def stop(sid: str) -> bool:
+def stop(sid: str, run_id: str | None = None) -> bool:
     """Dung ro rang luot dang chay cua phien (nut Dung); dong tab/doi trang KHONG goi ham nay."""
-    r = _runs.get(sid)
+    r = lookup_run(sid, run_id)
     if not r or r.done:
         return False
     r.cancel.set()
-    for a in [*_approvals.values(), *_questions.values()]:
-        a["event"].set()
+    _wake_pending(sid)
     return True
 
 
+def _wake_pending(sid: str) -> None:
+    for pending in (_approvals.copy(), _questions.copy()):
+        for entry in pending.values():
+            if entry["sid"] == sid:
+                entry["event"].set()
+
+
+def lookup_run(sid: str, run_id: str | None = None) -> Run | None:
+    with _runs_lock:
+        _gc()
+        run = _runs.get(sid)
+        return run if run and (run_id is None or run.id == run_id) else None
+
+
 def attach(sid: str, start: int = 0) -> Iterator[dict]:
-    """Noi lai vao luot dang chay (hoac vua xong): phat lai tu su kien thu `start`. Khong co luot nao thi tra ve 'done' ngay."""
-    r = _runs.get(sid)
-    if not r:
+    run = lookup_run(sid)
+    if not run:
         yield {"type": "done"}
         return
-    yield from r.tail(start)
+    yield from run.tail(start)
 
 
 def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_override=None, source: str = "chat",
@@ -173,7 +206,13 @@ def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_ov
         elif assistant is not None and not sessions.set_assistant(sid, assistant):
             error = "Hãy bắt đầu phiên mới để đổi hồ sơ."
         else:
-            run = Run(sid)
+            track = detach and source == "chat"
+            with db() as conn:
+                count = conn.execute("SELECT COUNT(*) FROM messages WHERE session_id=?", (sid,)).fetchone()[0]
+                run = Run(sid, text, attachments or [], count)
+                if track:
+                    title = " ".join(text.split())[:100] or "Chat"
+                    work_runs.begin(conn, run.id, "chat", title, session_id=sid)
             _runs[sid] = run
     if error:
         yield {"type": "session", "id": sid}
@@ -186,7 +225,8 @@ def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_ov
         aid = uuid.uuid4().hex
         _approvals[aid] = {"event": threading.Event(), "ok": False, "sid": sid, "kind": kind, "detail": detail}
         run.push({"type": "approval", "id": aid, "kind": kind, "detail": detail})
-        _approvals[aid]["event"].wait(APPROVAL_TIMEOUT)
+        if not cancel.is_set():
+            _approvals[aid]["event"].wait(APPROVAL_TIMEOUT)
         ok = _approvals.pop(aid)["ok"] and not cancel.is_set()
         run.push({"type": "approval_done", "id": aid, "ok": ok})
         return ok
@@ -195,7 +235,8 @@ def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_ov
         qid = uuid.uuid4().hex
         _questions[qid] = {"event": threading.Event(), "answer": "", "sid": sid, "question": question, "options": options, "form": form}
         run.push({"type": "question", "id": qid, "question": question, "options": options, **({"form": form} if form else {})})
-        _questions[qid]["event"].wait(QUESTION_TIMEOUT)
+        if not cancel.is_set():
+            _questions[qid]["event"].wait(QUESTION_TIMEOUT)
         ans = _questions.pop(qid)["answer"] if not cancel.is_set() else ""
         run.push({"type": "question_done", "id": qid, "answer": ans})
         return ans
@@ -221,14 +262,32 @@ def stream_chat(sid: str | None, text: str, provider: str | None, *, approver_ov
             threading.Thread(target=_auto_name_session, args=(sid, text, provider), daemon=True).start()
         except Exception:
             pass
-        run.push({"type": "done"})
+        try:
+            if track:
+                error = next((event["message"] for event in run.events if event["type"] == "error"), "")
+                answer = next((event["content"] for event in reversed(run.events) if event["type"] == "assistant"), "")
+                try:
+                    files = _output_files(sid, run.events)
+                except (OSError, ValueError):
+                    files = []
+                status = "cancelled" if cancel.is_set() else "error" if error else "ok"
+                with db() as conn:
+                    work_runs.finish(conn, run.id, status, error or answer, files)
+        finally:
+            run.push({"type": "done"})
 
-    threading.Thread(target=worker, daemon=True).start()
-    yield {"type": "session", "id": sid}
+    try:
+        threading.Thread(target=worker, daemon=True).start()
+    except RuntimeError as exc:
+        if track:
+            with db() as conn:
+                work_runs.finish(conn, run.id, "error", str(exc))
+        run.push({"type": "error", "message": str(exc)})
+        run.push({"type": "done"})
+    yield {"type": "session", "id": sid, "run_id": run.id}
     try:
         yield from run.tail(0)
     finally:
         if not detach:
             cancel.set()  # client ngat ket noi -> dung agent, tu choi cac xin phep dang cho
-            for a in [*_approvals.values(), *_questions.values()]:
-                a["event"].set()
+            _wake_pending(sid)

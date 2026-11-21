@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { attachChat, streamChat, type ChatEvent, type RunState } from '@/lib/chatStream'
@@ -43,10 +43,16 @@ export function useChat() {
   const [filesTick, setFilesTick] = useState(0)
   const [plan, setPlan] = useState<PlanItem[]>([])
   const abort = useRef<AbortController | null>(null)
+  const runIdRef = useRef<string | null>(null)
+  const stopRequest = useRef<AbortController | null>(null)
   const openRequest = useRef(0)
   const sessionRef = useRef<string | null>(null)
   const currentProviderRef = useRef<string | null>(null)
-  sessionRef.current = sessionId
+  useEffect(() => () => {
+    openRequest.current += 1
+    abort.current?.abort()
+    abort.current = null
+  }, [])
 
   const apply = useCallback((e: ChatEvent) => {
     if (e.type === 'status') {
@@ -106,29 +112,64 @@ export function useChat() {
     })
   }, [])
 
-  const ensureSession = useCallback(async (assistant?: string) => {
+  const ensureSession = useCallback(async (assistant?: string, title?: string) => {
     if (sessionRef.current) return sessionRef.current
-    const r = await api.post<{ id: string }>('/api/sessions', { assistant })
+    const request = openRequest.current
+    const r = await api.post<{ id: string }>('/api/sessions', { assistant, title })
+    if (request !== openRequest.current) return r.id
     setSessionId(r.id)
     sessionRef.current = r.id
     void qc.invalidateQueries({ queryKey: ['sessions'] })
     return r.id
   }, [qc])
 
+  const requestStop = useCallback((sid: string, runId: string) =>
+    api.post<{ ok: boolean }>(`/api/sessions/${sid}/stop?run_id=${encodeURIComponent(runId)}`, {}), [])
+
   const send = useCallback(async (text: string, provider: string | null, attachments: string[] = [], opts: { assistant?: string; context?: string; permission?: string; effort?: string; docs?: boolean; temperature?: number; max_tokens?: number } = {}) => {
-    if (busy || !text.trim()) return
+    if (busy || abort.current || !text.trim()) return
     currentProviderRef.current = provider
     setBusy(true)
     setStatus(t('Đang gửi…'))
     setItems((p) => [...p, { key: k(), kind: 'user', text, attachments }])
     const ctl = new AbortController()
     abort.current = ctl
+    runIdRef.current = null
     try {
-      await streamChat({ text, session: sessionRef.current, provider, attachments, ...opts }, apply, ctl.signal)
+      const sid = await ensureSession(opts.assistant, text.slice(0, 60))
+      if (ctl.signal.aborted || stopRequest.current === ctl) return
+      let runId: string | undefined
+      let cursor = 0
+      let complete = false
+      try {
+        complete = await streamChat({ text, session: sid, provider, attachments, ...opts }, (event) => {
+          if (ctl.signal.aborted) return
+          if (event.type === 'session') {
+            runId = event.run_id
+            runIdRef.current = runId ?? null
+            if (runId && stopRequest.current === ctl) {
+              void requestStop(sid, runId).catch((error) => {
+                if (!ctl.signal.aborted) apply({ type: 'error', message: errMsg(error) })
+              })
+            }
+          } else cursor += 1
+          apply(event)
+        }, ctl.signal)
+      } catch (error) {
+        if (!runId || ctl.signal.aborted) throw error
+      }
+      if (!complete && !ctl.signal.aborted) {
+        if (!runId) throw new Error(t('Mất kết nối với phiên chat'))
+        setStatus(t('Đang kết nối lại…'))
+        await attachChat(sid, runId, cursor, apply, ctl.signal, () => setStatus(t('Đang kết nối lại…')))
+      }
     } catch (e) {
       if (!ctl.signal.aborted) apply({ type: 'error', message: errMsg(e) })
     } finally {
+      if (stopRequest.current === ctl) stopRequest.current = null
       if (abort.current === ctl) { // da doi sang phien khac thi khong dong vao trang thai cua phien moi
+        abort.current = null
+        runIdRef.current = null
         setItems((p) => p.map((it) => ((it.kind === 'assistant' || it.kind === 'thinking') && it.streaming ? { ...it, streaming: false } : it)))
         setBusy(false)
         setStatus(null)
@@ -137,32 +178,39 @@ export function useChat() {
       void qc.invalidateQueries({ queryKey: ['sessions'] })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
     }
-  }, [apply, busy, qc])
+  }, [apply, busy, ensureSession, qc, requestStop])
 
   const stop = useCallback(() => {
     const sid = sessionRef.current
     const ctl = abort.current
-    if (!sid) return ctl?.abort()
+    if (!ctl) return
     setStatus(t('Đang dừng…'))
-    // bao server dung that; cho no gui 'done' roi stream tu ket thuc. Neu server khong phan hoi thi moi ngat o giao dien.
-    void api.post(`/api/sessions/${sid}/stop`, {}).catch(() => ctl?.abort())
-    setTimeout(() => ctl?.abort(), 4000)
-  }, [])
+    stopRequest.current = ctl
+    const runId = runIdRef.current
+    if (sid && runId) {
+      void requestStop(sid, runId).catch((error) => {
+        if (!ctl.signal.aborted) apply({ type: 'error', message: errMsg(error) })
+      })
+    }
+  }, [apply, requestStop])
 
   /** Gan luong cua luot dang chay tren server vao giao dien (idempotent: huy luong cu truoc). */
-  const follow = useCallback(async (sid: string, st: RunState) => {
+  const follow = useCallback(async (sid: string, runId: string) => {
     abort.current?.abort()
     const ctl = new AbortController()
     abort.current = ctl
+    runIdRef.current = runId
     setBusy(true)
     setStatus(t('Đang xử lý…'))
-    setItems((p) => [...p.filter((it) => it.kind !== 'approval' && it.kind !== 'question'), ...(st.questions ?? []).map((q) => ({ key: k(), kind: 'question' as const, qid: q.id, question: q.question, options: q.options, form: q.form, answer: null })), ...st.pending.map((a) => ({ key: k(), kind: 'approval' as const, aid: a.id, approvalKind: a.kind, detail: a.detail, status: 'pending' as const }))])
     try {
-      await attachChat(sid, st.cursor, apply, ctl.signal)
+      await attachChat(sid, runId, 0, apply, ctl.signal, () => setStatus(t('Đang kết nối lại…')))
     } catch (e) {
       if (!ctl.signal.aborted) apply({ type: 'error', message: errMsg(e) })
     } finally {
+      if (stopRequest.current === ctl) stopRequest.current = null
       if (abort.current === ctl) {
+        abort.current = null
+        runIdRef.current = null
         setItems((p) => p.map((it) => ((it.kind === 'assistant' || it.kind === 'thinking') && it.streaming ? { ...it, streaming: false } : it)))
         setBusy(false)
         setStatus(null)
@@ -175,17 +223,20 @@ export function useChat() {
   const open = useCallback(async (sid: string) => {
     const request = ++openRequest.current
     abort.current?.abort() // chi ngat phia giao dien; agent tren server van chay tiep
+    abort.current = null
     setBusy(false)
     setStatus(null)
-    const [s, st] = await Promise.all([
-      api.get<{ messages: WireMessage[]; assistant?: string }>(`/api/sessions/${sid}`),
-      api.get<RunState>(`/api/sessions/${sid}/run`).catch(() => null),
-    ])
+    const st = await api.get<RunState>(`/api/sessions/${sid}/run`).catch(() => null)
+    const s = await api.get<{ messages: WireMessage[]; assistant?: string }>(`/api/sessions/${sid}`)
     if (request !== openRequest.current) return
     setSessionId(sid)
     sessionRef.current = sid
-    setItems(fromWire(s.messages))
-    if (st?.active) void follow(sid, st)
+    if (st?.active && st.run_id && st.user) {
+      setItems([...fromWire(s.messages.slice(0, st.base_count)), { key: k(), kind: 'user', ...st.user }])
+      void follow(sid, st.run_id)
+    } else {
+      setItems(fromWire(s.messages))
+    }
     api.get<{ items: PlanItem[] }>(`/api/sessions/${sid}/plan`)
       .then((p) => { if (request === openRequest.current) setPlan(p.items) })
       .catch(() => { if (request === openRequest.current) setPlan([]) })
@@ -195,6 +246,7 @@ export function useChat() {
   const reset = useCallback(() => {
     ++openRequest.current
     abort.current?.abort()
+    abort.current = null
     setBusy(false)
     setStatus(null)
     setSessionId(null)

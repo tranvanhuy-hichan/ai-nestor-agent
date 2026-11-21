@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from ..core import config as cfgmod
 from ..services import scheduler, sessions, skills as skillmod, usage
 
+from ..services.system import work_runs
+
 router = APIRouter()
 
 
@@ -67,11 +69,17 @@ def delete_job(job_id: str):
     return {"ok": True}
 
 
+@router.get("/automations/{job_id}/runs")
+def automation_runs(job_id: str, limit: int = Query(30, ge=1, le=100)):
+    return work_runs.recent(limit, job_id=job_id)
+
+
 @router.post("/automations/{job_id}/run")
 def run_job(job_id: str):
-    import threading
-    threading.Thread(target=scheduler.run_job, args=(job_id,), daemon=True).start()
-    return {"ok": True}
+    try:
+        return {"ok": True, "id": scheduler.start_job(job_id)}
+    except scheduler.ScheduleError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 class BriefBody(BaseModel):

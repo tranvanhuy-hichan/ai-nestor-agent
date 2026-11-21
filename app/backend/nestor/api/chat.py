@@ -186,18 +186,25 @@ def run_state(sid: str):
 
 
 @router.get("/sessions/{sid}/attach")
-def attach(sid: str, start: int = 0):
-    """Nối lại luồng sự kiện của lượt đang chạy, phát lại từ sự kiện thứ `start`."""
+def attach(sid: str, start: int = 0, run_id: str | None = None):
+    """Replay a particular run so a stale cursor cannot attach to its successor."""
+    run = chat_runner.lookup_run(sid, run_id)
+    if run_id and not run:
+        raise HTTPException(409, "luồng hội thoại đã kết thúc hoặc được thay thế")
+    if run and start > len(run.events):
+        raise HTTPException(409, "vị trí nối lại không hợp lệ")
+
     def gen():
-        for ev in chat_runner.attach(sid, max(0, start)):
+        events = run.tail(max(0, start)) if run else ({"type": "done"},)
+        for ev in events:
             yield _sse(ev)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)
 
 
 @router.post("/sessions/{sid}/stop")
-def stop_run(sid: str):
-    return {"ok": chat_runner.stop(sid)}
+def stop_run(sid: str, run_id: str | None = None):
+    return {"ok": chat_runner.stop(sid, run_id)}
 
 
 class Approval(BaseModel):

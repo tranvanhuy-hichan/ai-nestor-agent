@@ -1,8 +1,9 @@
 """API bang Kanban ca nhan: the 'viec can lam' + giao viec cho Nestor chay nen (tai dung jobs.py)."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from ..services import jobs, kanban
+from ..services import chat_runner, jobs, kanban
+from ..services.system import work_runs
 
 AUTO = True
 router = APIRouter()
@@ -11,6 +12,17 @@ router = APIRouter()
 @router.get("/kanban")
 def get_board():
     return kanban.board()
+
+
+@router.get("/kanban/runs")
+def get_runs(limit: int = Query(40, ge=1, le=100)):
+    runs = work_runs.recent(limit)
+    for run in runs:
+        if run["kind"] == "chat" and run["status"] == "running":
+            state = chat_runner.state(run["session_id"])
+            if state["run_id"] == run["id"] and (state["pending"] or state["questions"]):
+                run["status"] = "waiting"
+    return runs
 
 
 class NewCard(BaseModel):

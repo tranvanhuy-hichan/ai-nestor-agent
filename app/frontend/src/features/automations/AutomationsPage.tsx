@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { BarChart3, CalendarClock, FileText, GitPullRequest, Sparkles, Video, ChevronDown, Languages, Moon, Newspaper, CircleCheck, CircleX, HeartPulse, Pencil, Play, Plus, Trash2, type LucideIcon } from 'lucide-react'
+import { BarChart3, CalendarClock, FileText, GitPullRequest, Sparkles, Video, ChevronDown, Languages, Moon, Newspaper, CircleCheck, CircleX, History, HeartPulse, Pencil, Play, Plus, Trash2, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -11,6 +11,7 @@ import { ErrorNote, Loading, Page, PageHeader } from '@/components/ui/misc'
 import { Switch } from '@/components/ui/Switch'
 import { useToast } from '@/components/ui/Toast'
 import { Markdown } from '@/features/chat/Markdown'
+import { RunDetails, useRunHistory } from '@/features/tasks/RunHistory'
 import { api } from '@/lib/api'
 import { useConfig, useHeartbeat, useJobs } from '@/lib/queries'
 import type { Job } from '@/lib/types'
@@ -116,9 +117,12 @@ function JobModal({ draft, onClose }: { draft: Draft | null; onClose: () => void
 function JobCard({ j, onEdit, refresh }: { j: Job; onEdit: () => void; refresh: () => void }) {
   const toast = useToast()
   const [open, setOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const history = useRunHistory(j.id, historyOpen)
+  const qc = useQueryClient()
   const toggle = useMutation({ mutationFn: () => api.put(`/api/automations/${j.id}`, { ...j, enabled: !j.enabled }), onSuccess: refresh, onError: (e) => toast(errMsg(e), 'bad') })
   const del = useMutation({ mutationFn: () => api.del(`/api/automations/${j.id}`), onSuccess: refresh })
-  const run = useMutation({ mutationFn: () => api.post(`/api/automations/${j.id}/run`), onSuccess: () => { toast(t('Đã bắt đầu chạy, xem kết quả sau ít giây')); setTimeout(refresh, 8000) } })
+  const run = useMutation({ mutationFn: () => api.post(`/api/automations/${j.id}/run`), onSuccess: () => { setHistoryOpen(true); void qc.invalidateQueries({ queryKey: ['work-runs'] }); refresh() }, onError: (e) => toast(errMsg(e), 'bad') })
   const ok = j.last_status === 'ok'
   return (
     <Card className={cn(!j.enabled && 'opacity-70')}>
@@ -147,11 +151,17 @@ function JobCard({ j, onEdit, refresh }: { j: Job; onEdit: () => void; refresh: 
         </div>
         <Switch checked={j.enabled} onChange={() => toggle.mutate()} label={t('Bật {name}', { name: j.name })} />
       </div>
-      <div className="flex gap-1.5 border-t border-line px-4 py-2.5">
+      <div className="flex flex-wrap gap-1.5 border-t border-line px-4 py-2.5">
         <Button size="sm" onClick={() => run.mutate()} loading={run.isPending}><Play className="size-3.5" />{t('Chạy thử ngay')}</Button>
+        <Button size="sm" variant="ghost" onClick={() => setHistoryOpen(true)}><History className="size-3.5" />{t('Lịch sử chạy')}</Button>
         <Button size="sm" variant="ghost" onClick={onEdit}><Pencil className="size-3.5" />{t('Sửa')}</Button>
         <Button size="sm" variant="ghost" onClick={() => { if (confirm(t('Xóa "{name}"?', { name: j.name }))) del.mutate() }}><Trash2 className="size-3.5" />{t('Xóa')}</Button>
       </div>
+      {historyOpen && <Modal open wide onClose={() => { setHistoryOpen(false); refresh() }} title={`${t('Lịch sử chạy')} · ${j.name}`}>
+        {history.isLoading ? <Loading /> : history.error ? <ErrorNote error={history.error} /> : history.data?.length
+          ? <div className="space-y-2">{history.data.map((entry) => <RunDetails key={entry.id} run={entry} showTitle={false} />)}</div>
+          : <p className="text-sm text-muted">{t('Chưa có lượt chạy')}</p>}
+      </Modal>}
     </Card>
   )
 }

@@ -32,6 +32,7 @@ def list_all(limit: int = 200, q: str = "") -> list[dict]:
 def delete(sid: str) -> None:
     with db() as c:
         c.execute("DELETE FROM messages_fts WHERE session_id=?", (sid,)) if dbmod.fts_enabled else None
+        c.execute("DELETE FROM work_runs WHERE kind='chat' AND session_id=?", (sid,))
         c.execute("DELETE FROM sessions WHERE id=?", (sid,))
     try:
         from nestor.services import vectorstore
