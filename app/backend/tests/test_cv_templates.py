@@ -10,7 +10,7 @@ from nestor.assistant_defs.forms import form_for
 from nestor.services.tools import ToolContext, call
 from nestor.services import tools_cv
 
-RENDERER = Path(tools_cv.__file__).resolve().parents[1] / 'cv_templates' / 'render.mjs'
+RENDERER = Path(tools_cv.__file__).resolve().parents[2] / 'cv_templates' / 'render.mjs'
 
 
 def render(template, data, lang='vi'):

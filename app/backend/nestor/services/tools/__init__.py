@@ -1,0 +1,770 @@
+"""Registry tool. Ten tool (read/write/exec/web_fetch) trung voi ten ma skill ClawHub thuong goi, de skill chay duoc."""
+import fnmatch
+import html
+import ipaddress
+import json
+import os
+import platform
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import threading
+
+tools = sys.modules[__name__]
+sys.modules[f"{__name__}.tools"] = tools
+from collections.abc import Callable
+from contextvars import ContextVar
+from dataclasses import dataclass, field
+from pathlib import Path
+from urllib.parse import parse_qs, quote_plus, unquote, urlparse
+
+import httpx
+
+from nestor.core.config import ToolPolicy
+
+
+_approved_context: ContextVar[object] = ContextVar("approved_tool_context", default=None)
+
+
+@dataclass
+class ToolContext:
+    workspace: Path
+    approver: Callable[[str, str], bool] = lambda kind, detail: False
+    confirm_exec: bool = True
+    policies: dict[str, ToolPolicy] = field(default_factory=dict)
+    approvals_once: set[tuple[str, str]] = field(default_factory=set)
+    interactive_policy: bool = False
+    profile_id: str = ""
+    env: dict[str, str] = field(default_factory=dict)
+    enabled: dict[str, bool] = field(default_factory=dict)
+    skills: dict = field(default_factory=dict)  # name -> skills.Skill
+    extra: dict = field(default_factory=dict)  # name -> ToolDef (tool dong, vd. tu MCP)
+    project: Path | None = None  # du an nguoi dung da mo (che do Code): doc/ghi ben trong khong can hoi them
+    cwd: Path | None = None  # thu muc lam viec cua phien; duong dan tuong doi tinh tu day
+    session_id: str | None = None
+    depth: int = 0  # do sau cua agent con (0 = agent chinh)
+    permission: str = "default"
+    provider: str | None = None
+    emit: Callable[[dict], None] = lambda ev: None  # gui su kien ra giao dien (plan, anh...)
+    cancel: object | None = None  # threading.Event; tool chay lau nen kiem tra de dung som
+    confirm_writes: bool = False  # che do 'Hoi truoc': hoi ca khi ghi file/goi HTTP thay doi trong phien
+    full_access: bool = False  # che do 'Toan quyen': khong hoi xac nhan nao
+    asker: Callable[[str, list[str]], str] | None = None  # hoi nguoi dung mot cau (ask_user); None = khong hoi duoc (API/CLI)
+    sandbox: dict = field(default_factory=dict)  # {"mode": "none|docker", "image", "network"}
+    plan_restore: dict | None = None  # che do Ke hoach: danh sach tool bi tat de khoi phuc khi nguoi dung duyet ke hoach
+
+    @property
+    def workdir(self) -> Path:
+        return self.cwd or self.workspace
+
+    @property
+    def memory_file(self) -> Path:
+        return self.workspace / ".profiles" / self.profile_id / "MEMORY.md" if self.profile_id else self.workspace / "MEMORY.md"
+
+    def approve(self, kind: str, detail: str) -> bool:
+        return _approved_context.get() is self or self.approver(kind, detail)
+
+
+@dataclass
+class ToolDef:
+    name: str
+    description: str
+    parameters: dict
+    fn: Callable
+    risk: str  # safe | file | exec | network | mcp
+    read_only: bool = False  # tool MCP danh dau chi doc
+
+
+TOOLS: dict[str, ToolDef] = {}
+DENIED = "KHÔNG THỰC HIỆN: yêu cầu bị từ chối nên CHƯA được chạy, không có kết quả nào. Hãy báo cho người dùng biết."
+
+
+def tool(name: str, description: str, params: dict[str, tuple[str, str]], required: list[str] | None = None, risk: str = "safe"):
+    def deco(fn):
+        props = {k: ({"type": t, "description": d, "items": {"type": "string"}} if t == "array" else {"type": t, "description": d}) for k, (t, d) in params.items()}
+        TOOLS[name] = ToolDef(name, description, {"type": "object", "properties": props, "required": list(params) if required is None else required}, fn, risk)
+        return fn
+    return deco
+
+
+def schemas(ctx: ToolContext) -> list[dict]:
+    return [{"name": t.name, "description": t.description, "parameters": t.parameters} for t in [*TOOLS.values(), *ctx.extra.values()] if tool_enabled(ctx, t.name)]
+
+
+def tool_enabled(ctx: ToolContext, name: str) -> bool:
+    policy = ctx.policies.get(name)
+    return ctx.enabled.get(name, True) and (policy is None or policy.enabled)
+
+
+from nestor.services import checkpoints, hooks
+from nestor.services.agent.truncation import truncate_middle
+
+
+def call(ctx: ToolContext, name: str, args: dict) -> tuple[str, bool]:
+    t = TOOLS.get(name) or ctx.extra.get(name)
+    if not t or not tool_enabled(ctx, name):
+        return f"loi: khong co tool {name}", False
+    policy = ctx.policies.get(name)
+    mode = policy.approval if policy else "inherit"
+    approved = mode == "auto" and ctx.interactive_policy
+    if mode in ("ask", "once"):
+        detail = json.dumps(args, ensure_ascii=False, sort_keys=True)
+        key = (name, detail)
+        approved = mode == "once" and key in ctx.approvals_once
+        if not approved and not ctx.approver(name, detail):
+            return DENIED, False
+        if mode == "once":
+            ctx.approvals_once.add(key)
+        approved = True
+    token = _approved_context.set(ctx if approved else None)
+    try:
+        if blocked := hooks.run(ctx, "PreToolUse", name, args):
+            return f"KHÔNG THỰC HIỆN: hook chặn tool này: {blocked}", False
+        out = str(t.fn(ctx, **args))
+        if policy and policy.output_limit and len(out) > policy.output_limit:
+            suffix = "\n[Đã giới hạn đầu ra]"
+            out = out[:policy.output_limit - len(suffix)] + suffix
+        hooks.run(ctx, "PostToolUse", name, args, out)
+        return out, True
+    except TypeError as e:
+        return f"loi: tham so khong hop le ({e})", False
+    except Exception as e:  # tool khong duoc lam sap vong lap agent
+        return f"loi: {type(e).__name__}: {e}", False
+    finally:
+        _approved_context.reset(token)
+
+
+# ---------- helpers
+def _resolve(ctx: ToolContext, path: str, mode: str) -> Path:
+    p = Path(path).expanduser()
+    p = (p if p.is_absolute() else ctx.workdir / p).resolve()
+    ws = ctx.workspace.resolve()
+    if p.is_relative_to(ws / ".profiles"):
+        raise ValueError("Dùng công cụ bộ nhớ để truy cập ghi nhớ của hồ sơ")
+    outside = p != ws and ws not in p.parents
+    if outside and ctx.project:
+        root = ctx.project.resolve()
+        outside = p != root and root not in p.parents
+    needs_ok = outside or (mode == "write" and ctx.confirm_writes)
+    if needs_ok and not ctx.full_access and not ctx.approve(f"file_{mode}", str(p)):
+        raise PermissionError("người dùng từ chối truy cập file này")
+    return p
+
+
+def _check_url(url: str) -> None:
+    u = urlparse(url)
+    if u.scheme not in ("http", "https") or not u.hostname:
+        raise ValueError("chi ho tro URL http/https")
+    for info in socket.getaddrinfo(u.hostname, u.port or 443):
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise PermissionError(f"chan truy cap dia chi noi bo ({ip})")
+
+
+def _fetch(url: str, method: str = "GET", body: str = "", headers: dict | None = None) -> httpx.Response:
+    for _ in range(5):
+        _check_url(url)
+        r = httpx.request(method, url, content=body.encode() if body else None, headers=headers or {}, timeout=30, follow_redirects=False)
+        if r.is_redirect and r.headers.get("location"):
+            url = str(httpx.URL(url).join(r.headers["location"]))
+            method, body = "GET", ""
+            continue
+        return r
+    raise RuntimeError("qua nhieu lan chuyen huong")
+
+
+def _html_to_text(raw: str) -> str:
+    raw = re.sub(r"(?is)<(script|style|noscript)\b.*?</\1>", " ", raw)
+    raw = re.sub(r"(?s)<[^>]+>", " ", raw)
+    return re.sub(r"[ \t\r\f\v]+", " ", re.sub(r"\n\s*\n+", "\n\n", html.unescape(raw))).strip()
+
+
+# ---------- tools
+@tool("read", "Đọc nội dung một file text. Đường dẫn tương đối tính từ workspace.", {"path": ("string", "đường dẫn file")}, risk="file")
+def read_file(ctx, path):
+    content = _resolve(ctx, path, "read").read_text(errors="replace")
+    return truncate_middle(content, max_chars=24000, head_ratio=0.5)
+
+
+@tool("write", "Ghi nội dung vào file (ghi đè), tự tạo thư mục cha.", {"path": ("string", "đường dẫn file"), "content": ("string", "nội dung")}, risk="file")
+def write_file(ctx, path, content):
+    p = _resolve(ctx, path, "write")
+    checkpoints.record(ctx.session_id, p)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content)
+    return f"da ghi {len(content)} ky tu vao {p}"
+
+
+@tool("list_dir", "Liệt kê file trong thư mục.", {"path": ("string", "đường dẫn thư mục")}, risk="file")
+def list_dir(ctx, path="."):
+    d = _resolve(ctx, path, "read")
+    return "\n".join(sorted(x.name + ("/" if x.is_dir() else "") for x in d.iterdir()))[:5000] or "(rong)"
+
+
+def _shell() -> tuple[str | None, str]:
+    """(executable, tên hiển thị) của shell dùng để chạy lệnh: bash nếu có, nếu không thì shell mặc định của hệ điều hành (cmd.exe trên Windows)."""
+    if sys.platform != "win32" and Path("/bin/bash").exists():
+        return "/bin/bash", "bash"
+    found = shutil.which("bash")
+    if found:
+        return found, "bash"
+    return None, "cmd.exe" if sys.platform == "win32" else "sh"
+
+
+def shell_note() -> str:
+    """Câu báo cho model biết lệnh shell chạy bằng gì (chỉ khi không phải bash)."""
+    name = _shell()[1]
+    return "" if name == "bash" else f"Lệnh exec chạy bằng {name} trên {platform.system()}: viết lệnh đúng cú pháp của shell này, không dùng cú pháp bash."
+
+
+def _docker_cmd(ctx: ToolContext, command: str, container: str = "") -> list[str]:
+    sb = ctx.sandbox
+    cmd = ["docker", "run", "--rm", "--network", "bridge" if sb.get("network") else "none", "--memory", "1g", "--cpus", "2", "--pids-limit", "256",
+           *(["--user", f"{os.getuid()}:{os.getgid()}"] if hasattr(os, "getuid") else []), "-e", "HOME=/tmp", "-v", f"{ctx.workdir.resolve()}:/work", "-w", "/work"]
+    if container:
+        cmd += ["--name", container]
+    for k, v in ctx.env.items():
+        cmd += ["-e", f"{k}={v}"]
+    return cmd + [sb.get("image") or "python:3.12-slim", "bash", "-c", command]
+
+
+class _Cancelled(Exception):
+    pass
+
+
+def _run_cancellable(ctx, cmd, timeout, **kw):
+    """Nhu subprocess.run nhung dung ngay (kill ca nhom tien trinh) khi nguoi dung bam Dung."""
+    import time
+    posix = os.name == "posix"
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace",
+                            start_new_session=posix, **kw)
+    end = time.time() + timeout
+    chunks: list[str] = []
+    t = threading.Thread(target=lambda: chunks.append(proc.stdout.read()), daemon=True)
+    t.start()
+
+    def kill():
+        try:
+            if posix:
+                import signal
+                os.killpg(proc.pid, signal.SIGKILL)
+            else:
+                proc.kill()
+        except OSError:
+            pass
+
+    while proc.poll() is None:
+        if ctx.cancel is not None and ctx.cancel.is_set():
+            kill()
+            raise _Cancelled()
+        if time.time() > end:
+            kill()
+            raise subprocess.TimeoutExpired(cmd, timeout)
+        time.sleep(0.1)
+    t.join(2)
+    return subprocess.CompletedProcess(cmd, proc.returncode, "".join(chunks), "")
+
+
+@tool("exec", "Chạy lệnh shell (bash) trong thư mục làm việc của phiên. Người dùng có thể phải xác nhận.",
+      {"command": ("string", "lệnh cần chạy"), "timeout": ("integer", "số giây tối đa (mặc định 60)")}, required=["command"], risk="exec")
+def exec_tool(ctx, command, timeout=60):
+    if ctx.confirm_exec and not ctx.approve("exec", command):
+        return DENIED
+    ctx.workdir.mkdir(parents=True, exist_ok=True)
+    policy = ctx.policies.get("exec")
+    limit = min(int(timeout), 300)
+    if policy and policy.timeout:
+        limit = min(limit, policy.timeout)
+    sandboxed = ctx.sandbox.get("mode") == "docker"
+    if sandboxed and not shutil.which("docker"):
+        return "loi: da bat sandbox Docker nhung may khong co lenh docker"
+    container = f"nestor-{uuid_hex()}" if sandboxed else ""
+    try:
+        if sandboxed:
+            r = _run_cancellable(ctx, _docker_cmd(ctx, command, container), limit if policy and policy.timeout else limit + 30)
+        else:
+            r = _run_cancellable(ctx, command, limit, shell=True, executable=_shell()[0], cwd=ctx.workdir, env={**os.environ, **ctx.env})
+    except (subprocess.TimeoutExpired, _Cancelled) as exc:
+        if container:
+            try:
+                subprocess.run(["docker", "rm", "-f", container], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        if isinstance(exc, _Cancelled):
+            return "loi: da dung lenh theo yeu cau cua nguoi dung"
+        return f"loi: lenh chay qua {limit}s va bi dung"
+    raw = r.stdout + r.stderr
+    out = truncate_middle(raw, max_chars=16000, head_ratio=0.35) or "(khong co output)"
+    out = out if r.returncode == 0 else f"{out}\n[exit code {r.returncode}]"
+    return f"[sandbox docker]\n{out}" if sandboxed else out
+
+
+@tool("web_fetch", "Tải một trang web và trả về nội dung dạng text.", {"url": ("string", "URL http/https")}, risk="network")
+def web_fetch(ctx, url):
+    from nestor.services import security
+    safe, reason = security.is_safe_url(url, allow_private=ctx.full_access)
+    if not safe:
+        return f"Lỗi bảo mật: {reason}"
+    r = _fetch(url, headers={"User-Agent": "nestor-agent/0.3"})
+    text = _html_to_text(r.text) if "html" in r.headers.get("content-type", "") else r.text
+    return f"HTTP {r.status_code}\n{text[:8000]}"
+
+
+@tool("http_request", "Gọi một HTTP API (GET/POST/PUT/DELETE) và trả về phản hồi.",
+      {"url": ("string", "URL đầy đủ"), "method": ("string", "GET, POST, PUT hoặc DELETE (mặc định GET)"),
+       "body": ("string", "nội dung body (JSON) nếu có"), "headers": ("string", "JSON object các header nếu có")},
+      required=["url"], risk="network")
+def http_request(ctx, url, method="GET", body="", headers=""):
+    from nestor.services import security
+    safe, reason = security.is_safe_url(url, allow_private=ctx.full_access)
+    if not safe:
+        return f"Lỗi bảo mật: {reason}"
+    if ctx.confirm_writes and not ctx.full_access and method.upper() != "GET" and not ctx.approve("http_request", f"{method.upper()} {url}"):
+        return DENIED
+    h = {"Content-Type": "application/json", "User-Agent": "nestor-agent/0.3", **(json.loads(headers) if headers else {})}
+    r = _fetch(url, method.upper(), body, h)
+    return f"HTTP {r.status_code}\n{r.text[:8000]}"
+
+
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build", ".next", ".mypy_cache", ".pytest_cache", "target"}
+
+
+def _walk(root: Path):
+    for dp, dns, fns in os.walk(root):
+        dns[:] = [d for d in dns if d not in SKIP_DIRS]
+        for fn in fns:
+            yield Path(dp) / fn
+
+
+@tool("glob", "Tìm file theo mẫu tên (vd. **/*.py, src/**/*.tsx) trong thư mục, bỏ qua .git/node_modules.",
+      {"pattern": ("string", "mẫu glob"), "path": ("string", "thư mục gốc (mặc định thư mục làm việc)")}, required=["pattern"], risk="file")
+def glob_tool(ctx, pattern, path="."):
+    root = _resolve(ctx, path, "read")
+    out = []
+    for p in _walk(root):
+        rel = p.relative_to(root).as_posix()
+        if fnmatch.fnmatch(rel, pattern) or fnmatch.fnmatch(rel, pattern.replace("**/", "")) or fnmatch.fnmatch(p.name, pattern):
+            out.append(rel)
+            if len(out) >= 300:
+                break
+    return "\n".join(sorted(out)) or "(không có file nào khớp)"
+
+
+@tool("grep", "Tìm văn bản/regex trong nội dung các file (như ripgrep). Trả về file:dòng: nội dung.",
+      {"pattern": ("string", "regex hoặc chuỗi cần tìm"), "path": ("string", "thư mục hoặc file (mặc định thư mục làm việc)"),
+       "include": ("string", "chỉ tìm trong file khớp mẫu này, vd. *.py"), "ignore_case": ("boolean", "không phân biệt hoa thường")},
+      required=["pattern"], risk="file")
+def grep_tool(ctx, pattern, path=".", include="", ignore_case=False):
+    root = _resolve(ctx, path, "read")
+    rx = re.compile(pattern, re.I if ignore_case else 0)
+    files = [root] if root.is_file() else _walk(root)
+    out = []
+    for p in files:
+        if include and not fnmatch.fnmatch(p.name, include):
+            continue
+        try:
+            if p.stat().st_size > 1_000_000:
+                continue
+            lines = p.read_text(errors="strict").splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for n, ln in enumerate(lines, 1):
+            if rx.search(ln):
+                out.append(f"{p.relative_to(root) if root.is_dir() else p.name}:{n}: {ln.strip()[:200]}")
+                if len(out) >= 200:
+                    return "\n".join(out) + "\n[đã cắt ở 200 kết quả, hãy thu hẹp mẫu tìm]"
+    return "\n".join(out) or "(không có kết quả)"
+
+
+@tool("ask_user", "Hỏi người dùng khi thiếu thông tin cá nhân hoặc yêu cầu kinh doanh mà bạn hoàn toàn không thể tự kiểm tra được. TUYỆT ĐỐI KHÔNG dùng tool này để bảo người dùng tự chạy lệnh terminal, mở htop/top hay kiểm tra file/tiến trình hộ bạn (hãy tự dùng `exec`, `read`, `ps`...). Một câu: dùng question (+ options 2-4 lựa chọn để bấm nhanh). Nhiều câu cần hỏi cùng lúc: dùng questions (JSON mảng [{\"question\":\"...\",\"options\":[\"...\"],\"multi\":false}]) để người dùng trả lời một lần trên các tab, KHÔNG gọi ask_user nhiều lần liên tiếp. Không dùng cho việc bạn tự quyết được.",
+      {"question": ("string", "câu hỏi ngắn gọn (khi chỉ hỏi một câu)"), "options": ("array", "các lựa chọn gợi ý (tùy chọn)"),
+       "questions": ("string", "JSON mảng nhiều câu hỏi, mỗi câu {question, options?, multi?}; tối đa 8 câu")}, required=[])
+def ask_user(ctx, question="", options=None, questions=None):
+    if not ctx.asker:
+        return "Không hỏi được người dùng ở chế độ này: hãy tự chọn phương án hợp lý nhất, nêu rõ giả định rồi làm tiếp."
+    form = None
+    if questions:
+        try:
+            raw = json.loads(questions) if isinstance(questions, str) else questions
+            form = [{"question": str(q.get("question", "")).strip()[:300], "options": [str(o)[:80] for o in (q.get("options") or [])][:8], "multi": bool(q.get("multi"))}
+                    for q in raw if isinstance(q, dict) and str(q.get("question", "")).strip()][:8]
+        except (ValueError, TypeError, AttributeError):
+            form = None
+        if not form:
+            raise ValueError("questions phải là JSON mảng các object {question, options?, multi?}.")
+    if form and len(form) > 1:
+        raw_ans = ctx.asker("Cần thêm vài thông tin", [], form).strip()
+        try:
+            vals = json.loads(raw_ans)
+            lines = [f"- {q['question']}: {(vals[i] if i < len(vals) and vals[i] else '(chưa trả lời)')}" for i, q in enumerate(form)]
+            return "Người dùng trả lời:\n" + "\n".join(lines)
+        except (ValueError, TypeError, IndexError):
+            return f"Người dùng trả lời: {raw_ans}" if raw_ans else "Người dùng chưa trả lời: hãy tự chọn phương án hợp lý nhất, nêu rõ giả định rồi làm tiếp."
+    if form:
+        question, options = form[0]["question"], form[0]["options"]
+    if not (question or "").strip():
+        raise ValueError("Thiếu câu hỏi.")
+    ans = ctx.asker(question, [str(o) for o in (options or [])][:4]).strip()
+    return f"Người dùng trả lời: {ans}" if ans else "Người dùng chưa trả lời: hãy tự chọn phương án hợp lý nhất, nêu rõ giả định rồi làm tiếp."
+
+
+@tool("plan_submit", "CHẾ ĐỘ KẾ HOẠCH: sau khi khảo sát xong, trình kế hoạch chi tiết (markdown) cho người dùng duyệt. Chỉ khi được duyệt các tool ghi/chạy lệnh mới được mở.",
+      {"plan": ("string", "kế hoạch chi tiết: mục tiêu, file sẽ sửa, các bước, cách kiểm chứng")})
+def plan_submit(ctx, plan):
+    if ctx.permission != "plan":
+        return "Không ở chế độ kế hoạch: cứ làm việc bình thường."
+    if not ctx.asker:
+        return "Không hỏi được người dùng ở chế độ này nên chưa thể duyệt kế hoạch."
+    ans = ctx.asker("Duyệt kế hoạch này?\n\n" + plan[:6000], ["Duyệt, bắt đầu làm", "Sửa lại kế hoạch"]).strip()
+    if ans.lower().startswith(("duyệt", "duyet", "ok", "yes", "có", "co")):
+        if ctx.plan_restore is not None:
+            ctx.enabled, ctx.plan_restore = ctx.plan_restore, None
+        ctx.permission = "default"
+        return "Người dùng ĐÃ DUYỆT kế hoạch. Các tool ghi file và chạy lệnh đã được mở: hãy thực hiện kế hoạch."
+    return f"Người dùng chưa duyệt: {ans or '(không trả lời)'}. Hãy chỉnh kế hoạch theo góp ý rồi trình lại bằng plan_submit."
+
+
+# ---- lenh chay nen (dev server, test watch...): khong chan luot cua agent
+_BG: dict[str, dict] = {}
+MAX_BG = 5
+
+
+def _bg_kill(job: dict, *, force: bool = False) -> None:
+    if timer := job.get("timer"):
+        timer.cancel()
+    proc = job["proc"]
+    if proc.poll() is None:
+        try:
+            if os.name == "posix":
+                import signal
+                os.killpg(proc.pid, signal.SIGKILL if force else signal.SIGTERM)
+            else:
+                proc.kill() if force else proc.terminate()
+        except ProcessLookupError:
+            pass
+
+
+def _bg_cleanup() -> None:
+    for j in _BG.values():
+        _bg_kill(j)
+
+
+import atexit  # noqa: E402
+
+atexit.register(_bg_cleanup)
+
+
+@tool("exec_bg", "Chạy một lệnh shell NỀN (dev server, watcher, tiến trình dài) và trả về mã job ngay. Dùng exec_read xem output, exec_stop để dừng. Không dùng cho lệnh ngắn (dùng exec).",
+      {"command": ("string", "lệnh cần chạy nền")}, risk="exec")
+def exec_bg(ctx, command):
+    if ctx.confirm_exec and not ctx.approve("exec", command):
+        return DENIED
+    if ctx.sandbox.get("mode") == "docker":
+        return "loi: lenh nen chua ho tro khi bat sandbox Docker"
+    if sum(1 for j in _BG.values() if j["proc"].poll() is None) >= MAX_BG:
+        return f"loi: da co {MAX_BG} lenh nen dang chay, hay exec_stop bot"
+    from nestor.core import db as dbmod
+    ctx.workdir.mkdir(parents=True, exist_ok=True)
+    jid = uuid_hex()
+    log = Path(dbmod.DATA) / "bg" / f"{jid}.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("wb") as f:
+        proc = subprocess.Popen(command, shell=True, executable=_shell()[0], stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=ctx.workdir,
+                                env={**os.environ, **ctx.env}, start_new_session=(os.name == "posix"))
+    job = {"proc": proc, "log": log, "cmd": command, "scope": ctx.profile_id}
+    _BG[jid] = job
+    policy = ctx.policies.get("exec_bg")
+    if policy and policy.timeout:
+        timer = threading.Timer(policy.timeout, _bg_kill, args=(job,), kwargs={"force": True})
+        timer.daemon = True
+        job["timer"] = timer
+        timer.start()
+    return f"đã chạy nền job {jid} (pid {proc.pid}). Dùng exec_read job={jid} để xem output."
+
+
+def _bg_job(ctx: ToolContext, job: str) -> dict:
+    j = _BG.get(job)
+    if not j or j["scope"] != ctx.profile_id:
+        raise ValueError(f"không có job '{job}'")
+    return j
+
+
+@tool("exec_read", "Xem output mới nhất của một lệnh nền và trạng thái (đang chạy / đã thoát). Có thể chờ vài giây để output kịp xuất hiện.",
+      {"job": ("string", "mã job từ exec_bg"), "wait": ("integer", "chờ tối đa bấy nhiêu giây trước khi đọc (mặc định 0, tối đa 30)")}, required=["job"], risk="exec")
+def exec_read(ctx, job, wait=0):
+    import time
+    j = _bg_job(ctx, job)
+    time.sleep(max(0, min(int(wait or 0), 30)))
+    raw = j["log"].read_bytes().decode("utf-8", "replace")
+    out = truncate_middle(raw, max_chars=16000, head_ratio=0.35) or "(chưa có output)"
+    rc = j["proc"].poll()
+    return f"[{'đang chạy' if rc is None else f'đã thoát, mã {rc}'}] {j['cmd']}\n{out}"
+
+
+@tool("exec_stop", "Dừng một lệnh nền.", {"job": ("string", "mã job từ exec_bg")}, risk="exec")
+def exec_stop(ctx, job):
+    j = _bg_job(ctx, job)
+    _bg_kill(j)
+    return f"đã dừng job {job}"
+
+
+def uuid_hex() -> str:
+    import uuid
+    return uuid.uuid4().hex[:6]
+
+
+def project_notes_path(workspace: Path, project) -> Path:
+    import hashlib
+    return workspace / "project-notes" / f"{hashlib.sha1(str(project).encode()).hexdigest()[:10]}.md"
+
+
+@tool("project_note", "Ghi nhớ một điều học được về DỰ ÁN đang mở (cách chạy test, quy ước code, cấu trúc, lỗi hay gặp) để lần sau nhớ lại. Chỉ dùng trong chế độ lập trình.",
+      {"note": ("string", "một ý ngắn gọn, hữu ích về dự án")})
+def project_note(ctx, note):
+    if not ctx.project:
+        return "loi: chi dung trong che do lap trinh"
+    p = project_notes_path(ctx.workspace, ctx.project)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("a", encoding="utf-8") as f:
+        f.write(f"- {note.strip()}\n")
+    return "đã ghi nhớ về dự án"
+
+
+@tool("remember", "Lưu một điều quan trọng vào bộ nhớ dài hạn (MEMORY.md).", {"note": ("string", "nội dung cần nhớ")})
+def remember(ctx, note):
+    path = ctx.memory_file
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(f"- {note}\n")
+    return "da nho"
+
+
+@tool("skills_read", "Nạp hướng dẫn đầy đủ của một skill (theo tên trong danh sách available_skills).", {"name": ("string", "tên skill")})
+def skills_read(ctx, name):
+    s = ctx.skills.get(name)
+    if not s:
+        import difflib
+        matches = difflib.get_close_matches(name, list(ctx.skills.keys()), n=4, cutoff=0.35)
+        hint = f" Gợi ý skill tương tự: {', '.join(matches)}" if matches else ""
+        return f"Không tìm thấy skill '{name}'.{hint} Hãy kiểm tra lại danh sách available_skills để chọn đúng tên."
+    from nestor.services import skill_curator
+    ws = getattr(ctx, "workspace", None)
+    usage_info = skill_curator.record_usage(name, action="read", base_dir=ws)
+    files = sorted(str(p.relative_to(s.path)) for p in s.path.rglob("*") if p.is_file() and ".clawhub" not in p.parts)[:40]
+    scripts = [str(p.relative_to(s.path)) for p in (s.path / "scripts").glob("*") if p.is_file()] if (s.path / "scripts").is_dir() else []
+    templates = [str(p.relative_to(s.path)) for p in (s.path / "templates").glob("*") if p.is_file()] if (s.path / "templates").is_dir() else []
+    extra_notes = []
+    if scripts:
+        extra_notes.append(f"[Scripts sẵn có để chạy bằng exec: {', '.join(scripts)}]")
+    if templates:
+        extra_notes.append(f"[Templates mẫu: {', '.join(templates)}]")
+    extra_notes.append(f"[Lượt dùng: {usage_info.get('use_count', 1)} | Trạng thái: {usage_info.get('state', 'active')}]")
+    extra_str = "\n".join(extra_notes)
+    return f"{s.instructions()}\n\n[Thư mục skill: {s.path}]\n[File đi kèm: {', '.join(files)}]\n{extra_str}"
+
+
+@tool("skill_curate", "Quản lý vòng đời kỹ năng (Curator theo chuẩn Hermes): xem thống kê sử dụng, ghim (pin), lưu trữ skill cũ (archive) hoặc khôi phục (restore).",
+      {"action": ("string", "hành động: 'status' (xem lượt dùng), 'pin' (ghim), 'unpin' (bỏ ghim), 'archive' (lưu trữ skill cũ không dùng), 'restore' (khôi phục skill đã lưu trữ)"),
+       "name": ("string", "tên skill (khi dùng pin/unpin/restore)")}, required=["action"])
+def skill_curate(ctx, action="status", name=""):
+    from nestor.services import skill_curator
+    ws = getattr(ctx, "workspace", None)
+    skills_dir = ws / "skills" if ws else None
+    if action == "status":
+        stats = skill_curator.get_usage(name or None, base_dir=ws)
+        return json.dumps(stats, ensure_ascii=False, indent=2) if stats else "(chưa có dữ liệu sử dụng)"
+    if action in ("pin", "unpin"):
+        if not name:
+            return "Lỗi: Cần cung cấp tên skill để ghim hoặc bỏ ghim."
+        skill_curator.pin_skill(name, pinned=(action == "pin"), base_dir=ws)
+        return f"Đã {'ghim' if action == 'pin' else 'bỏ ghim'} skill '{name}' thành công."
+    if action == "archive":
+        if not skills_dir:
+            return "Lỗi: Không tìm thấy thư mục skills trong workspace."
+        archived = skill_curator.archive_stale_skills(skills_dir, stale_days=30, base_dir=ws)
+        return f"Đã lưu trữ {len(archived)} skill cũ không hoạt động: {', '.join(archived)}" if archived else "Không có skill cũ nào cần lưu trữ."
+    if action == "restore":
+        if not skills_dir or not name:
+            return "Lỗi: Cần tên skill để khôi phục."
+        ok = skill_curator.restore_archived(skills_dir, name, base_dir=ws)
+        return f"Đã khôi phục skill '{name}'." if ok else f"Không tìm thấy skill '{name}' trong .archive/."
+    return f"Hành động '{action}' không hợp lệ. Chọn: status, pin, unpin, archive, restore."
+
+
+@tool("skill_patch", "Sửa một đoạn trong file SKILL.md của một kỹ năng bằng cách thay đoạn cũ bằng đoạn mới (chuẩn Hermes Agent).",
+      {"name": ("string", "tên skill"), "old": ("string", "đoạn văn bản cũ cần sửa"), "new": ("string", "đoạn văn bản mới thay thế")}, risk="file")
+def skill_patch(ctx, name, old, new):
+    from nestor.services import skills as skillmod
+    from nestor.core import config as cfgmod
+    cfg = cfgmod.load()
+    try:
+        s = skillmod.patch(cfg, name, old, new)
+        ctx.skills[name] = s
+        return f"Đã cập nhật SKILL.md của '{name}' thành công."
+    except Exception as e:
+        return f"Lỗi sửa skill: {e}"
+
+
+_TODO_ICONS = {"completed": "[x]", "in_progress": "[>]", "pending": "[ ]", "cancelled": "[~]"}
+
+@tool("todo_list", "Quản lý danh sách việc cần làm (Todo list theo chuẩn Hermes Agent). Đọc hoặc cập nhật tiến độ các bước.",
+      {"todos": ("string", "Danh sách JSON các mục todo: [{\"id\": \"1\", \"content\": \"...\", \"status\": \"pending|in_progress|completed|cancelled\", \"parent\": \"optional_id\"}]. Bỏ trống nếu chỉ muốn xem danh sách hiện tại."),
+       "merge": ("boolean", "True để chỉ cập nhật các mục có ID trùng (không ghi đè toàn bộ danh sách). Mặc định False.")})
+def todo_list(ctx, todos="", merge=False):
+    import json
+    from nestor.core.db import db
+    key = f"todos:{ctx.session_id}"
+    if not todos or not str(todos).strip():
+        with db() as c:
+            r = c.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+        items = json.loads(r["value"]) if r and r["value"] else []
+        if not items:
+            return "Danh sách việc cần làm hiện đang trống. Hãy lập kế hoạch bằng cách gửi danh sách todos."
+        out = []
+        for it in items:
+            icon = _TODO_ICONS.get(it.get("status"), "[ ]")
+            pfx = "  " if it.get("parent") else ""
+            out.append(f"{pfx}{icon} #{it.get('id')}: {it.get('content')} ({it.get('status')})")
+        return "\n".join(out)
+
+    try:
+        new_items = json.loads(todos) if isinstance(todos, str) else todos
+        if not isinstance(new_items, list):
+            return "Lỗi: todos phải là một danh sách JSON các object."
+    except Exception as e:
+        return f"Lỗi cú pháp JSON của todos: {e}"
+
+    with db() as c:
+        r = c.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+    current = json.loads(r["value"]) if r and r["value"] else []
+
+    if merge:
+        curr_map = {str(it.get("id")): it for it in current}
+        for item in new_items:
+            iid = str(item.get("id"))
+            if iid in curr_map:
+                curr_map[iid].update(item)
+            else:
+                curr_map[iid] = item
+        final_list = list(curr_map.values())
+    else:
+        final_list = new_items
+
+    with db() as c:
+        c.execute("INSERT OR REPLACE INTO kv(key, value) VALUES(?, ?)", (key, json.dumps(final_list, ensure_ascii=False)))
+
+    out = []
+    for it in final_list:
+        icon = _TODO_ICONS.get(it.get("status"), "[ ]")
+        pfx = "  " if it.get("parent") else ""
+        out.append(f"{pfx}{icon} #{it.get('id')}: {it.get('content')} ({it.get('status')})")
+    return "Đã cập nhật danh sách việc cần làm:\n" + "\n".join(out)
+
+
+@tool("edit", "Sửa file bằng cách thay đúng một đoạn văn bản bằng đoạn khác. Báo lỗi nếu đoạn cũ không có hoặc xuất hiện nhiều lần.",
+      {"path": ("string", "đường dẫn file"), "old": ("string", "đoạn văn bản cũ, phải khớp chính xác"), "new": ("string", "đoạn văn bản mới")}, risk="file")
+def edit_file(ctx, path, old, new):
+    p = _resolve(ctx, path, "write")
+    checkpoints.record(ctx.session_id, p)
+    text = p.read_text()
+    n = text.count(old)
+    if n != 1:
+        raise ValueError(f"đoạn cũ xuất hiện {n} lần (cần đúng 1 lần), hãy cung cấp đoạn dài hơn để duy nhất")
+    p.write_text(text.replace(old, new))
+    return f"đã sửa {p}"
+
+
+@tool("web_search", "Tìm kiếm trên web (DuckDuckGo), trả về tiêu đề, link và mô tả ngắn.",
+      {"query": ("string", "từ khóa tìm kiếm"), "limit": ("integer", "số kết quả tối đa (mặc định 5)")}, required=["query"], risk="network")
+def web_search(ctx, query, limit=5):
+    r = _fetch("https://html.duckduckgo.com/html/", "POST", "q=" + quote_plus(query),
+               {"Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) nestor-agent/0.3"})
+    if r.status_code != 200:
+        raise RuntimeError(f"DuckDuckGo trả về HTTP {r.status_code}")
+    out = []
+    for block in re.split(r'(?=<div class="[^"]*\bresult\b[^"]*")', r.text):
+        link = re.search(r'(?s)<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>', block)
+        if not link or "result--ad" in block[:200] or "duckduckgo.com/y.js" in link.group(1):
+            continue  # bo quang cao
+        snip = re.search(r'(?s)class="result__snippet"[^>]*>(.*?)</a>', block)
+        href = html.unescape(link.group(1))
+        target = parse_qs(urlparse(href).query).get("uddg")
+        out.append(f"{len(out) + 1}. {_html_to_text(link.group(2))}\n   {unquote(target[0]) if target else href}\n   {_html_to_text(snip.group(1)) if snip else ''}")
+        if len(out) >= min(int(limit), 10):
+            break
+    if not out:
+        raise RuntimeError("không có kết quả (DuckDuckGo có thể đang chặn truy vấn tự động)")
+    return "\n".join(out)
+
+
+@tool("memory_search", "Tìm lại thông tin trong các cuộc hội thoại cũ và bộ nhớ dài hạn (MEMORY.md).",
+      {"query": ("string", "từ khóa cần tìm"), "limit": ("integer", "số kết quả tối đa (mặc định 6)")}, required=["query"])
+def memory_search(ctx, query, limit=6):
+    from nestor.services import sessions  # tranh import vong
+    hits = sessions.search(query, min(int(limit), 15), scope=ctx.profile_id)
+    mem = ctx.memory_file
+    from nestor.core.text import fold
+    terms = fold(query).split()
+    notes = [ln for ln in (mem.read_text().splitlines() if mem.exists() else []) if any(t in fold(ln) for t in terms)]
+    out = [f"[ghi nhớ] {ln}" for ln in notes[:6]] + [f"[phiên {h['session_id']} · {h['title']}] ({h['role']}) {h['snip']}" for h in hits]
+    return "\n".join(out) or "không tìm thấy gì liên quan"
+
+
+@tool("read_document", "Đọc nội dung file tài liệu: PDF, Excel (xlsx), Word (docx), PowerPoint (pptx), CSV hoặc text. Tài liệu dài được đọc từng phần bằng offset.",
+      {"path": ("string", "đường dẫn file"), "offset": ("integer", "vị trí ký tự bắt đầu đọc (mặc định 0); dùng giá trị 'offset=' ở cuối kết quả để đọc tiếp")})
+def read_document(ctx, path, offset=0):
+    p = _resolve(ctx, path, "read")
+    ext = p.suffix.lower()
+    if ext == ".pdf":
+        from pypdf import PdfReader
+        r = PdfReader(str(p))
+        text = "\n\n".join(f"--- trang {i + 1} ---\n{pg.extract_text() or ''}" for i, pg in enumerate(r.pages[:300]))
+    elif ext in (".xlsx", ".xlsm"):
+        from openpyxl import load_workbook
+        wb = load_workbook(p, read_only=True, data_only=True)
+        out = []
+        for ws in wb.worksheets[:6]:
+            out.append(f"--- sheet {ws.title} ---")
+            out += ["\t".join("" if c is None else str(c) for c in row) for row in ws.iter_rows(max_row=500, values_only=True)]
+        text = "\n".join(out)
+    elif ext == ".docx":
+        import zipfile
+        with zipfile.ZipFile(p) as z:
+            xml = z.read("word/document.xml").decode("utf8", "replace")
+        text = _html_to_text(re.sub(r"</w:p>", "\n", xml))
+    elif ext == ".pptx":
+        from nestor.services.knowledge import _read_pptx
+        text = "\n\n".join(f"--- {loc} ---\n{body}" for loc, body in _read_pptx(p)[0])
+    else:
+        text = p.read_text(errors="replace")
+    start, size = max(0, int(offset or 0)), 30000
+    chunk = text[start:start + size]
+    if start + size < len(text):
+        chunk += f"\n\n[da doc ky tu {start}-{start + size} tren tong {len(text)}; goi lai read_document voi offset={start + size} de doc tiep]"
+    return chunk or "(khong co noi dung)"
+
+
+@tool("notify", "Gửi thông báo cho người dùng (hiện trong hộp thư của giao diện và gửi qua Telegram nếu đã kết nối). Dùng khi có điều đáng báo.",
+      {"title": ("string", "tiêu đề ngắn"), "message": ("string", "nội dung thông báo")})
+def notify(ctx, title, message):
+    from nestor.services import notifications
+    notifications.add(title, message, source="agent")
+    return "đã gửi thông báo"
+
+
+# ---- cac module tool bo sung tu dang ky khi import (ke hoach, agent con, trinh duyet, bo nho, anh, may tinh).
+# Module chua ton tai thi bo qua; loi ben trong module (thieu thu vien...) duoc ghi lai de `nestor doctor` bao.
+import importlib  # noqa: E402
+
+OPTIONAL_MODULES = ("tools_plan", "tools_agents", "tools_browser", "tools_memory", "tools_kb", "tools_media", "tools_computer", "tools_office", "tools_cv", "tools_reconcile", "tools_quality", "tools_docs", "tools_pages")
+LOAD_ERRORS: dict[str, str] = {}
+for _m in OPTIONAL_MODULES:
+    try:
+        importlib.import_module(f"{__package__}.{_m}")
+    except ModuleNotFoundError as _e:
+        if _e.name != f"{__package__}.{_m}":
+            LOAD_ERRORS[_m] = str(_e)
+    except Exception as _e:  # noqa: BLE001 - mot module loi khong duoc lam sap ca he thong tool
+        LOAD_ERRORS[_m] = f"{type(_e).__name__}: {_e}"
