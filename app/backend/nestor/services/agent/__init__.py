@@ -17,6 +17,8 @@ from nestor.services import assistants, audit, checkpoints, commands, compaction
 from .loop_guard import LoopGuard
 from nestor.services.providers import ProviderError, make_provider
 from .truncation import truncate_middle
+from .exemplars import get_dynamic_exemplars
+from .verification import is_mutating_tool, verify_turn_outputs
 
 PROMPT_FILES = ("SOUL.md", "USER.md", "RULES.md", "MEMORY.md")  # RULES.md: quy tac nguoi dung "dung ket" tu hoi thoai (api/rules)
 RETRIES = 4  # tong so lan thu cho loi tam thoi (429/503/timeout)
@@ -57,6 +59,11 @@ AUTONOMY = ("Cách làm việc: hãy tự quyết và làm cho xong, đừng d�
             "Gặp lỗi thì tự đọc lỗi, sửa và thử lại vài lần trước khi báo cáo. Gọi nhiều tool độc lập trong cùng một lượt khi có thể. "
             "Trước khi báo xong, TỰ KIỂM CHỨNG kết quả: chạy lại/mở lại thứ vừa làm (test, file vừa tạo, trang web, số liệu) và đối chiếu với yêu cầu ban đầu; chưa kiểm chứng được thì nói rõ. "
             "Tiến trình chạy lâu (dev server, watcher) dùng exec_bg/exec_read/exec_stop.")
+
+ADAPTIVE_SCRATCHPAD = ("Quy trình suy luận (Hermes Reasoning Scratchpad): Với mỗi bước xử lý, hãy suy nghĩ thấu đáo: "
+                       "1. Quan sát (Observe): Dữ liệu & kết quả bước trước. "
+                       "2. Kế hoạch (Plan): Bước tiếp theo và lý do chọn công cụ. "
+                       "3. Quay lui (Backtrack): Nếu phát hiện đi vào ngõ cụt hoặc sai lầm, hãy chủ động dùng tool `backtrack` để hoàn tác và đổi phương án khác.")
 
 
 def _project_docs(start: Path) -> str:
@@ -125,6 +132,7 @@ def build_system_prompt(cfg: cfgmod.Config, skills: dict, workdir, summary: str 
         if p.exists() and p.read_text().strip():
             stable_parts.append(f"## {name}\n{p.read_text()[-4000:].strip()}")
     stable_parts.append(AUTONOMY)
+    stable_parts.append(ADAPTIVE_SCRATCHPAD)
     if note := tools.shell_note():
         stable_parts.append(note)
     if has_planning:
@@ -429,7 +437,8 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
     if attachments and cfg.providers[first].vision:
         current["images"] = _images(workdir, attachments)
     has_planning = "plan_set" in tools.TOOLS and ctx.enabled.get("plan_set", True)
-    system = build_system_prompt(cfg, skills, workdir, sess.get("summary", ""), sid, has_planning, bool(project), profile) + (f"\n\n{perm_note}" if perm_note else "") + (f"\n\n{mention_note}" if mention_note else "") + (f"\n\n{system_extra}" if system_extra else "")
+    exemplars = get_dynamic_exemplars(user_text)
+    system = build_system_prompt(cfg, skills, workdir, sess.get("summary", ""), sid, has_planning, bool(project), profile) + (f"\n\n{perm_note}" if perm_note else "") + (f"\n\n{mention_note}" if mention_note else "") + (f"\n\n{system_extra}" if system_extra else "") + (f"\n\n{exemplars}" if exemplars else "")
     messages = [{"role": "system", "content": system}] \
         + [_augment(m, workdir) for m in _window(history, cfg.agent.max_history)] + [current]
 
@@ -442,6 +451,8 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
     quality_retries = 0
     allow_blank = any(s in user_text.casefold() for s in ('mẫu trống', 'bảng trống', 'khung trống', 'phiếu trống'))
     loop_guard = LoopGuard()
+    mutated_files: set[str] = set()
+    verification_retries = 0
     for step in range(limit):
         if cancel and cancel.is_set():
             return
@@ -498,6 +509,17 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
             emit({"type": "assistant", "content": result["content"], "provider": result["provider"], "usage": result["usage"],
                   "duration_ms": int((time.time() - t0) * 1000)})
         if not result["tool_calls"]:
+            if mutated_files and verification_retries < 2:
+                verify_issues = verify_turn_outputs(workdir, mutated_files)
+                if verify_issues:
+                    verification_retries += 1
+                    issue_text = "\n- ".join(verify_issues)
+                    messages.append({
+                        "role": "user",
+                        "content": f"[system verification] Tự kiểm chứng phát hiện vấn đề ở tệp vừa tạo/sửa:\n- {issue_text}\nHãy xem lại và sửa dứt điểm trước khi báo hoàn thành cho người dùng."
+                    })
+                    emit(ui_event("notice", "Tự kiểm chứng phát hiện tệp chưa đạt chuẩn, đang sửa lại…"))
+                    continue
             if sid and not (cancel and cancel.is_set()):
                 done_plan = plans.finalize(sid)
                 if done_plan:
@@ -526,6 +548,11 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
                 out, ok = fut.result()
             else:
                 out, ok = tools.call(ctx, c["name"], c["args"])
+            if is_mutating_tool(c["name"]) and ok:
+                for k in ("path", "file", "filepath", "target"):
+                    if k in c["args"] and isinstance(c["args"][k], str):
+                        mutated_files.add(c["args"][k])
+                        break
             ms = int((time.time() - t0) * 1000)
             usage.record_tool(c["name"], ok, ms, sid)
             dec = decision.get("last") or ("full_access" if permission == "full" and tdef and tdef.risk in ("exec", "mcp", "file", "network") else "auto")

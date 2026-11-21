@@ -129,8 +129,13 @@ def call(ctx: ToolContext, name: str, args: dict) -> tuple[str, bool]:
         hooks.run(ctx, "PostToolUse", name, args, out)
         return out, True
     except TypeError as e:
-        return f"loi: tham so khong hop le ({e})", False
+        from nestor.services.agent.self_healing import diagnose_tool_call
+        return diagnose_tool_call(name, t, args, e), False
     except Exception as e:  # tool khong duoc lam sap vong lap agent
+        err_str = str(e).lower()
+        if isinstance(e, (json.JSONDecodeError, KeyError)) or "argument" in err_str or "required" in err_str or "thiếu" in err_str:
+            from nestor.services.agent.self_healing import diagnose_tool_call
+            return diagnose_tool_call(name, t, args, e), False
         return f"loi: {type(e).__name__}: {e}", False
     finally:
         _approved_context.reset(token)
@@ -530,6 +535,19 @@ def project_note(ctx, note):
     with p.open("a", encoding="utf-8") as f:
         f.write(f"- {note.strip()}\n")
     return "đã ghi nhớ về dự án"
+
+
+@tool("backtrack", "Quay lui lại trạng thái trước đó khi phát hiện hướng tiếp cận bị bế tắc hoặc sai lầm (Hermes Backtracking). Khôi phục lại các tệp đã sửa trong lượt gần nhất để thử phương án khác.",
+      {"reason": ("string", "lý do quay lui và hướng tiếp cận mới")})
+def backtrack(ctx: ToolContext, reason: str):
+    sid = ctx.session_id
+    if not sid:
+        return "Không thể quay lui: không xác định được phiên làm việc."
+    restored = checkpoints.undo(sid)
+    if not restored:
+        return f"Đã ghi nhận yêu cầu quay lui ({reason}), nhưng không có tệp nào bị thay đổi trong lượt để khôi phục."
+    files_str = ", ".join(restored)
+    return f"ĐÃ QUAY LUI THÀNH CÔNG (lý do: '{reason}'). Các tệp sau đã được khôi phục về trạng thái trước đó: [{files_str}]. Hãy thử hướng tiếp cận khác ngay."
 
 
 @tool("remember", "Lưu một điều quan trọng vào bộ nhớ dài hạn (MEMORY.md).", {"note": ("string", "nội dung cần nhớ")})

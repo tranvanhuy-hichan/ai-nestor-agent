@@ -120,6 +120,14 @@ def team_run(ctx: ToolContext, goal, members):
     return f"Tổ công tác {team['id']} ({team['status']}):\n\n{team['result']}"
 
 
+@tool("swarm_run", "Chạy BẦY AGENT (Hermes Swarm Protocol): Điều phối đồng thời các Agent chuyên biệt (researcher, coder, reviewer) để giải quyết các nhánh việc song song, sau đó rà soát và tổng hợp báo cáo hoàn chỉnh.",
+      {"goal": ("string", "mục tiêu tổng thể cần hoàn thành"),
+       "tasks": ("string", "JSON danh sách nhiệm vụ [{\"role\": \"researcher|coder|reviewer|general\", \"task\": \"việc cụ thể cần làm\"}]")},
+      required=["goal", "tasks"])
+def swarm_run(ctx: ToolContext, goal: str, tasks: str):
+    return team_run(ctx, goal, tasks)
+
+
 @tool("team_note_write", "Ghi vào bảng ghi chép chung của tổ công tác để đồng đội đọc được.",
       {"team": ("string", "id tổ công tác (có trong yêu cầu giao việc)"), "key": ("string", "tiêu đề ghi chép"), "text": ("string", "nội dung")})
 def team_note_write(ctx: ToolContext, team, key, text):

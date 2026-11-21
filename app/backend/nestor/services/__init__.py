@@ -33,6 +33,9 @@ MODULE_ROUTING: dict[str, str] = {
     "brief": "nestor.services.agent.brief",
     "distill": "nestor.services.agent.distill",
     "api_run": "nestor.services.agent.api_run",
+    "self_healing": "nestor.services.agent.self_healing",
+    "verification": "nestor.services.agent.verification",
+    "exemplars": "nestor.services.agent.exemplars",
     # tools
     "tools": "nestor.services.tools",
     "tools_agents": "nestor.services.tools.tools_agents",
