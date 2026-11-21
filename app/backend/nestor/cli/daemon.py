@@ -15,7 +15,8 @@ import httpx
 from ..core import config as cfgmod
 from ..core.env import getenv
 from ..core.paths import CODE_ROOT, DATA, DB_PATH, DIST, LOG_FILE, PID_FILE, ROOT
-from .ui import L, bad, bold, dim, green, info, ok, red, warn, yellow
+from .banner import print_status_card
+from .ui import L, bad, bold, cyan, dim, green, info, ok, red, warn, yellow
 
 STATE_FILE = DATA / "server.json"
 BACKEND_DIR = Path(__file__).resolve().parents[2]  # thu muc chua goi `nestor` (de chay duoc ca khi chua pip install)
@@ -217,27 +218,48 @@ def status(as_json: bool = False) -> int:
     if as_json:
         print(json.dumps(data, ensure_ascii=False, indent=2))
         return 0 if data["running"] else 1
-    if data["running"]:
-        up = data["uptime_s"] or 0
-        ok(L(f"Đang chạy · pid {data['pid']} · {bold(url)} · v{data['version']} · {up // 3600}h{up % 3600 // 60:02d}m",
-             f"Running · pid {data['pid']} · {bold(url)} · v{data['version']} · {up // 3600}h{up % 3600 // 60:02d}m"))
-        if not pid:
-            warn(L("Không do `nestor start` quản lý (service/Docker).", "Not managed by `nestor start` (service/Docker)."))
+    def field(label, value):
+        return f"{dim(label)}  {value}"
+
+    enabled = L("bật", "on")
+    disabled = L("tắt", "off")
+    running = data["running"]
+    state = green(L("● Đang chạy", "● Running")) if running else red(L("○ Đã dừng", "○ Stopped"))
+    gateway = field("Gateway", state)
+    rows = [(f"  {gateway}", f"{cyan(url)}  ")]
+    if running:
+        up = max(0, data["uptime_s"] or 0)
+        process = field("PID", f"{data['pid']}  ·  v{data['version']}")
+        uptime = field(L("Thời gian chạy", "Uptime"), f"{up // 3600}h {up % 3600 // 60:02d}m")
+        manager = "nestor start" if data["managed_by_cli"] else L("dịch vụ bên ngoài CLI", "external service")
+        rows.extend([
+            (f"  {process}", f"{uptime}  "),
+            (f"  {field(L('Quản lý', 'Managed by'), manager)}", ""),
+        ])
+    model = field(L("Model mặc định", "Default model"), cyan(f"{data['default_provider']} · {data['model']}"))
+    providers = field(L("Nhà cung cấp", "Providers"), ", ".join(data["providers"]))
+    activity = field(L("Hội thoại", "Conversations"), bold(str(sessions)))
+    mcp = field("MCP", bold(str(data["mcp_servers"])))
+    telegram = field("Telegram", green(enabled) if data["telegram"] else dim(disabled))
+    heartbeat = field("Heartbeat", green(enabled) if data["heartbeat"] else dim(disabled))
+    password = green(L("đã đặt", "set")) if data["password"] else yellow(L("chưa đặt", "not set"))
+    security = field(L("Mật khẩu giao diện", "Interface password"), password)
+    sandbox = field("Sandbox", data["sandbox"])
+    rows.extend([
+        (f"  {model}", ""),
+        (f"  {providers}", ""),
+        (f"  {activity}", f"{mcp}  "),
+        (f"  {telegram}", f"{heartbeat}  "),
+        (f"  {security}", f"{sandbox}  "),
+        (f"  {field(L('Thư mục dữ liệu', 'Data folder'), data['home'])}", ""),
+    ])
+    if running:
+        tip = L("  nestor open  Giao diện web", "  nestor open  Web UI")
+        if data["managed_by_cli"]:
+            tip += L("   ·   nestor logs  Nhật ký", "   ·   nestor logs  Logs")
     else:
-        bad(L("Không chạy. Bật bằng: nestor start", "Not running. Start it with: nestor start"))
-    rows = [
-        (L("Model mặc định", "Default model"), f"{data['default_provider']} · {data['model']}"),
-        (L("Provider", "Providers"), ", ".join(data["providers"])),
-        (L("Hội thoại", "Conversations"), str(sessions)),
-        ("MCP", L(f"{data['mcp_servers']} server", f"{data['mcp_servers']} server(s)")),
-        ("Telegram", green("on") if data["telegram"] else dim("off")),
-        ("Heartbeat", green("on") if data["heartbeat"] else dim("off")),
-        (L("Mật khẩu giao diện", "Interface password"), green(L("đã đặt", "set")) if data["password"] else yellow(L("chưa đặt", "not set"))),
-        ("Sandbox", data["sandbox"]),
-        (L("Thư mục dữ liệu", "Data folder"), data["home"]),
-    ]
-    for k, v in rows:
-        print(f"  {dim(k.ljust(22))}{v}")
+        tip = L("  nestor start  Khởi động gateway", "  nestor start  Start the gateway")
+    print_status_card(L("  ✦  Nestor Agent  /  Trạng thái", "  ✦  Nestor Agent  /  Status"), rows, tip)
     return 0 if data["running"] else 1
 
 

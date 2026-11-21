@@ -68,6 +68,39 @@ def env_for(home: Path, lang: str) -> dict[str, str]:
     return {**os.environ, "NESTOR_HOME": str(home), "NESTOR_PORT": str(port), "NESTOR_LANG": lang, "PYTHONPATH": str(BACKEND), "TERM": "xterm-256color", "NO_COLOR": ""}
 
 
+def test_chat_keeps_alternate_screen_open_while_streaming(tmp_path):
+    script = """
+from nestor.cli import main
+from nestor.services import chat_runner
+
+def stream_chat(*args, **kwargs):
+    yield {"type": "delta", "text": "Reply inside chat"}
+    yield {"type": "assistant", "content": "Reply inside chat", "provider": "local",
+           "usage": {"prompt": 1, "completion": 1}}
+
+chat_runner.stream_chat = stream_chat
+print("Shell before chat", flush=True)
+try:
+    main()
+finally:
+    print("Shell after chat", flush=True)
+"""
+    p = Pty([sys.executable, "-c", script, "chat"], env_for(tmp_path, "en"))
+    p.read_until("Ctrl+D to exit")
+    p.send(b"hello\r")
+    p.read_until("Reply inside chat")
+    p.send(b"/exit\r")
+    p.read_until("Shell after chat")
+    assert p.finish() == 0, ANSI.sub("", p.text)[-900:]
+    enter, leave = "\x1b[?1049h", "\x1b[?1049l"
+    assert p.text.count(enter) == p.text.count(leave) == 1
+    before, chat = p.text.split(enter)
+    chat, after = chat.split(leave)
+    assert "Shell before chat" in ANSI.sub("", before)
+    assert "Reply inside chat" in ANSI.sub("", chat)
+    assert "Shell after chat" in ANSI.sub("", after)
+
+
 def test_onboard_with_arrow_keys_space_and_enter(tmp_path):
     p = Pty([sys.executable, "-m", "nestor", "onboard"], env_for(tmp_path, "en"))
     p.read_until("Language / Ngôn ngữ")

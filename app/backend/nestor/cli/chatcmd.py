@@ -72,6 +72,22 @@ class _ChatTranscript:
         self.buffer.write(text)
         return self.terminal.write(text)
 
+    @contextmanager
+    def screen(self):
+        self.terminal.write("\x1b[?1049h\x1b[H")
+        self.terminal.flush()
+        try:
+            yield
+        finally:
+            self.terminal.write("\x1b[?1049l")
+            self.terminal.flush()
+
+    def redraw(self):
+        rows = shutil.get_terminal_size((80, 24)).lines
+        visible = self.text().split("\n")[-max(1, rows - _FOOTER_ROWS):]
+        self.terminal.write("\x1b[H\x1b[2J" + "\n".join(visible))
+        self.terminal.flush()
+
     def __getattr__(self, name):
         return getattr(self.terminal, name)
 
@@ -444,6 +460,7 @@ def _make_reader(cfg, st, transcript=None):
         from prompt_toolkit.layout.controls import FormattedTextControl, UIContent, UIControl
         from prompt_toolkit.layout.dimension import Dimension
         from prompt_toolkit.mouse_events import MouseButton, MouseEventType
+        from prompt_toolkit.output import create_output
         from prompt_toolkit.styles import Style
         from prompt_toolkit.utils import get_cwidth
     except ImportError:
@@ -675,7 +692,15 @@ def _make_reader(cfg, st, transcript=None):
                 app.full_screen = app.renderer.full_screen = True
             return app
 
+    output = None
+    if transcript is not None:
+        output = create_output(stdout=transcript.terminal)
+        # The chat owns the alternate screen across both prompts and streamed replies.
+        output.enter_alternate_screen = lambda: None
+        output.quit_alternate_screen = lambda: None
+
     session = ChatPromptSession(
+        output=output,
         completer=SlashCompleter(),
         complete_while_typing=True,
         history=InMemoryHistory(),
@@ -703,6 +728,8 @@ def _make_reader(cfg, st, transcript=None):
             wrapped_lines.cache_clear()
             transcript_control.offset = 0
             transcript_control.clear_selection()
+            transcript.terminal.write("\x1b[H")
+            transcript.terminal.flush()
         line = session.prompt(ANSI(prompt)).strip()
         if footer_command is not None:
             return footer_command
@@ -732,7 +759,7 @@ def chat(args) -> int:
     transcript = _ChatTranscript(sys.stdout) if tty() and os.environ.get("TERM") != "dumb" else None
     reader = _make_reader(cfg, st, transcript)
     if reader is not None and transcript is not None:
-        with redirect_stdout(transcript):
+        with transcript.screen(), redirect_stdout(transcript):
             print_chat_banner(cfg, st["provider"], st["perm"], st["sid"])
             if st["sid"]:
                 transcript.load(st["sid"])
@@ -932,6 +959,8 @@ def _chat_loop(cfg, st, reader, transcript=None) -> int:
         events = chat_runner.stream_chat(st["sid"], line, st["provider"], source="cli", permission=st["perm"], effort=effort)
         spinner = ThinkingSpinner(L("Nestor đang suy nghĩ...", "Nestor is thinking..."), terminal=terminal)
         try:
+            if transcript is not None:
+                transcript.redraw()
             with _busy_chat_footer(cfg, st, prompt_str, enabled=reader is not None, terminal=terminal):
                 spinner.start()
                 try:
