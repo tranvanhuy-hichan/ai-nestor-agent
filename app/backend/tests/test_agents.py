@@ -66,6 +66,78 @@ def test_plan_tools_persist_emit_and_feed_the_prompt(llm):
     assert "Kế hoạch hiện tại của hội thoại (2/2 xong)" in seen[-1] and "plan_set" in seen[0]
 
 
+def test_agent_sends_small_ranked_skill_catalog_and_records_context(llm, monkeypatch):
+    from nestor.services import skills, tools, usage
+
+    catalog = {
+        f"invoice-{i}": skills.Skill(f"invoice-{i}", "Mẫu hóa đơn", cfgmod.load().workspace_path(), "", {}, {})
+        for i in range(12)
+    }
+    catalog["private"] = skills.Skill("private", "Hóa đơn", cfgmod.load().workspace_path(), "",
+                                      {"disable-model-invocation": True}, {})
+    monkeypatch.setattr(agent_mod.skillmod, "discover", lambda cfg: catalog)
+    seen = []
+
+    def rule(messages, tool_names):
+        seen.append(messages[0]["content"])
+        assert {"skills_search", "skills_read"} <= set(tool_names)
+        return {"content": "Đã xong"}
+
+    llm(rule)
+    sid, _ = run_chat("Hỗ trợ hóa đơn")
+    assert seen[0].count("<skill category=") == 6
+    assert "skills_search" in seen[0] and "<name>private</name>" not in seen[0]
+    found = tools.skills_search(tools.ToolContext(workspace=cfgmod.load().workspace_path(), skills=catalog), "invoice-9")
+    assert found.splitlines()[0].startswith("invoice-9 ") and "private" not in found
+    report = usage.last_context(sid)
+    assert report["sections"]["skills"] > 0 and report["sections"]["current"] > 0
+    assert report["estimated_tokens"] > 0 and report["prompt_tokens"] == 1
+
+
+def test_agent_discovers_mcp_tool_and_reads_long_result_in_pages(llm, monkeypatch):
+    import re
+
+    from nestor.services import tools
+
+    marker = "MỘT ĐOẠN QUAN TRỌNG"
+    content = "x" * 5_000 + marker + "y" * 5_000
+    name = "records__lookup"
+    remote = tools.ToolDef(name, "Tra cứu hồ sơ", {"type": "object", "properties": {}},
+                           lambda ctx: content, "safe", read_only=True)
+    monkeypatch.setattr(agent_mod.mcp_client.manager, "tool_defs", lambda: {name: remote})
+    observed = []
+
+    def rule(messages, names):
+        observed.append(names)
+        previous = messages[-1]
+        if previous["role"] == "user":
+            return {"calls": [call("tool_search", query="records lookup")]}
+        if len(observed) == 2:
+            assert name in previous["content"]
+            return {"calls": [call("tool_describe", names=[name])]}
+        if len(observed) == 3:
+            assert name in names
+            return {"calls": [call(name)]}
+        if len(observed) == 4:
+            assert marker not in previous["content"] and len(previous["content"]) < 2_500
+            mid = int(re.search(r"message_id=(\d+)", previous["content"])[1])
+            return {"calls": [call("tool_result_read", message_id=mid, offset=5_000, limit=len(marker))]}
+        assert previous["content"].splitlines()[0] == marker
+        assert f"offset={5_000 + len(marker)}" in previous["content"]
+        return {"content": "Đã đọc kết quả"}
+
+    llm(rule)
+    sid, events = run_chat("Tra cứu hồ sơ")
+    assert name not in observed[0] and name not in observed[1]
+    assert {"read", "edit", "tool_search", "tool_describe"} <= set(observed[0])
+    assert "create_xlsx" not in observed[0]
+    assert any(e.get("content") == "Đã đọc kết quả" for e in events)
+    saved = next(msg for msg in sessions.messages(sid, with_ids=True) if msg["content"] == content)
+    another_sid = sessions.create("Different session")
+    target = tools.ToolContext(workspace=cfgmod.load().workspace_path(), session_id=another_sid)
+    assert marker not in tools.tool_result_read(target, saved["_id"], 5_000)
+
+
 @pytest.mark.parametrize("steps,err", [([], "ít nhất"), (["x"] * 26, "tối đa")])
 def test_plan_validation(tmp_env, steps, err):
     sid = sessions.create("p")
@@ -358,13 +430,21 @@ def test_at_mention_keeps_only_that_service_tools_and_hints_the_model(llm, monke
     assert "@notion" in seen["system"] and "'notion__'" in seen["system"]
 
 
-def test_without_or_with_email_no_filtering(llm, monkeypatch):
+@pytest.mark.parametrize("text", ["tìm trang họp", "gửi mail cho an@notion.com và @khong-co-dich-vu-nay"])
+def test_without_service_mention_all_services_can_be_loaded(llm, monkeypatch, text):
     _mcp_world(monkeypatch)
-    seen = _capture(llm)
-    run_chat("tìm trang họp")
-    assert {"notion__search", "linear__list_issues"} <= seen["tools"] and "@" not in seen["system"].split("Hiện tại")[-1]
-    run_chat("gửi mail cho an@notion.com và @khong-co-dich-vu-nay")
-    assert {"notion__search", "linear__list_issues"} <= seen["tools"]  # dia chi email va ten khong ton tai khong kich hoat
+    services = {"notion__search", "linear__list_issues"}
+
+    def rule(messages, names):
+        assert "@" not in messages[0]["content"].split("Hiện tại")[-1]
+        if not last_is_tool(messages):
+            assert services.isdisjoint(names) and "tool_search" in names
+            return {"calls": [call("tool_describe", names=sorted(services))]}
+        assert services <= set(names)
+        return {"content": "ok"}
+
+    llm(rule)
+    run_chat(text)
 
 
 def test_mention_of_disconnected_service_warns_user(llm, monkeypatch):

@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from collections.abc import Callable, Iterator
 from datetime import datetime
+from hashlib import sha256
 from threading import Event
 import sys
 
@@ -115,7 +116,7 @@ def coding_prompt(project, workspace=None) -> str:
     return text
 
 
-def build_system_prompt(cfg: cfgmod.Config, skills: dict, workdir, summary: str = "", sid: str | None = None, has_planning: bool = False, coding: bool = False, profile: dict | None = None) -> str:
+def build_system_prompt(cfg: cfgmod.Config, skills: dict, workdir, summary: str = "", sid: str | None = None, has_planning: bool = False, coding: bool = False, profile: dict | None = None, *, searchable_skills: bool = False) -> str:
     """Xây dựng System Prompt 3 tầng theo chuẩn Hermes Agent để tối ưu Prompt Caching (Cache Hit trên Gemini/Claude/OpenAI/vLLM):
     - TIER 1 (STABLE - Cố định 100%): Identity, SOUL, RULES, USER, Autonomy, Shell notes, Planning rules, Skills Index Level 0.
       Tầng này luôn nằm ở đầu mảng để được cache hoàn toàn qua mọi turn.
@@ -138,7 +139,8 @@ def build_system_prompt(cfg: cfgmod.Config, skills: dict, workdir, summary: str 
         stable_parts.append(note)
     if has_planning:
         stable_parts.append("Với việc phức tạp nhiều bước: lập kế hoạch bằng plan_set trước rồi làm lần lượt. Việc cần chuyên môn riêng hoặc làm song song: giao cho agent con bằng delegate. Việc rất dài: task_start để chạy nền.")
-    if block := skillmod.prompt_block(skills):
+    block = skillmod.prompt_block(skills)
+    if block and not searchable_skills:
         stable_parts.append(block)
 
     # --- TIER 2: CONTEXT (Dự án & Tri thức) ---
@@ -153,8 +155,12 @@ def build_system_prompt(cfg: cfgmod.Config, skills: dict, workdir, summary: str 
         f"Hiện tại: {datetime.now().astimezone():%Y-%m-%d %H:%M %Z}.\n"
         f"Thư mục làm việc của phiên này: {workdir}. Mọi file bạn tạo (script, dữ liệu trung gian, kết quả) hãy đặt ở đây; "
         "đường dẫn tương đối được tính từ thư mục này và người dùng nhìn thấy chúng trong panel Workspace. "
-        "Khi cần nhớ chuyện đã nói trước đây, dùng tool memory_search."
+        "Khi cần nhớ chuyện đã nói trước đây, dùng memory_search. Để xem nguyên văn quanh kết quả, truyền session_id và message_id."
     ]
+    if searchable_skills:
+        volatile_parts.extend((block, "Danh mục kỹ năng gửi kèm chỉ gồm gợi ý cho tác vụ. "
+                               "Nếu cần quy trình chuyên biệt chưa có trong danh mục, dùng skills_search với tên hoặc từ khóa "
+                               "rồi nạp hướng dẫn bằng skills_read."))
     if summary:
         volatile_parts.append(f"Tóm tắt phần hội thoại trước đó:\n{summary}")
     if sid and (plan := plans.prompt_block(sid)):
@@ -193,6 +199,17 @@ def _augment(m: dict, workdir=None) -> dict:
     if mentioned := _mentioned_paths(m["content"], workdir):
         content += f"\n\n[Người dùng nhắc tới các tệp/thư mục này bằng @: {', '.join(mentioned)}. Hãy đọc chúng (read/list_dir/grep) trước khi làm.]"
     return {"role": "user", "content": content} if content != m["content"] else {k: v for k, v in m.items() if k not in ("attachments", "_id")}
+
+
+def _prompt_message(msg: dict, workdir, can_read_results: bool) -> dict:
+    result = _augment(msg, workdir)
+    if can_read_results and msg["role"] == "tool" and msg.get("_id") and len(result["content"]) > 8_000:
+        preview = truncate_middle(result["content"], max_chars=2_000, head_ratio=0.7)
+        result["content"] = (
+            f"[Kết quả đầy đủ đã lưu. Dùng tool_result_read(message_id={msg['_id']}, offset=0) để đọc từng phần.]\n"
+            + preview
+        )
+    return result
 
 
 def _images(workdir, names: list[str]) -> list[dict]:
@@ -298,6 +315,42 @@ def _prompt_weight(value) -> int:
     return len(json.dumps(value, ensure_ascii=False).encode())
 
 
+def context_report(messages: list[dict], schemas: list[dict], pcfg: cfgmod.ProviderCfg, current: dict | None = None) -> dict:
+    system = messages[0]["content"]
+    _, marker, after = system.partition("<available_skills>\n")
+    catalog, end, _ = after.partition("\n</available_skills>")
+    skill_bytes = len((marker + catalog + end).encode()) if marker and end else 0
+    sections = {
+        "system": len(system.encode()) - skill_bytes, "skills": skill_bytes,
+        "tools": 0, "history": 0, "current": 0, "tool_results": 0, "images": 0,
+    }
+    wire_schemas = schemas[:128] if pcfg.type == "openai" else schemas
+    encoded_schemas = json.dumps(wire_schemas, ensure_ascii=False, sort_keys=True).encode()
+    sections["tools"] = len(encoded_schemas) if wire_schemas else 0
+    keys = []
+    for msg in messages[1:]:
+        encoded = json.dumps({k: v for k, v in msg.items() if k != "images"}, ensure_ascii=False, sort_keys=True).encode()
+        keys.append(sha256(encoded).hexdigest()[:24])
+        section = "current" if msg is current else "tool_results" if msg["role"] == "tool" else "history"
+        sections[section] += len(encoded)
+        sections["images"] += len(msg.get("images") or [])
+    estimated = (sum(sections.values()) - sections["images"] + 3) // 4 + sections["images"] * 512
+    return {
+        "sections": sections, "estimated_tokens": estimated,
+        "schema_key": sha256(encoded_schemas).hexdigest()[:24], "message_keys": keys,
+        "endpoint_key": sha256(f"{pcfg.type}\0{pcfg.base_url}".encode()).hexdigest()[:24],
+        "context_window": usage.context_window(pcfg),
+    }
+
+
+def _anchored_tokens(report: dict, previous: dict | None) -> int | None:
+    if (not previous or not previous["prompt_tokens"] or previous.get("endpoint_key") != report["endpoint_key"]
+            or previous["schema_key"] != report["schema_key"]
+            or not set(previous["message_keys"]).intersection(report["message_keys"])):
+        return None
+    return max(1, previous["prompt_tokens"] + report["estimated_tokens"] - previous["estimated_tokens"])
+
+
 def _fit_prompt_limit(messages: list[dict], schemas: list[dict], current: dict,
                       error: PromptLimitError) -> list[dict]:
     """Fit a rejected request without changing stored messages or splitting a tool exchange."""
@@ -351,14 +404,39 @@ def _fit_prompt_limit(messages: list[dict], schemas: list[dict], current: dict,
 def _stream_with_retry(name: str, pcfg: cfgmod.ProviderCfg, messages: list[dict], schemas: list[dict],
                        emit: Callable[[dict], None], cancel: Event | None, effort: str | None = None,
                        temperature: float | None = None, max_tokens: int | None = None,
-                       current: dict | None = None) -> Iterator[dict]:
+                       current: dict | None = None, report: dict | None = None,
+                       previous: dict | None = None) -> Iterator[dict]:
     delay = 1.5
     context_retries = 0
+    prompt_limit = None
+    prompt_limit_at = None
+    if report is not None:
+        measured = context_report(messages, schemas, pcfg, current)
+        report["initial_estimated_tokens"] = measured["estimated_tokens"]
+        if (previous and previous.get("endpoint_key") == measured["endpoint_key"]
+                and time.time() - (previous.get("prompt_limit_at") or 0) < 300):
+            prompt_limit = previous.get("prompt_limit")
+            prompt_limit_at = previous["prompt_limit_at"]
+        anchor = _anchored_tokens(measured, previous)
+        window = measured["context_window"]
+        budget = max(1, window - (max_tokens or min(4_096, window // 8))) if window else None
+        if prompt_limit:
+            budget = min(budget, prompt_limit) if budget else prompt_limit
+        if current is not None and anchor and budget and anchor > budget:
+            fitted = _fit_prompt_limit(messages, schemas, current, PromptLimitError(anchor, budget))
+            if fitted != messages:
+                messages = fitted
+                emit(ui_event("status", "{name}: đã rút gọn ngữ cảnh trước khi gửi…", name=name))
     for attempt in range(RETRIES):
         if cancel and cancel.is_set():
             return
         started = False
         try:
+            if report is not None:
+                report.update(context_report(messages, schemas, pcfg, current))
+                report["anchored_tokens"] = _anchored_tokens(report, previous)
+                report["prompt_limit"] = prompt_limit
+                report["prompt_limit_at"] = prompt_limit_at
             prov = make_provider(pcfg)
             prov.cancel = cancel  # CLI provider dung de kill tien trinh ngay khi bam Dung
             kwargs = {}
@@ -386,6 +464,11 @@ def _stream_with_retry(name: str, pcfg: cfgmod.ProviderCfg, messages: list[dict]
                     close()
             return
         except PromptLimitError as e:
+            prompt_limit = e.limit
+            prompt_limit_at = time.time()
+            if report is not None:
+                report["prompt_limit"] = prompt_limit
+                report["prompt_limit_at"] = prompt_limit_at
             if started or current is None or context_retries == 2 or attempt == RETRIES - 1:
                 raise
             fitted = _fit_prompt_limit(messages, schemas, current, e)
@@ -469,7 +552,8 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
     if only_tools is not None:  # gioi han tool cho rieng luot nay (dung cho API ben ngoai)
         ctx.enabled = {n: n in only_tools for n in [*tools.TOOLS, *ctx.extra]}
     mention_note = ""
-    if names_at := mentioned_servers(user_text, cfg):
+    names_at = mentioned_servers(user_text, cfg)
+    if names_at:
         mention_note, down = apply_mentions(ctx, names_at)
         if down:
             emit(ui_event("notice", "Dịch vụ {names} chưa kết nối: vào mục Tiện ích để đăng nhập", names=", ".join(down)))
@@ -486,6 +570,8 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
         ctx.enabled = lock(ctx.enabled)
         if ctx.plan_restore is not None:
             ctx.plan_restore = lock(ctx.plan_restore)
+    if only_tools is None and tool_allow is None and not names_at:
+        tools.configure_discovery(ctx)
     preferred = [n for n in (profile or {}).get("providers", []) if n in cfg.providers]
     first = provider if provider in cfg.providers else (preferred or [cfg.default_provider])[0]
     if not preferred and first == cfg.default_provider and cfg.agent.fast_provider in cfg.providers and cfg.agent.fast_provider != first and is_simple(user_text, attachments, bool(project), only_tools):
@@ -496,7 +582,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
     if compaction.maybe_compact(sid, cfg, first):
         emit(ui_event("notice", "Đã tóm tắt phần đầu hội thoại để tiết kiệm bộ nhớ của model"))
     sess = sessions.get(sid) or {}
-    history = sessions.messages(sid, after_id=sess.get("summary_upto", 0))
+    history = sessions.messages(sid, after_id=sess.get("summary_upto", 0), with_ids=True)
     attachments = attachments or []
     user_msg = {"role": "user", "content": user_text}
     if attachments:
@@ -507,9 +593,19 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
         current["images"] = _images(workdir, attachments)
     has_planning = "plan_set" in tools.TOOLS and ctx.enabled.get("plan_set", True)
     exemplars = get_dynamic_exemplars(user_text)
-    system = build_system_prompt(cfg, skills, workdir, sess.get("summary", ""), sid, has_planning, bool(project), profile) + (f"\n\n{perm_note}" if perm_note else "") + (f"\n\n{mention_note}" if mention_note else "") + (f"\n\n{system_extra}" if system_extra else "") + (f"\n\n{exemplars}" if exemplars else "")
+    searchable_skills = all(tools.tool_enabled(ctx, name) for name in ("skills_search", "skills_read"))
+    prompt_skills = {s.name: s for s in skillmod.find_skills(skills, user_text, limit=6)} if searchable_skills else skills
+    system = build_system_prompt(cfg, prompt_skills, workdir, sess.get("summary", ""), sid, has_planning,
+                                 bool(project), profile, searchable_skills=searchable_skills)
+    discovery_note = (
+        "Khi cần công cụ chuyên biệt ngoài danh sách hiện tại, dùng tool_search rồi tool_describe để nạp công cụ; "
+        "sau đó gọi công cụ gốc."
+        if ctx.deferred_tools else ""
+    )
+    system = "\n\n".join(part for part in (system, perm_note, mention_note, system_extra, exemplars, discovery_note) if part)
+    can_read_results = tools.tool_enabled(ctx, "tool_result_read")
     messages = [{"role": "system", "content": system}] \
-        + [_augment(m, workdir) for m in _window(history, cfg.agent.max_history)] + [current]
+        + [_prompt_message(m, workdir, can_read_results) for m in _window(history, cfg.agent.max_history)] + [current]
 
     limit = max_steps or cfg.agent.max_steps
     empty_retries = 0
@@ -529,11 +625,14 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
         for name in names:
             pcfg = cfg.providers[name]
             t0, started = time.time(), False
+            report = {}
+            previous = usage.last_context(sid, name, pcfg.model, successful=True)
             emit(ui_event("status", "Đang gọi {name} · {model}…", name=name, model=pcfg.model) if step == 0
                  else ui_event("status", "{name} đang xử lý kết quả tool…", name=name))
             try:
                 for ev in _stream_with_retry(name, pcfg, shrink_stale(messages), tools.schemas(ctx), emit, cancel, effort,
-                                             temperature=temperature, max_tokens=max_tokens, current=current):
+                                             temperature=temperature, max_tokens=max_tokens, current=current,
+                                             report=report, previous=previous):
                     if ev["type"] in ("delta", "thinking"):
                         started = True
                         emit(ev)
@@ -543,14 +642,14 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
                     emit(ui_event("notice", "Đã dừng"))
                     return
                 u = result["usage"]
-                usage.record_llm(name, pcfg.model, u["prompt"], u["completion"], int((time.time() - t0) * 1000), True, sid)
+                usage.record_llm(name, pcfg.model, u["prompt"], u["completion"], int((time.time() - t0) * 1000), True, sid, report)
                 result["provider"] = name
                 break
             except ProviderError as e:
                 if cancel and cancel.is_set():
                     emit(ui_event("notice", "Đã dừng"))
                     return
-                usage.record_llm(name, pcfg.model, 0, 0, int((time.time() - t0) * 1000), False, sid)
+                usage.record_llm(name, pcfg.model, 0, 0, int((time.time() - t0) * 1000), False, sid, report)
                 if started or name == names[-1]:
                     emit({"type": "error", "message": f"{name}: {e}"})
                     return
@@ -633,8 +732,9 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
                     emit({"type": "plan", "items": items})
                 nudge = plans.hint(sid)  # chi gui cho model
             tmsg = {"role": "tool", "tool_call_id": c["id"], "content": out + nudge}
-            messages.append(tmsg)
-            sessions.add_message(sid, tmsg)
+            message_id = sessions.add_message(sid, tmsg)
+            messages.append(_prompt_message({**tmsg, "_id": message_id}, workdir,
+                                            tools.tool_enabled(ctx, "tool_result_read")))
             emit({"type": "tool_result", "id": c["id"], "result": out[:4000], "ok": ok, "duration_ms": ms, "decision": dec})
             emit({"type": "files"})
         if is_stuck:

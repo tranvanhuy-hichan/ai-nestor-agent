@@ -104,7 +104,8 @@ def deliverable_kinds(dels) -> set[str]:
     return out
 
 
-ALWAYS_TOOLS = ("ask_user", "plan_set", "plan_update", "plan_show", "remember", "memory_search", "skills_read", "delegate")
+ALWAYS_TOOLS = ("ask_user", "plan_set", "plan_update", "plan_show", "remember", "memory_search",
+                "skills_read", "skills_search", "tool_result_read", "delegate")
 CONTENT_MODULES = ("gov_biz", "edu_personal")
 LOAD_ERRORS: list[str] = []
 

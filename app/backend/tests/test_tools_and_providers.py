@@ -54,6 +54,28 @@ def test_disabled_and_unknown_tools(tmp_path):
     assert "read" not in [s["name"] for s in tools.schemas(c)]
 
 
+def test_deferred_tools_respect_scope_and_require_original_approval(tmp_path):
+    from nestor.core.config import ToolPolicy
+
+    c = ctx(tmp_path)
+    ran = []
+    visible = "crm__write_record"
+    hidden = "crm__read_secret"
+    c.extra = {name: tools.ToolDef(name, "CRM records", {}, lambda ctx: ran.append(True), "mcp")
+               for name in (visible, hidden)}
+    c.enabled[hidden] = False
+    c.policies[visible] = ToolPolicy(approval="ask")
+    tools.configure_discovery(c)
+
+    assert visible not in {item["name"] for item in tools.schemas(c)}
+    found = tools.tool_search(c, "crm")
+    assert visible in found and hidden not in found
+    assert tools.call(c, "tool_describe", {"names": [visible, hidden]})[1]
+    assert {visible, "tool_search"} <= {item["name"] for item in tools.schemas(c)}
+    assert hidden not in {item["name"] for item in tools.schemas(c)}
+    assert not tools.call(c, visible, {})[1] and not ran
+
+
 class FakeStream:
     def __init__(self, lines, status=200):
         self.lines, self.status_code, self.text = lines, status, "err"
@@ -281,3 +303,33 @@ def test_prompt_limit_compacts_large_skill_catalog_without_dropping_short_histor
     assert fitted[0]["content"].count("- sample") == 100
     assert len(fitted[0]["content"]) < len(system)
     assert messages[0]["content"] == system
+
+
+def test_context_anchor_shortens_large_tool_result_before_provider_call(monkeypatch):
+    import time
+
+    cfg = ProviderCfg(base_url="http://local/v1", model="model", context_window=8_000)
+    current = {"role": "user", "content": "Read logs"}
+    system = {"role": "system", "content": "System"}
+    schemas = [{"name": "read", "parameters": {}}]
+    anchor = {**agent_mod.context_report([system, current], schemas, cfg, current),
+              "prompt_tokens": 6_000, "ts": time.time()}
+    call = {"role": "assistant", "content": "", "tool_calls": [{"id": "one", "name": "read", "args": {}}]}
+    result = {"role": "tool", "tool_call_id": "one", "content": "start " + "x" * 24_000 + " end"}
+    sent = []
+
+    def fake(*args, **kwargs):
+        sent.append(kwargs["json"])
+        return FakeStream(sse({"choices": [{"delta": {"content": "ok"}}]}))
+
+    monkeypatch.setattr(providers.httpx, "stream", fake)
+    report = {}
+    list(agent_mod._stream_with_retry("local", cfg, [system, current, call, result], schemas, lambda _: None, None,
+                                      current=current, report=report, previous=anchor))
+
+    assert len(sent) == 1 and report["anchored_tokens"] is not None
+    actual = sent[0]["messages"]
+    assert actual[1] == current
+    assert actual[2]["tool_calls"][0]["id"] == actual[3]["tool_call_id"]
+    assert actual[3]["content"].startswith("start ") and actual[3]["content"].endswith(" end")
+    assert len(actual[3]["content"]) < len(result["content"])

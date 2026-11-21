@@ -2,6 +2,7 @@
 import io
 import json
 import os
+import re
 import shutil
 import stat
 import sys
@@ -255,6 +256,38 @@ def env_for(skills: dict[str, Skill], cfg: Config) -> dict[str, str]:
             if s.meta.get("primaryEnv") and entry.api_key:
                 env[s.meta["primaryEnv"]] = entry.api_key
     return env
+
+
+_SKILL_QUERY_COMMON = frozenset(
+    "xin chao hello toi ban giup hay cho minh can voi mot please help me you the and of for to".split()
+)
+
+
+def find_skills(skills: dict[str, Skill], query: str, limit: int = 8) -> list[Skill]:
+    """Rank discoverable skills by name, category, and description without reading their bodies."""
+    from nestor.core.text import fold
+
+    def words(text):
+        return set(re.findall(r"[^\W_]+", fold(text)))
+
+    terms = {term for term in words(query) - _SKILL_QUERY_COMMON if len(term) > 1 or term.isdigit()}
+    if not terms:
+        return []
+    query_words = f" {' '.join(re.findall(r'[^\W_]+', fold(query)))} "
+    ranked = []
+    for skill in skills.values():
+        if not skill.active or skill.front.get("disable-model-invocation"):
+            continue
+        name_words = re.findall(r"[^\W_]+", fold(skill.name))
+        names = set(name_words)
+        score = (5 * len(terms & names) + 2 * len(terms & words(skill.category))
+                 + len(terms & words(skill.description)))
+        if score:
+            if f" {' '.join(name_words)} " in query_words:
+                score += 10
+            ranked.append((score, skill))
+    ranked.sort(key=lambda match: (-match[0], match[1].name))
+    return [skill for _, skill in ranked[:limit]]
 
 
 def prompt_block(skills: dict[str, Skill], limit: int = 40000, bundled_limit: int = 18000) -> str:

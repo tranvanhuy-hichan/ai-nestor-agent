@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS usage(
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, provider TEXT, model TEXT,
   prompt_tokens INTEGER DEFAULT 0, completion_tokens INTEGER DEFAULT 0,
   latency_ms INTEGER DEFAULT 0, ok INTEGER DEFAULT 1, session_id TEXT);
+CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id, id);
 CREATE TABLE IF NOT EXISTS tool_events(
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, name TEXT NOT NULL,
   ok INTEGER DEFAULT 1, duration_ms INTEGER DEFAULT 0, session_id TEXT);
@@ -71,6 +72,7 @@ MIGRATIONS = [
     ("jobs", "assistant_scope", "TEXT NOT NULL DEFAULT ''"),
     ("cron_jobs", "notify", "INTEGER DEFAULT 1"),
     ("api_tokens", "allow_docs", "INTEGER DEFAULT 0"),
+    ("usage", "context_report", "TEXT"),
 ]
 
 fts_enabled = False
@@ -88,13 +90,14 @@ def _ensure_fts(c: sqlite3.Connection) -> None:
     from .text import fold
     try:
         cols = [r["name"] for r in c.execute("PRAGMA table_info(messages_fts)")]
-        if cols and cols[0] != "folded":  # schema cu (chua bo dau): dung lai tu dau
+        if cols and (cols[0] != "folded" or "message_id" not in cols):
             c.execute("DROP TABLE messages_fts")
             cols = []
         if not cols:
-            c.execute("CREATE VIRTUAL TABLE messages_fts USING fts5(folded, content UNINDEXED, session_id UNINDEXED, role UNINDEXED)")
-            rows = c.execute("SELECT content, session_id, role FROM messages WHERE role IN ('user','assistant') AND content!=''").fetchall()
-            c.executemany("INSERT INTO messages_fts(folded, content, session_id, role) VALUES(?,?,?,?)", [(fold(r["content"]), r["content"], r["session_id"], r["role"]) for r in rows])
+            c.execute("CREATE VIRTUAL TABLE messages_fts USING fts5(folded, message_id UNINDEXED, session_id UNINDEXED)")
+            rows = c.execute("SELECT id, content, session_id FROM messages WHERE role IN ('user','assistant') AND content!=''")
+            c.executemany("INSERT INTO messages_fts(rowid, folded, message_id, session_id) VALUES(?,?,?,?)",
+                          ((r["id"], fold(r["content"]), r["id"], r["session_id"]) for r in rows))
         fts_enabled = True
     except sqlite3.OperationalError:
         fts_enabled = False
@@ -118,5 +121,6 @@ def init() -> None:
         c.execute("PRAGMA journal_mode=WAL")
         c.executescript(SCHEMA)
         c.executescript(EXTRA_SCHEMA)
+        c.execute("BEGIN IMMEDIATE")
         _ensure_columns(c)
         _ensure_fts(c)

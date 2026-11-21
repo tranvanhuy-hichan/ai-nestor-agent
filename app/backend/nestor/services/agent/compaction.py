@@ -7,6 +7,7 @@ from nestor.services.providers import ProviderError, make_provider
 
 PROMPT = ("Tóm tắt cuộc hội thoại dưới đây thành các ý chính để người trợ lý có thể tiếp tục công việc. "
           "Giữ nguyên: yêu cầu của người dùng, quyết định đã chốt, tên file và đường dẫn, kết quả quan trọng, việc còn dở. "
+          "Giữ message_id của kết quả công cụ quan trọng để đọc lại bằng tool_result_read khi cần. "
           "Tối đa 250 từ, viết gạch đầu dòng, không thêm lời dẫn.")
 
 
@@ -16,7 +17,8 @@ def _size(m: dict) -> int:
 
 def _render(m: dict) -> str:
     if m["role"] == "tool":
-        return f"[kết quả tool] {m['content'][:500]}"
+        reference = f" message_id={m['_id']}" if m.get("_id") else ""
+        return f"[kết quả tool{reference}] {m['content'][:500]}"
     calls = "".join(f" [gọi {c['name']}({json.dumps(c['args'], ensure_ascii=False)[:150]})]" for c in m.get("tool_calls", []))
     return f"{'Người dùng' if m['role'] == 'user' else 'Trợ lý'}: {m['content'][:1500]}{calls}"
 

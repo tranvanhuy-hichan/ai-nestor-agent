@@ -54,6 +54,8 @@ class ToolContext:
     asker: Callable[[str, list[str]], str] | None = None  # hoi nguoi dung mot cau (ask_user); None = khong hoi duoc (API/CLI)
     sandbox: dict = field(default_factory=dict)  # {"mode": "none|docker", "image", "network"}
     plan_restore: dict | None = None  # che do Ke hoach: danh sach tool bi tat de khoi phuc khi nguoi dung duyet ke hoach
+    deferred_tools: set[str] = field(default_factory=set)
+    loaded_tools: dict[str, None] = field(default_factory=dict)
 
     @property
     def workdir(self) -> Path:
@@ -89,13 +91,101 @@ def tool(name: str, description: str, params: dict[str, tuple[str, str]], requir
     return deco
 
 
+_DEFERRED_OFFICE = {
+    "canva_check", "compare_documents", "convert_to_pdf", "create_cv", "create_docx", "create_pptx",
+    "create_xlsx", "deadline_report", "docx_fill_template", "excel_audit", "excel_merge_reports",
+    "grade_summary", "place_name_check", "read_cv_profile", "review_vn_document", "shuffle_exam",
+    "vanban_types", "vanban_write_docx",
+}
+
+
+def configure_discovery(ctx: ToolContext) -> None:
+    if all(tool_enabled(ctx, name) for name in ("tool_search", "tool_describe")):
+        ctx.deferred_tools = {*ctx.extra, *(name for name in TOOLS
+                               if name in _DEFERRED_OFFICE or name.startswith(("browser_", "computer_")))}
+
+
+def _deferred_group(ctx: ToolContext, name: str) -> str:
+    if name in ctx.extra:
+        return name.partition("__")[0] if "__" in name else "MCP"
+    if name in _DEFERRED_OFFICE:
+        return "Office"
+    return "Browser" if name.startswith("browser_") else "Desktop"
+
+
 def schemas(ctx: ToolContext) -> list[dict]:
-    return [{"name": t.name, "description": t.description, "parameters": t.parameters} for t in [*TOOLS.values(), *ctx.extra.values()] if tool_enabled(ctx, t.name)]
+    deferred = {name for name in ctx.deferred_tools if tool_enabled(ctx, name)}
+    definitions = []
+    for t in [*TOOLS.values(), *ctx.extra.values()]:
+        if not tool_enabled(ctx, t.name) or (t.name in deferred and t.name not in ctx.loaded_tools):
+            continue
+        description = t.description
+        if t.name in ("tool_search", "tool_describe"):
+            if not deferred:
+                continue
+            if t.name == "tool_search":
+                groups = sorted({_deferred_group(ctx, name) for name in deferred})
+                description += " Nhóm có thể tìm: " + ", ".join(groups[:20])[:360] + "."
+        definitions.append({"name": t.name, "description": description, "parameters": t.parameters})
+    return definitions
 
 
 def tool_enabled(ctx: ToolContext, name: str) -> bool:
     policy = ctx.policies.get(name)
     return ctx.enabled.get(name, True) and (policy is None or policy.enabled)
+
+
+@tool("tool_search", "Tìm tên công cụ chuyên biệt đang được nạp theo nhu cầu. Gọi tool_describe để mở công cụ đã chọn.",
+      {"query": ("string", "tên công cụ, nhóm hoặc từ khóa mô tả việc cần làm")})
+def tool_search(ctx, query):
+    from nestor.core.text import fold
+
+    query = fold(query).strip()
+    terms = set(re.findall(r"[^\W_]+", query))
+    if not terms:
+        return "Cần cung cấp từ khóa tìm công cụ."
+    matches = []
+    for name in ctx.deferred_tools:
+        if not tool_enabled(ctx, name):
+            continue
+        definition = ctx.extra.get(name) or TOOLS[name]
+        label = fold(f"{name} {_deferred_group(ctx, name)}")
+        words = set(re.findall(r"[^\W_]+", label))
+        description = set(re.findall(r"[^\W_]+", fold(definition.description)))
+        score = 30 * (name.casefold() == query) + 4 * len(terms & words) + len(terms & description)
+        if score:
+            matches.append((-score, name, " ".join(definition.description.split())[:120]))
+    matches.sort()
+    return "\n".join(f"{name} — {description}" for _, name, description in matches[:8]) or "Không tìm thấy công cụ phù hợp."
+
+
+@tool("tool_describe", "Nạp schema đầy đủ của các công cụ được chọn. Schema sẽ xuất hiện trong lần gọi model tiếp theo. Sau đó gọi công cụ gốc.",
+      {"names": ("array", "tên công cụ trả về từ tool_search, tối đa 8 tên")})
+def tool_describe(ctx, names):
+    loaded = []
+    for name in names[:8]:
+        if name in ctx.deferred_tools and tool_enabled(ctx, name):
+            ctx.loaded_tools.pop(name, None)
+            ctx.loaded_tools[name] = None
+            loaded.append(name)
+    while len(ctx.loaded_tools) > 24:
+        del ctx.loaded_tools[next(iter(ctx.loaded_tools))]
+    return ("Đã nạp công cụ: " + ", ".join(loaded)) if loaded else "Không có công cụ phù hợp trong phạm vi được phép."
+
+
+@tool("tool_result_read", "Đọc phần tiếp theo của kết quả công cụ dài đã lưu trong phiên hiện tại.",
+      {"message_id": ("integer", "ID kết quả ghi trong đoạn xem trước"), "offset": ("integer", "vị trí ký tự bắt đầu, mặc định 0"),
+       "limit": ("integer", "số ký tự, tối đa 4000")}, required=["message_id"])
+def tool_result_read(ctx, message_id, offset=0, limit=4_000):
+    from nestor.services import sessions
+
+    start = max(0, int(offset))
+    end = start + max(1, min(int(limit), 4_000))
+    content = sessions.tool_result(ctx.session_id, int(message_id), scope=ctx.profile_id)
+    if content is None:
+        return "Không tìm thấy kết quả công cụ trong phiên hiện tại."
+    suffix = f"\n[Đọc tiếp với message_id={message_id}, offset={end}]" if end < len(content) else ""
+    return content[start:end] + suffix
 
 
 from nestor.services import checkpoints, hooks
@@ -559,7 +649,16 @@ def remember(ctx, note):
     return "da nho"
 
 
-@tool("skills_read", "Nạp hướng dẫn đầy đủ của một skill (theo tên trong danh sách available_skills).", {"name": ("string", "tên skill")})
+@tool("skills_search", "Tìm kỹ năng phù hợp với tác vụ. Sau khi tìm thấy, dùng skills_read để nạp hướng dẫn.",
+      {"query": ("string", "tên hoặc từ khóa mô tả tác vụ")})
+def skills_search(ctx, query):
+    from nestor.services.skills import find_skills
+
+    matches = find_skills(ctx.skills, query)
+    return "\n".join(f"{s.name} [{s.category}]: {s.description[:160]}" for s in matches) or "Không tìm thấy kỹ năng phù hợp."
+
+
+@tool("skills_read", "Nạp hướng dẫn đầy đủ của một skill theo tên từ available_skills hoặc skills_search.", {"name": ("string", "tên skill")})
 def skills_read(ctx, name):
     s = ctx.skills.get(name)
     if not s:
@@ -717,16 +816,34 @@ def web_search(ctx, query, limit=5):
     return "\n".join(out)
 
 
-@tool("memory_search", "Tìm lại thông tin trong các cuộc hội thoại cũ và bộ nhớ dài hạn (MEMORY.md).",
-      {"query": ("string", "từ khóa cần tìm"), "limit": ("integer", "số kết quả tối đa (mặc định 6)")}, required=["query"])
-def memory_search(ctx, query, limit=6):
+@tool("memory_search", "Tìm ký ức bằng query, hoặc đọc lại tin nhắn và các tin lân cận bằng session_id và message_id.",
+      {"query": ("string", "từ khóa cần tìm"), "limit": ("integer", "số kết quả tối đa (mặc định 6)"),
+       "session_id": ("string", "ID phiên từ kết quả tìm kiếm"), "message_id": ("integer", "ID tin cần đọc"),
+       "radius": ("integer", "số tin mỗi phía, mặc định 1, tối đa 3"), "offset": ("integer", "vị trí ký tự để đọc tiếp tin chính")},
+      required=[])
+def memory_search(ctx, query="", limit=6, session_id="", message_id=None, radius=1, offset=0):
     from nestor.services import sessions  # tranh import vong
-    hits = sessions.search(query, min(int(limit), 15), scope=ctx.profile_id)
+    if session_id or message_id is not None:
+        if not session_id or message_id is None:
+            return "Cần cung cấp cả session_id và message_id."
+        message_id = int(message_id)
+        messages = sessions.around_message(session_id, message_id, int(radius), scope=ctx.profile_id)
+        out = []
+        for msg in messages:
+            focus = msg["id"] == message_id
+            start = max(0, int(offset)) if focus else 0
+            end = start + (8_000 if focus else 1_200)
+            suffix = f"\n[Đọc tiếp tin {msg['id']} với offset={end}]" if end < len(msg["content"]) else ""
+            out.append(f"[tin {msg['id']} · {msg['role']}] {msg['content'][start:end]}{suffix}")
+        return "\n\n".join(out) or "Không tìm thấy tin nhắn trong phạm vi phiên được phép."
+    if not query.strip():
+        return "Cần cung cấp từ khóa tìm kiếm."
+    hits = sessions.search(query, max(1, min(int(limit), 15)), scope=ctx.profile_id)
     mem = ctx.memory_file
     from nestor.core.text import fold
     terms = fold(query).split()
     notes = [ln for ln in (mem.read_text().splitlines() if mem.exists() else []) if any(t in fold(ln) for t in terms)]
-    out = [f"[ghi nhớ] {ln}" for ln in notes[:6]] + [f"[phiên {h['session_id']} · {h['title']}] ({h['role']}) {h['snip']}" for h in hits]
+    out = [f"[ghi nhớ] {ln}" for ln in notes[:6]] + [f"[phiên {h['session_id']} · {h['title']} · tin {h['message_id']}] ({h['role']}) {h['snip']}" for h in hits]
     return "\n".join(out) or "không tìm thấy gì liên quan"
 
 

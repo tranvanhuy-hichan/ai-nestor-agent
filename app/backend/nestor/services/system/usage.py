@@ -1,13 +1,29 @@
+import json
 import re
 import time
 
 from nestor.core.db import db
 
 
-def record_llm(provider: str, model: str, prompt: int, completion: int, latency_ms: int, ok: bool, session_id: str | None) -> None:
+def record_llm(provider: str, model: str, prompt: int, completion: int, latency_ms: int, ok: bool,
+               session_id: str | None, context_report: dict | None = None) -> None:
     with db() as c:
-        c.execute("INSERT INTO usage(ts,provider,model,prompt_tokens,completion_tokens,latency_ms,ok,session_id) VALUES(?,?,?,?,?,?,?,?)",
-                  (time.time(), provider, model, prompt, completion, latency_ms, int(ok), session_id))
+        c.execute("""INSERT INTO usage(ts,provider,model,prompt_tokens,completion_tokens,latency_ms,ok,session_id,context_report)
+                     VALUES(?,?,?,?,?,?,?,?,?)""",
+                  (time.time(), provider, model, prompt, completion, latency_ms, int(ok), session_id,
+                   json.dumps(context_report) if context_report else None))
+
+
+def last_context(sid: str, provider: str | None = None, model: str | None = None, *, successful: bool = False) -> dict | None:
+    with db() as c:
+        row = c.execute("""SELECT ts, provider, model, prompt_tokens, completion_tokens, ok, context_report
+                           FROM usage WHERE session_id=? AND context_report IS NOT NULL
+                           AND (? IS NULL OR provider=?) AND (? IS NULL OR model=?) AND (?=0 OR ok=1)
+                           ORDER BY id DESC LIMIT 1""", (sid, provider, provider, model, model, successful)).fetchone()
+    if row is None:
+        return None
+    result = dict(row)
+    return {**json.loads(result.pop("context_report")), **result}
 
 
 def record_tool(name: str, ok: bool, duration_ms: int, session_id: str | None) -> None:

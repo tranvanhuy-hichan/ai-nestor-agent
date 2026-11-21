@@ -88,21 +88,32 @@ def messages(sid: str, after_id: int = 0, with_ids: bool = False) -> list[dict]:
     return out
 
 
-def add_message(sid: str, msg: dict) -> None:
+def add_message(sid: str, msg: dict) -> int:
     now = time.time()
     with db() as c:
-        c.execute("INSERT INTO messages(session_id,role,content,tool_calls,tool_call_id,attachments,ts) VALUES(?,?,?,?,?,?,?)",
+        inserted = c.execute("INSERT INTO messages(session_id,role,content,tool_calls,tool_call_id,attachments,ts) VALUES(?,?,?,?,?,?,?)",
                   (sid, msg["role"], msg.get("content", ""), json.dumps(msg["tool_calls"], ensure_ascii=False) if msg.get("tool_calls") else None,
                    msg.get("tool_call_id"), json.dumps(msg["attachments"]) if msg.get("attachments") else None, now))
+        mid = inserted.lastrowid
         c.execute("UPDATE sessions SET updated=? WHERE id=?", (now, sid))
         if dbmod.fts_enabled and msg["role"] in ("user", "assistant") and msg.get("content"):
-            c.execute("INSERT INTO messages_fts(folded, content, session_id, role) VALUES(?,?,?,?)", (fold(msg["content"]), msg["content"], sid, msg["role"]))
+            c.execute("INSERT INTO messages_fts(rowid, folded, message_id, session_id) VALUES(?,?,?,?)",
+                      (mid, fold(msg["content"]), mid, sid))
     if msg["role"] in ("user", "assistant") and msg.get("content"):
         try:
             from nestor.services import memory_index
             memory_index.enqueue_message(sid, msg["role"], msg["content"], now)
         except Exception:  # noqa: BLE001 - chi muc vector khong duoc lam hong chat
             pass
+    return mid
+
+
+def tool_result(sid: str | None, message_id: int, *, scope: str) -> str | None:
+    with db() as c:
+        row = c.execute("""SELECT m.content FROM messages m JOIN sessions s ON s.id=m.session_id
+                           WHERE m.session_id=? AND m.id=? AND m.role='tool' AND s.assistant_scope=?""",
+                        (sid, message_id, scope)).fetchone()
+    return row["content"] if row else None
 
 
 def truncate_from(sid: str, index: int) -> None:
@@ -110,6 +121,8 @@ def truncate_from(sid: str, index: int) -> None:
     with db() as c:
         ids = [r["id"] for r in c.execute("SELECT id FROM messages WHERE session_id=? ORDER BY id", (sid,))]
         if index < len(ids):
+            if dbmod.fts_enabled:
+                c.execute("DELETE FROM messages_fts WHERE session_id=? AND rowid>=?", (sid, ids[index]))
             c.execute("DELETE FROM messages WHERE session_id=? AND id>=?", (sid, ids[index]))
             c.execute("UPDATE sessions SET summary='', summary_upto=0, compacted_at=0 WHERE id=? AND summary_upto>=?", (sid, ids[index]))
 
@@ -148,9 +161,29 @@ def search(query: str, limit: int = 8, *, scope: str | None = None) -> list[dict
     if not terms or not dbmod.fts_enabled:
         return []
     with db() as c:
-        rows = c.execute("""SELECT f.session_id, f.role, f.content, s.title, s.updated
-                            FROM messages_fts f JOIN sessions s ON s.id=f.session_id
+        rows = c.execute("""SELECT m.id, m.session_id, m.role, m.content, s.title, s.updated
+                            FROM messages_fts f JOIN messages m ON m.id=f.rowid JOIN sessions s ON s.id=m.session_id
                             WHERE messages_fts MATCH ? AND (? IS NULL OR s.assistant_scope=?)
                             ORDER BY rank LIMIT ?""",
                          (" ".join(f'"{t}"' for t in terms), scope, scope, limit)).fetchall()
-    return [{"session_id": r["session_id"], "role": r["role"], "snip": _excerpt(r["content"], terms), "title": r["title"], "updated": r["updated"]} for r in rows]
+    return [{"session_id": r["session_id"], "message_id": r["id"], "role": r["role"],
+             "snip": _excerpt(r["content"], terms), "title": r["title"], "updated": r["updated"]} for r in rows]
+
+
+def around_message(sid: str, message_id: int, radius: int, *, scope: str | None) -> list[dict]:
+    """Return neighboring user/assistant messages, including those outside the active window."""
+    radius = max(0, min(radius, 3))
+    with db() as c:
+        c.execute("BEGIN")
+        anchor = c.execute("""SELECT m.id, m.role, m.content FROM messages m JOIN sessions s ON s.id=m.session_id
+                              WHERE m.session_id=? AND m.id=? AND m.role IN ('user','assistant')
+                              AND (? IS NULL OR s.assistant_scope=?)""", (sid, message_id, scope, scope)).fetchone()
+        if anchor is None:
+            return []
+        previous = c.execute("""SELECT id, role, content FROM messages WHERE session_id=? AND id<?
+                                AND role IN ('user','assistant') AND content!='' ORDER BY id DESC LIMIT ?""",
+                             (sid, message_id, radius)).fetchall()
+        following = c.execute("""SELECT id, role, content FROM messages WHERE session_id=? AND id>?
+                                 AND role IN ('user','assistant') AND content!='' ORDER BY id LIMIT ?""",
+                              (sid, message_id, radius)).fetchall()
+    return [dict(row) for row in [*reversed(previous), anchor, *following]]

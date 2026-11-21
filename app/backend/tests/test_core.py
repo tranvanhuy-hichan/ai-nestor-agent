@@ -78,6 +78,33 @@ def test_memory_search_is_diacritics_insensitive_and_scoped(tmp_env):
     assert sessions.search("da nang") == []
 
 
+def test_legacy_fts_migration_recovers_exact_compacted_messages_and_honors_scope(tmp_env):
+    from nestor.core import db
+    from nestor.services import sessions, tools
+
+    sid = sessions.create("Đà Nẵng")
+    with db.db() as con:
+        con.execute("UPDATE sessions SET assistant_scope=? WHERE id=?", ("trip", sid))
+    for role, content in (("user", "Tôi muốn đi Đà Nẵng."), ("assistant", "Khởi hành ngày 16."), ("user", "Đã ghi nhận.")):
+        sessions.add_message(sid, {"role": role, "content": content})
+    mid = sessions.messages(sid, with_ids=True)[0]["_id"]
+    sessions.set_summary(sid, "Đã bàn lịch đi.", mid)
+    with db.db() as con:
+        con.execute("DROP TABLE messages_fts")
+        con.execute("CREATE VIRTUAL TABLE messages_fts USING fts5(folded, content UNINDEXED, session_id UNINDEXED, role UNINDEXED)")
+    db.init()
+
+    allowed = tools.ToolContext(workspace=tmp_env, profile_id="trip")
+    other = tools.ToolContext(workspace=tmp_env, profile_id="other")
+    assert sessions.search("da nang", scope="trip")[0]["message_id"] == mid
+    assert f"tin {mid}" in tools.memory_search(allowed, "da nang")
+    exact = tools.memory_search(allowed, session_id=sid, message_id=mid)
+    assert "Tôi muốn đi Đà Nẵng." in exact and "Khởi hành ngày 16." in exact and "Đã ghi nhận." not in exact
+    assert "Đà Nẵng" not in tools.memory_search(other, session_id=sid, message_id=mid)
+    sessions.truncate_from(sid, 0)
+    assert not sessions.search("da nang", scope="trip")
+
+
 def test_truncate_resets_summary_and_removes_later_messages(tmp_env):
     from nestor.services import sessions
     sid = sessions.create("t")

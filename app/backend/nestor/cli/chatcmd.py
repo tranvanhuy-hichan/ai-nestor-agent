@@ -419,6 +419,7 @@ HELP = {
     "/open <id>": ("Mở lại một hội thoại", "Reopen a conversation"), "/model [name]": ("Xem & đổi model/provider", "List & switch model/provider"), "/perm <mode>": ("default | readonly | guarded | full", "default | readonly | guarded | full"),
     "/effort <level>": ("auto | low | medium | high | thinking", "auto | low | medium | high | thinking"), "/skills": ("Liệt kê skill", "List skills"), "/files": ("Liệt kê file của phiên", "List the conversation's files"),
     "/status": ("Model, quyền, mức suy nghĩ, usage phiên", "Model, permissions, effort, session usage"),
+    "/context": ("Xem kích thước ngữ cảnh gửi cho model", "Inspect the context sent to the model"),
     "/retry": ("Gửi lại tin nhắn cuối", "Resend the last message"),
     "/undo": ("Hoàn tác file của lượt gần nhất (giữ nguyên hội thoại)", "Undo files from the last turn (keeps the conversation)"),
     "/rewind [n]": ("Lùi lại n tin của bạn rồi sửa & gửi lại", "Rewind n of your messages, then edit & resend"),
@@ -860,6 +861,8 @@ def _chat_loop(cfg, st, reader, transcript=None) -> int:
                     msgs = sessions.messages(st["sid"])
                     chars = sum(len(m.get("content", "")) for m in msgs)
                     print(f"  {L('Tin nhắn', 'Messages')}: {len(msgs)}  ·  ~{chars // 4} tokens {dim(L('(ước lượng)', '(estimate)'))}")
+            elif cmd == "/context":
+                _print_context(cfg, st)
             elif cmd == "/retry":
                 if not st["sid"]:
                     print(red(L("Chưa có hội thoại để gửi lại.", "No conversation to retry yet.")))
@@ -946,6 +949,55 @@ def _chat_loop(cfg, st, reader, transcript=None) -> int:
             print(dim(f"  {res['provider']} · {time.time() - t0:.1f}s" + (f" · {u['prompt']}+{u['completion']} tokens" if u["prompt"] else "") + f" · {L('phiên', 'session')} {st['sid']}"))
         if transcript is not None:
             print()
+
+
+def _print_context(cfg, st):
+    from ..services import agent, mcp_client, skills, tools, usage
+
+    name = st["provider"]
+    pcfg = cfg.providers[name]
+    report = usage.last_context(st["sid"], name, pcfg.model) if st["sid"] else None
+    if report:
+        print(L(f"Ngữ cảnh lần gọi gần nhất · {name} / {pcfg.model}", f"Last request context · {name} / {pcfg.model}"))
+    else:
+        workdir = cfg.workspace_path()
+        ctx = tools.ToolContext(workspace=workdir, enabled=cfg.agent.tools_enabled, policies=cfg.agent.tool_policies,
+                                extra=mcp_client.manager.tool_defs())
+        permission_note = agent.apply_permission(ctx, st["perm"])
+        tools.configure_discovery(ctx)
+        searchable = all(tools.tool_enabled(ctx, name) for name in ("skills_search", "skills_read"))
+        system = agent.build_system_prompt(cfg, {} if searchable else skills.discover(cfg), workdir,
+                                           searchable_skills=searchable)
+        if permission_note:
+            system += "\n\n" + permission_note
+        report = agent.context_report([{"role": "system", "content": system}], tools.schemas(ctx), pcfg)
+        print(L("Ước lượng nền trước lượt chat, chưa tính nội dung và bộ công cụ riêng của phiên.",
+                "Baseline before a chat turn, excluding session-specific content and tool selection."))
+
+    labels = (
+        ("system", L("Chỉ dẫn hệ thống", "System instructions")),
+        ("skills", L("Danh mục kỹ năng", "Skill catalog")),
+        ("tools", L("Định nghĩa công cụ", "Tool schemas")),
+        ("history", L("Lịch sử và lượt gọi công cụ", "History and tool calls")),
+        ("current", L("Yêu cầu hiện tại", "Current request")),
+        ("tool_results", L("Kết quả công cụ", "Tool results")),
+    )
+    for key, label in labels:
+        print(f"  {label:<30} {report['sections'][key]:>8,} B")
+    if images := report["sections"]["images"]:
+        print(f"  {L('Hình ảnh', 'Images'):<30} {images:>8,}")
+    print(f"  {L('Token đầu vào ước lượng', 'Estimated input tokens'):<30} {report['estimated_tokens']:>8,}")
+    initial = report.get("initial_estimated_tokens", report["estimated_tokens"])
+    if initial > report["estimated_tokens"]:
+        print(f"  {L('Trước khi rút gọn', 'Before context reduction'):<30} {initial:>8,}")
+    if anchor := report.get("anchored_tokens"):
+        print(f"  {L('Ước lượng theo lượt trước', 'Calibrated input estimate'):<30} {anchor:>8,}")
+    if actual := report.get("prompt_tokens"):
+        print(f"  {L('Token đầu vào đo được', 'Reported input tokens'):<30} {actual:>8,}")
+    if window := report.get("context_window"):
+        print(f"  {L('Cửa sổ ngữ cảnh model', 'Model context window'):<30} {window:>8,}")
+    if limit := report.get("prompt_limit"):
+        print(f"  {L('Giới hạn đầu vào gần nhất', 'Last reported input limit'):<30} {limit:>8,}")
 
 
 __all__ = ["run", "chat", "green"]

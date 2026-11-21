@@ -15,6 +15,26 @@ from prompt_toolkit.output import DummyOutput
 from nestor.cli import chatcmd
 
 
+def test_context_command_reads_latest_measurement_without_a_provider_call(tmp_env, capsys):
+    from nestor.core import config
+    from nestor.services import agent, sessions, usage
+
+    cfg = config.load()
+    name = cfg.default_provider
+    pcfg = cfg.providers[name]
+    sid = sessions.create("context")
+    current = {"role": "user", "content": "Xin chào"}
+    report = agent.context_report([{"role": "system", "content": "Chỉ dẫn"}, current], [], pcfg, current)
+    usage.record_llm(name, pcfg.model, 1_234, 56, 100, True, sid, report)
+    st = {"sid": sid, "provider": name, "perm": "default", "effort": "auto"}
+    commands = iter(("/context", "/exit"))
+
+    assert chatcmd._chat_loop(cfg, st, lambda _: next(commands)) == 0
+
+    output = capsys.readouterr().out
+    assert "1,234" in output and str(report["sections"]["current"]) in output
+
+
 def test_interactive_reply_streams_then_renders_markdown_once():
     response = "Hôm nay là **Thứ Bảy**.\n\n- Một mục\n\n```python\nprint(1)\n```"
     terminal = StringIO()
