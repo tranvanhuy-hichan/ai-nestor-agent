@@ -281,12 +281,14 @@ def _trace(ev: dict) -> str | None:
 def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | None = None,
             spinner: ThinkingSpinner | None = None, transcript: _ChatTranscript | None = None) -> dict:
     """Doc su kien tu stream_chat. live=True: in chu khi model dang sinh; ask=True: hoi y/N khi can phe duyet."""
+    from .math_text import MathStream
+
     out = {"session": None, "output": "", "error": None, "timed_out": False, "provider": None, "usage": {"prompt": 0, "completion": 0}}
     streamed = False
     answer_streamed = False
     in_thinking = False
     terminal = transcript.terminal if transcript is not None else sys.stdout
-    render_completed = live and transcript is None and tty()
+    math_stream = MathStream() if live and (transcript is not None or terminal.isatty()) else None
     try:
         for ev in events:
             t = ev["type"]
@@ -317,14 +319,14 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
                     streamed = True
                 elif verbose:
                     print(dim(ev["text"]), end="", file=sys.stderr, flush=True)
-            elif t == "delta" and live and not render_completed:
+            elif t == "delta" and live:
                 if spinner:
                     spinner.stop(clear=True)
                 if in_thinking:
                     in_thinking = False
                     sys.stdout.write("\n\n")
                     sys.stdout.flush()
-                terminal.write(ev["text"])
+                terminal.write(math_stream.feed(ev["text"]) if math_stream else ev["text"])
                 terminal.flush()
                 streamed = True
                 answer_streamed = True
@@ -337,12 +339,15 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
                     sys.stdout.flush()
                 out["output"], out["provider"] = ev["content"], ev["provider"]
                 out["usage"] = {k: out["usage"][k] + ev["usage"][k] for k in out["usage"]}
+                if math_stream is not None:
+                    terminal.write(math_stream.feed("", final=True))
+                    math_stream = MathStream()
                 if live and transcript is not None and answer_streamed:
                     transcript.terminal.write("\n")
                     transcript.terminal.flush()
                     if ev["content"]:
                         transcript.buffer.write(_chat_markdown(ev["content"]) + "\n")
-                elif live and (transcript is not None or render_completed) and ev["content"]:
+                elif live and math_stream is not None and not answer_streamed and ev["content"]:
                     print(_chat_markdown(ev["content"]), flush=True)
                 elif live and streamed:
                     sys.stdout.write("\n")
@@ -392,6 +397,9 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
     finally:
         if spinner:
             spinner.stop(clear=True)
+        if math_stream is not None and math_stream.pending:
+            terminal.write(math_stream.feed("", final=True))
+            terminal.flush()
         events.close()
     return out
 

@@ -32,6 +32,80 @@ def test_chat_markdown_renders_terminal_math(monkeypatch):
     assert r"$n \times W$" in result
 
 
+@pytest.mark.parametrize(("source", "expected"), [
+    (r"σ(z) = \frac{1}{1 + e^(-z)}, cập nhật theo (\hat{y} - y).",
+     "σ(z) = (1)/(1 + e^(-z)), cập nhật theo (ŷ - y)."),
+    (r"$\hat{y} = \frac{1}{1 + e^{-z}}$",
+     "ŷ = (1)/(1 + e^(-z))"),
+    (r"$$dp[i][w] = \max(dp[i-1][w], dp[i-1][w - wt[i-1]] + val[i-1])$$",
+     "dp[i][w] = max(dp[i-1][w], dp[i-1][w - wt[i-1]] + val[i-1])"),
+    (r"$\to \min(a,b)$", "→ min(a,b)"),
+    (r"\(\lim_{n\to\infty} \frac{1}{n^2} = 0\)", "lim_(n→∞) (1)/(n²) = 0"),
+    (r"$\ln x + \sin(\theta) \approx \cos(\varphi)$", "ln x + sin(θ) ≈ cos(ϕ)"),
+    (r"$\frac{\sqrt{x+1}}{\dfrac{a}{b}}$", "(√(x+1))/((a)/(b))"),
+    (r"$\sqrt[3]{x} + \binom{n}{k}$", "√[3](x) + (n choose k)"),
+    (r"$\left\lfloor \frac{n}{2} \right\rfloor$", "⌊ (n)/(2) ⌋"),
+    (r"$\forall x \in \mathbb{R},\quad x^2 \geq 0$", "∀ x ∈ ℝ, x² ≥ 0"),
+    (r"$\Delta E \sim \partial_t \Psi \Rightarrow x \notin A\cup B$",
+     "Δ E ∼ ∂_t Ψ ⇒ x ∉ A∪ B"),
+    (r"$\operatorname{median}(x) = \text{giá trị giữa}$", "median(x) = giá trị giữa"),
+    ("\\[\n" r"\begin{aligned} a &= b+c \\ d &= e \end{aligned}" "\n\\]",
+     "a = b+c; d = e"),
+    (r"$$f(x)=\begin{cases}1 & x>0 \\ 0 & x\leq 0\end{cases}$$",
+     "f(x)={1 x>0; 0 x≤ 0}"),
+    (r"$$A=\begin{bmatrix}1 & \alpha \\ \beta & 4\end{bmatrix}$$", "A=[1, α; β, 4]"),
+    (r"$x^{foo} + a_{index} + \unknown{x} + a\_1$", r"x^(foo) + a_(index) + \unknown{x} + a_1"),
+])
+def test_terminal_math_formats_common_llm_output(monkeypatch, source, expected):
+    from nestor.cli import ui
+    from nestor.cli.chatcmd import _chat_markdown
+    from nestor.cli.math_text import MathStream
+
+    monkeypatch.setattr(ui, "COLOR", False)
+    monkeypatch.setenv("COLUMNS", "160")
+    assert _chat_markdown(source) == expected
+    stream = MathStream()
+    pieces = [stream.feed(character) for character in source]
+    assert "".join(pieces) + stream.feed("", final=True) == expected
+
+
+def test_terminal_stream_formats_math_before_assistant_event(monkeypatch, capsys):
+    from nestor.cli.chatcmd import consume
+
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+
+    def events():
+        yield {"type": "delta", "text": "Thời gian $O(n "}
+        assert capsys.readouterr().out == "Thời gian "
+        yield {"type": "delta", "text": r"\times W)$ và $n^2 + a_{i+1} + \frac{x}{y}$."}
+        assert capsys.readouterr().out == "O(n × W) và n² + aᵢ₊₁ + (x)/(y)."
+        yield {"type": "delta", "text": "\n~~~text\n`$n^2$` và $x_1$\n~~~\n"}
+        assert capsys.readouterr().out == "\n~~~text\n`$n^2$` và $x_1$\n~~~\n"
+        yield {"type": "delta", "text": r"Sigmoid \fr"}
+        assert capsys.readouterr().out == "Sigmoid "
+        yield {"type": "delta", "text": r"ac{1}{1 + e^(-z)} và \hat{y}." + "\n"}
+        assert capsys.readouterr().out == "(1)/(1 + e^(-z)) và ŷ.\n"
+        yield {"type": "delta", "text": "$5 và `$n^2$`"}
+        yield {"type": "assistant", "content": "complete", "provider": "local",
+               "usage": {"prompt": 1, "completion": 1}}
+
+    result = consume(events(), live=True, verbose=False, ask=False)
+    assert capsys.readouterr().out == "$5 và `$n^2$`\n"
+    assert result["output"] == "complete"
+
+
+def test_bare_math_preserves_code_and_incomplete_commands(monkeypatch):
+    from nestor.cli import ui
+    from nestor.cli.chatcmd import _chat_markdown
+    from nestor.cli.math_text import MathStream
+
+    monkeypatch.setattr(ui, "COLOR", False)
+    source = r"`\frac{1}{2}` và \frac{1}."
+    assert _chat_markdown(source) == r"\frac{1}{2} và \frac{1}."
+    stream = MathStream()
+    assert stream.feed(source, final=True) == source
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
