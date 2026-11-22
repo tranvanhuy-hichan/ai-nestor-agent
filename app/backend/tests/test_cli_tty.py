@@ -75,7 +75,8 @@ from nestor.services import chat_runner
 
 def stream_chat(*args, **kwargs):
     yield {"type": "delta", "text": "Reply inside chat"}
-    yield {"type": "assistant", "content": "Reply inside chat", "provider": "local",
+    yield {"type": "delta", "text": r" $O(n \\times W)$"}
+    yield {"type": "assistant", "content": r"Reply inside chat $O(n \\times W)$", "provider": "local",
            "usage": {"prompt": 1, "completion": 1}}
 
 chat_runner.stream_chat = stream_chat
@@ -89,6 +90,7 @@ finally:
     p.read_until("Ctrl+D to exit")
     p.send(b"hello\r")
     p.read_until("Reply inside chat")
+    p.read_until("O(n × W)")
     p.send(b"/exit\r")
     p.read_until("Shell after chat")
     assert p.finish() == 0, ANSI.sub("", p.text)[-900:]

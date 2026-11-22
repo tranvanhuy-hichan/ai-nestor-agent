@@ -13,6 +13,25 @@ import pytest
 BACKEND = Path(__file__).resolve().parents[1]
 
 
+def test_chat_markdown_renders_terminal_math(monkeypatch):
+    from nestor.cli import ui
+    from nestor.cli.chatcmd import _chat_markdown
+
+    monkeypatch.setattr(ui, "COLOR", False)
+    monkeypatch.setenv("COLUMNS", "120")
+    source = (
+        r"- Thời gian: $O(n \times W)$ với $n$ và $W$." "\n"
+        r"- **\(x \le y\)**, công thức $$\alpha \times \beta$$." "\n"
+        "- Giá $5 và $10, mã `$n$`.\n\n"
+        "~~~text\n" r"$n \times W$" "\n~~~"
+    )
+    result = _chat_markdown(source)
+    assert "Thời gian: O(n × W) với n và W." in result
+    assert "x ≤ y, công thức α × β." in result
+    assert "Giá $5 và $10, mã $n$." in result
+    assert r"$n \times W$" in result
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))

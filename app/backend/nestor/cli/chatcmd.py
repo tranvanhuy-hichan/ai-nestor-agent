@@ -54,12 +54,15 @@ def _user_message_text(text: str) -> str:
 def _chat_markdown(text: str) -> str:
     from rich.console import Console
     from rich.markdown import Markdown
+    from .math_text import math_markdown_parser
     from .ui import COLOR
 
     output = StringIO()
     columns = shutil.get_terminal_size((80, 24)).columns
     console = Console(file=output, width=max(1, columns - 1), force_terminal=COLOR, highlight=False, legacy_windows=False)
-    console.print(Markdown(text, hyperlinks=False))
+    markdown = Markdown("", hyperlinks=False)
+    markdown.parsed = math_markdown_parser().parse(text)
+    console.print(markdown)
     return re.sub(r" +((?:\x1b\[[0-9;]*m)*)(?=\n|$)", r"\1", output.getvalue()).strip("\n")
 
 
@@ -283,6 +286,7 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
     answer_streamed = False
     in_thinking = False
     terminal = transcript.terminal if transcript is not None else sys.stdout
+    render_completed = live and transcript is None and tty()
     try:
         for ev in events:
             t = ev["type"]
@@ -313,7 +317,7 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
                     streamed = True
                 elif verbose:
                     print(dim(ev["text"]), end="", file=sys.stderr, flush=True)
-            elif t == "delta" and live:
+            elif t == "delta" and live and not render_completed:
                 if spinner:
                     spinner.stop(clear=True)
                 if in_thinking:
@@ -338,7 +342,7 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
                     transcript.terminal.flush()
                     if ev["content"]:
                         transcript.buffer.write(_chat_markdown(ev["content"]) + "\n")
-                elif live and transcript is not None and ev["content"]:
+                elif live and (transcript is not None or render_completed) and ev["content"]:
                     print(_chat_markdown(ev["content"]), flush=True)
                 elif live and streamed:
                     sys.stdout.write("\n")
