@@ -1,4 +1,14 @@
 const dict: Record<string, string> = {
+  'Hướng dẫn sử dụng': 'User guide',
+  'Cách sử dụng từng chức năng của Nestor': 'Learn how to use Nestor features',
+  'Tìm trong hướng dẫn': 'Search the guide',
+  'Tìm trong hướng dẫn…': 'Search the guide…',
+  'Chủ đề hướng dẫn': 'Guide topics',
+  'Không tìm thấy chủ đề phù hợp.': 'No matching topics.',
+  'Tất cả chủ đề': 'All topics',
+  'Nội dung hướng dẫn': 'Guide content',
+  'Mở chức năng': 'Open feature',
+
   'Xác nhận thao tác': 'Confirm action',
   'Bật toàn quyền': 'Enable full access',
   'Đổi quyền của agent': 'Change agent permissions',

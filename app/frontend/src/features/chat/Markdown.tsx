@@ -121,7 +121,7 @@ function Table({ head, rows, aligns }: { head: string[]; rows: string[][]; align
 }
 
 /** Markdown with local math rendering; raw model HTML is never interpreted. */
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, article = false }: { text: string; article?: boolean }) {
   const blocks = text.split(/```(\w*)\n?([\s\S]*?)(?:```|$)/g)
   const out: ReactNode[] = []
   for (let i = 0; i < blocks.length; i += 3) {
@@ -129,8 +129,14 @@ export function Markdown({ text }: { text: string }) {
     if (prose.trim()) {
       const lines = prose.replace(/(`[^`\n]+`)|(?<!\\)(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\])/g, (match, code: string | undefined) => code ? match : match.replace(/\n/g, ' ')).replace(/^\n+|\n+$/g, '').split('\n')
       let list: string[] = []
+      let ordered = false
       const flush = (key: string) => {
-        if (list.length) out.push(<ul key={key} className="my-1.5 list-disc space-y-0.5 pl-5">{list.map((l, j) => <li key={j}>{inline(l)}</li>)}</ul>)
+        if (list.length) {
+          const List = ordered ? 'ol' : 'ul'
+          out.push(<List key={key} className={ordered ? 'my-2 list-decimal space-y-1 pl-5' : 'my-1.5 list-disc space-y-0.5 pl-5'}>
+            {list.map((l, j) => <li key={j}>{inline(l)}</li>)}
+          </List>)
+        }
         list = []
       }
       for (let j = 0; j < lines.length; j++) {
@@ -146,11 +152,18 @@ export function Markdown({ text }: { text: string }) {
           out.push(<Table key={`t${i}-${j}`} head={head} rows={rows} aligns={aligns} />)
           continue
         }
-        const li = /^\s*[-*]\s+(.*)$/.exec(line)
-        if (li) { list.push(li[1]); continue }
+        const li = (article ? /^\s*(\d+\.|[-*])\s+(.*)$/ : /^\s*([-*])\s+(.*)$/).exec(line)
+        if (li) {
+          const nextOrdered = li[1].endsWith('.')
+          if (list.length && nextOrdered !== ordered) flush(`list${i}-${j}`)
+          ordered = nextOrdered
+          list.push(li[2])
+          continue
+        }
         flush(`ul${i}-${j}`)
         const h = /^#{1,4}\s+(.*)$/.exec(line)
-        out.push(h ? <p key={`${i}-${j}`} className="mt-2 font-semibold">{inline(h[1])}</p> : line.trim() ? <p key={`${i}-${j}`}>{inline(line)}</p> : <div key={`${i}-${j}`} className="h-2" />)
+        const Heading = article ? 'h3' : 'p'
+        out.push(h ? <Heading key={`${i}-${j}`} className={article ? 'mb-2 mt-5 text-base font-semibold first:mt-0' : 'mt-2 font-semibold'}>{inline(h[1])}</Heading> : line.trim() ? <p key={`${i}-${j}`}>{inline(line)}</p> : <div key={`${i}-${j}`} className="h-2" />)
       }
       flush(`ul${i}-end`)
     }

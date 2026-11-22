@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { NotebookText, Bell, Blocks, Cable, FileSearch, Clock, Code2, Columns3, Gauge, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, LayoutGrid, ChevronDown, Sun, type LucideIcon } from 'lucide-react'
+import { NotebookText, BookOpen, Bell, Blocks, Cable, FileSearch, Clock, Code2, Columns3, Gauge, Sparkles, Wrench, FolderCog, ListTodo, House, LayoutDashboard, LogOut, MessageSquare, Moon, Plug, Puzzle, Settings, LayoutGrid, ChevronDown, Sun, type LucideIcon } from 'lucide-react'
 import { setTheme, useAppearance } from '@/lib/appearance'
 import { api } from '@/lib/api'
 import { t, tk } from '@/lib/i18n.ts'
@@ -165,6 +165,7 @@ export function AppLayout() {
       </nav>
 
       <div className="space-y-1.5 border-t border-line p-2">
+        <NavRow item={{ to: '/guide', label: tk('Hướng dẫn sử dụng'), icon: BookOpen, hint: tk('Cách sử dụng từng chức năng của Nestor') }} unread={0} chatMode={chatMode} expanded={exp} />
         <div className={cn('gap-1', chatMode ? exp ? 'flex items-center' : 'grid' : 'grid md:flex md:items-center')}>
           <div className="min-w-0 flex-1">
             <NavRow item={{ to: '/settings', label: tk('Cài đặt'), icon: Settings, hint: tk('Tính năng, an toàn, mật khẩu') }} unread={0} chatMode={chatMode} expanded={exp} />

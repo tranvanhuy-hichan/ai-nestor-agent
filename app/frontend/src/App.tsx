@@ -21,6 +21,7 @@ import { SettingsPage } from '@/features/settings/SettingsPage'
 import { SkillsPage } from '@/features/skills/SkillsPage'
 import { WorkspacePage } from '@/features/workspace/WorkspacePage'
 import { ActivityPage } from '@/features/activity/ActivityPage'
+import { Loading } from '@/components/ui/misc'
 import { CODE_MODE } from '@/lib/features'
 import { useLang } from '@/lib/i18n.ts'
 import { FeatureHub } from '@/features/feature/FeatureHub'
@@ -29,6 +30,7 @@ import { FeaturePage } from '@/features/feature/FeaturePage'
 
 // trình soạn thảo kéo theo highlight.js nên chỉ tải khi mở một dự án
 const CodeWorkspace = lazy(() => import('@/features/code/CodeWorkspace').then((m) => ({ default: m.CodeWorkspace })))
+const GuidePage = lazy(() => import('@/features/guide/GuidePage').then((m) => ({ default: m.GuidePage })))
 // trinh soan Trang keo theo lowlight (to mau cu phap) nen chi tai khi mo Trang
 const PagesPage = lazy(() => import('@/features/pages/PagesPage').then((m) => ({ default: m.PagesPage })))
 
@@ -66,6 +68,7 @@ export default function App() {
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="guide/:topic?" element={<Suspense fallback={<Loading />}><GuidePage /></Suspense>} />
       </Route>
     </Routes>
   )

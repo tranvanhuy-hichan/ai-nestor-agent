@@ -106,6 +106,16 @@ def test_bare_math_preserves_code_and_incomplete_commands(monkeypatch):
     assert stream.feed(source, final=True) == source
 
 
+def test_terminal_stream_keeps_split_fence_lines_verbatim():
+    from nestor.cli.math_text import MathStream
+
+    stream = MathStream()
+    assert stream.feed("```text\n```") == "```text\n```"
+    assert stream.feed("invalid $n^2$\n``") == "invalid $n^2$\n``"
+    assert stream.feed("`\n$n^2$.") == "`\nn²."
+
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))

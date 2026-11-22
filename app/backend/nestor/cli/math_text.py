@@ -166,6 +166,7 @@ class MathStream:
         self.pending = ""
         self.line_start = True
         self.fence = ""
+        self.fence_partial: str | None = None
         self.code = ""
 
     def feed(self, text: str, *, final: bool = False) -> str:
@@ -184,18 +185,25 @@ class MathStream:
         return "".join(output)
 
     def _next(self, source: str, pos: int, final: bool) -> tuple[int, str] | None:
-        if self.line_start and not self.code:
+        if self.fence or (self.line_start and not self.code):
             line_end = source.find("\n", pos)
             stop = len(source) if line_end < 0 else line_end + 1
             line = source[pos:stop]
+            if self.fence:
+                full_line = (self.fence_partial or "") + line
+                if line_end < 0 and not final:
+                    self.fence_partial = full_line
+                    return stop, line
+                self.fence_partial = None
+                marker = _FENCE.match(full_line)
+                if marker and marker[1].startswith(self.fence) and not full_line[marker.end():].strip():
+                    self.fence = ""
+                return stop, line
             marker = _FENCE.match(line)
-            if self.fence or marker:
+            if marker:
                 if line_end < 0 and not final:
                     return None
-                if not self.fence:
-                    self.fence = marker[1]
-                elif marker and marker[1].startswith(self.fence) and not line[marker.end():].strip():
-                    self.fence = ""
+                self.fence = marker[1]
                 return stop, line
             if _INDENTED.match(line):
                 return (stop, line) if line_end >= 0 or final else None
