@@ -5,11 +5,15 @@ export const CALLOUT_COLORS = ['gray', 'blue', 'green', 'yellow', 'red', 'purple
 export type CalloutColor = typeof CALLOUT_COLORS[number]
 
 /** Khoi highlight co icon + mau nen, giong callout trong Notion. */
-export const Callout = Node.create({
+export const Callout = Node.create<{ editIcon: (current: string) => Promise<string | null> }>({
   name: 'callout',
   group: 'block',
   content: 'block+',
   defining: true,
+
+  addOptions() {
+    return { editIcon: async () => null }
+  },
 
   addAttributes() {
     return {
@@ -36,9 +40,9 @@ export const Callout = Node.create({
       iconEl.dataset.calloutIcon = ''
       iconEl.setAttribute('aria-label', t('Đổi biểu tượng'))
       iconEl.addEventListener('mousedown', (e) => e.preventDefault())
-      iconEl.addEventListener('click', () => {
-        const next = prompt(t('Emoji cho khối này:'), iconEl.textContent || '💡')
-        if (next == null || typeof getPos !== 'function') return
+      iconEl.addEventListener('click', async () => {
+        const next = await this.options.editIcon(iconEl.textContent || '💡')
+        if (next == null || editor.isDestroyed || !wrapper.isConnected || typeof getPos !== 'function') return
         const pos = getPos()
         if (pos == null) return
         editor.chain().focus().command(({ tr }) => { tr.setNodeAttribute(pos, 'icon', next.slice(0, 8) || '💡'); return true }).run()

@@ -7,7 +7,11 @@ def format_hits(hits: list[dict]) -> str:
     out = []
     for i, h in enumerate(hits, start=1):
         text = " ".join(h["text"].split())
-        out.append(f"[{i}] thẻ nguồn: [[src:{h['doc_id']}|{h['name']}|{h['loc']}]]\n{text[:900]}")
+        loc = h["loc"].replace("]", "］").replace("\n", " ").replace("\r", " ")
+        if h.get("chunk_id") is not None:
+            loc = f"{loc}#chunk={h['chunk_id']}"
+        name = h["name"].translate(str.maketrans({"|": "｜", "]": "］", "\n": " ", "\r": " "}))
+        out.append(f"[{i}] thẻ nguồn: [[src:{h['doc_id']}|{name}|{loc}]]\n{text[:900]}")
     return "\n\n".join(out)
 
 

@@ -1,0 +1,27 @@
+/* PDF.js positions each text run over the original canvas for selection and citations. */
+.kb-pdf-text {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+}
+.kb-pdf-text :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  transform-origin: 0 0;
+}
+.kb-pdf-text > span:not(.markedContent),
+.kb-pdf-text .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  font-size: calc(var(--total-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x));
+}
+.kb-pdf-text ::selection { background: #3b82f680; }
+.kb-pdf-highlights { mix-blend-mode: multiply; }
+.kb-pdf-highlights span { position: absolute; background: #facc15a0; border-radius: 2px; }

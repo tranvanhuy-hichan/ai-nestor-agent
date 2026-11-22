@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Copy, KeyRound, ShieldAlert, Trash2 } from 'lucide-react'
@@ -34,6 +35,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function ApiTab({ addSignal = 0 }: { addSignal?: number }) {
+  const { confirmAction } = useDialogs()
   const tokens = useTokens()
   const info = useQuery({ queryKey: ['integration-info'], queryFn: () => api.get<{ python: string; mcp_server_script: string }>('/api/integration-info') })
   const qc = useQueryClient()
@@ -72,7 +74,7 @@ export function ApiTab({ addSignal = 0 }: { addSignal?: number }) {
               <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{tk.name}</span><code className="font-mono text-xs text-muted">{tk.prefix}…</code>{tk.allow_exec ? <Badge tone="warn"><ShieldAlert className="size-3" />{t('Được chạy lệnh')}</Badge> : <Badge tone="ok">{t('Chỉ đọc/hỏi đáp')}</Badge>}{tk.allow_docs && <Badge tone="info">{t('Được thêm/xóa tài liệu')}</Badge>}</div>
               <p className="text-xs text-muted">{t('Tạo {ago} · dùng lần cuối {last}', { ago: timeAgo(tk.created), last: tk.last_used ? timeAgo(tk.last_used) : t('chưa bao giờ') })}</p>
             </div>
-            <Button size="sm" variant="ghost" aria-label={t('Thu hồi {name}', { name: tk.name })} onClick={() => { if (confirm(t('Thu hồi token "{name}"? Ứng dụng đang dùng nó sẽ bị từ chối.', { name: tk.name }))) revoke.mutate(tk.id) }}><Trash2 className="size-4" /></Button>
+            <Button size="sm" variant="ghost" aria-label={t('Thu hồi {name}', { name: tk.name })} onClick={async () => { if (await confirmAction(t('Thu hồi token "{name}"? Ứng dụng đang dùng nó sẽ bị từ chối.', { name: tk.name }), { action: t('Thu hồi'), danger: true })) revoke.mutate(tk.id) }}><Trash2 className="size-4" /></Button>
           </div>
         ))}
       </Card>

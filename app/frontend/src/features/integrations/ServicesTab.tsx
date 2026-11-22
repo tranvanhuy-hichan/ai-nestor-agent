@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useMemo, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, ExternalLink, KeyRound, LayoutGrid, LogOut, Plus, ShieldAlert, Trash2 } from 'lucide-react'
@@ -90,6 +91,7 @@ function TokenDialog({ ask, onClose, onSave }: { ask: TokenAsk | null; onClose: 
 }
 
 export function ServicesTab({ q }: { q: string }) {
+  const { confirmAction } = useDialogs()
   const lang = useLang()
   const mcp = useMcp()
   const cfg = useConfig()
@@ -163,9 +165,9 @@ export function ServicesTab({ q }: { q: string }) {
       return s.auth === 'oauth' ? openLogin(name, w) : undefined
     } })
   }
-  const chooseRegistry = (i: RegistryItem) => {
+  const chooseRegistry = async (i: RegistryItem) => {
     const warn = i.community ? t('Server do cộng đồng đăng, Nestor không kiểm duyệt. Công cụ của nó vẫn phải qua bước xin phép, nhưng nội dung nó trả về là dữ liệu bên ngoài. Chỉ dùng nếu bạn tin nguồn này.') : t('Thêm "{name}"?', { name: i.name })
-    if (!confirm(`${i.name}\n${i.url}\n\n${warn}`)) return
+    if (!(await confirmAction(`${i.name}\n${i.url}\n\n${warn}`, { action: t('Thêm máy chủ') }))) return
     run.mutate({ key: i.id, login: false, fn: async () => {
       const p = await api.post<Probe>('/api/mcp/probe', { url: i.url })
       if (p.kind === 'down') throw new Error(t('Không kết nối được tới máy chủ này ({note}).', { note: p.note }))
@@ -187,8 +189,8 @@ export function ServicesTab({ q }: { q: string }) {
     } catch (e) { toast(errMsg(e), 'bad') }
   }
   const login = (name: string) => run.mutate({ key: name, login: true, fn: (w) => openLogin(name, w) })
-  const logout = (name: string) => { if (confirm(t('Đăng xuất khỏi "{name}"? Token đã lưu sẽ bị xóa.', { name }))) run.mutate({ key: name, login: false, fn: async () => { await api.post(`/api/mcp/${name}/oauth/logout`); toast(t('Đã đăng xuất')) } }) }
-  const remove = (name: string) => { if (confirm(t('Gỡ "{name}"? Token đăng nhập đã lưu cũng bị xóa.', { name }))) run.mutate({ key: name, login: false, fn: async () => {
+  const logout = async (name: string) => { if (await confirmAction(t('Đăng xuất khỏi "{name}"? Token đã lưu sẽ bị xóa.', { name }), { action: t('Đăng xuất'), danger: true })) run.mutate({ key: name, login: false, fn: async () => { await api.post(`/api/mcp/${name}/oauth/logout`); toast(t('Đã đăng xuất')) } }) }
+  const remove = async (name: string) => { if (await confirmAction(t('Gỡ "{name}"? Token đăng nhập đã lưu cũng bị xóa.', { name }), { action: t('Gỡ'), danger: true })) run.mutate({ key: name, login: false, fn: async () => {
     if (servers[name]?.oauth) await api.post(`/api/mcp/${name}/oauth/logout`)
     const c = structuredClone(cfg.data.config)
     delete c.mcp_servers[name]

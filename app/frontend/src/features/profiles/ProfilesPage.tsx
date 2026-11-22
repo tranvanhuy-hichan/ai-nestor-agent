@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useState } from 'react'
 import { ArrowRight, Plus, Sparkles, MessageSquare, Pencil, Trash2 } from 'lucide-react'
 import { assistantIcon } from '@/lib/assistantIcons'
@@ -95,6 +96,7 @@ function ProfileEditor({ initial, editing, close }: { initial: Draft; editing: b
 }
 
 export function ProfilesPage() {
+  const { confirmAction } = useDialogs()
   const query = useQuery({ queryKey: ['profiles'], queryFn: () => api.get<(Draft & { builtin: boolean })[]>('/api/assistants') })
   const [editor, setEditor] = useState<{ draft: Draft; editing: boolean } | null>(null)
   const qc = useQueryClient()
@@ -140,7 +142,7 @@ export function ProfilesPage() {
             <div className="mt-auto flex items-center gap-2 border-t border-line pt-3">
               <Link to={`/chat?profile=${encodeURIComponent(profile.id)}`} className="mr-auto inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-accent hover:bg-accent/10">{t('Trò chuyện')}<ArrowRight className="size-4" /></Link>
               <Button size="sm" variant="ghost" aria-label={t('Sửa')} onClick={() => setEditor({ draft: { ...profile, skills: profile.skills ?? [], providers: profile.providers ?? [] }, editing: true })}><Pencil className="size-4" /></Button>
-              <Button size="sm" variant="ghost" aria-label={t('Xóa')} disabled={remove.isPending} onClick={() => { if (confirm(t('Xóa hồ sơ {name}?', { name: profile.name }))) remove.mutate(profile.id) }}><Trash2 className="size-4" /></Button>
+              <Button size="sm" variant="ghost" aria-label={t('Xóa')} disabled={remove.isPending} onClick={async () => { if (await confirmAction(t('Xóa hồ sơ {name}?', { name: profile.name }), { action: t('Xóa'), danger: true })) remove.mutate(profile.id) }}><Trash2 className="size-4" /></Button>
             </div>
           </Card>
         })}</div>}

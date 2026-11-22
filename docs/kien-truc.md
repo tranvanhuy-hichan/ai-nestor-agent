@@ -83,7 +83,10 @@ Nguyên tắc thiết kế chính:
 
 ### Kho tài liệu (`services/knowledge.py`, `tools_kb.py`, `api/knowledge.py`)
 
-Hỏi đáp trên tài liệu của người dùng. `add_file` lưu bản sao vào `workspace/knowledge/<id>/`, chống trùng bằng sha256 rồi đọc và lập chỉ mục ở luồng nền (`_index`). Bộ đọc theo định dạng trả về `(vị trí, văn bản)`: PDF theo trang (`pypdf`, báo "cần OCR" nếu quá nửa số trang không có chữ), Word theo mục tiêu đề hoặc cụm đoạn (đọc XML bằng `zipfile`), Excel theo sheet và cụm 25 dòng có kèm dòng tiêu đề, PowerPoint theo slide, còn lại theo cụm 40 dòng. Có chặn file nén quá lớn. Văn bản chia bằng `memory_index.chunk_text` (≈900 ký tự).
+Hỏi đáp trên tài liệu của người dùng. `add_file` lưu bản sao vào `workspace/knowledge/<id>/`, chống trùng bằng sha256 rồi đọc và lập chỉ mục ở luồng nền (`_index`). Bộ đọc theo định dạng trả về `(vị trí, văn bản)`: PDF theo trang (`pypdf` đọc lớp chữ, PDFium và Tesseract nhận dạng trang thiếu chữ, lưu tọa độ từ để tô sáng trích dẫn), Word theo mục tiêu đề hoặc cụm đoạn (đọc XML bằng `zipfile`), Excel theo sheet và cụm 25 dòng có kèm dòng tiêu đề, PowerPoint theo slide, còn lại theo cụm 40 dòng. Có chặn file nén quá lớn. Văn bản chia bằng `memory_index.chunk_text` (≈900 ký tự).
+
+OCR chạy nền trên máy chủ với tối đa một trang cùng lúc và hai luồng CPU cho Tesseract. Bản Docker có sẵn Tesseract tiếng Việt và tiếng Anh. Khi chạy trực tiếp, cài Tesseract và dữ liệu `vie`/`eng` trên máy chạy Nestor. Bản Windows tìm Tesseract trong `PATH` hoặc thư mục cài chuẩn. PDF cũ có thể chọn **Chạy OCR** từ menu tài liệu.
+
 
 Bảng `kb_docs`, `kb_chunks`, `kb_fts` (FTS5 trên chữ đã bỏ dấu) và `kb_vecs` (vector theo `model_id`), tách riêng khỏi `memory_vectors` nên `memory reindex` không xóa tài liệu. `search()` gộp từ khóa và vector bằng reciprocal-rank fusion; lỗi embedding thì vẫn tìm được bằng từ khóa. Tool `kb_search` trả các đoạn kèm `Nguồn: tên file, vị trí`; tool bị ẩn khi kho trống (tiết kiệm token) và `knowledge_note()` nhắc agent dùng nó và luôn trích nguồn.
 

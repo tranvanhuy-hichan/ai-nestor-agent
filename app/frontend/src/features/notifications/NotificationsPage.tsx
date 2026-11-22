@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -14,6 +15,7 @@ import { t } from '@/lib/i18n.ts'
 type FilterType = 'all' | 'unread' | 'heartbeat' | 'cron' | 'task'
 
 export function NotificationsPage() {
+  const { confirmAction } = useDialogs()
   const qc = useQueryClient()
   const [filter, setFilter] = useState<FilterType>('all')
   const q = useQuery({ queryKey: ['notifications'], queryFn: () => api.get<{ items: NotificationItem[]; unread: number }>('/api/notifications'), refetchInterval: 10_000 })
@@ -34,7 +36,7 @@ export function NotificationsPage() {
   return (
     <Page>
       <PageHeader title={t('Hộp thư')}
-        action={<div className="flex gap-2"><Button onClick={() => readAll.mutate()} disabled={!q.data?.unread}><CheckCheck className="size-4" />{t('Đánh dấu đã đọc')}</Button><Button variant="danger" onClick={() => { if (confirm(t('Xóa toàn bộ thông báo?'))) clear.mutate() }} disabled={!q.data?.items.length}><Trash2 className="size-4" />{t('Xóa hết')}</Button></div>} />
+        action={<div className="flex gap-2"><Button onClick={() => readAll.mutate()} disabled={!q.data?.unread}><CheckCheck className="size-4" />{t('Đánh dấu đã đọc')}</Button><Button variant="danger" onClick={async () => { if (await confirmAction(t('Xóa toàn bộ thông báo?'), { action: t('Xóa hết'), danger: true })) clear.mutate() }} disabled={!q.data?.items.length}><Trash2 className="size-4" />{t('Xóa hết')}</Button></div>} />
       
       {/* Thanh bộ lọc */}
       {items.length > 0 && (

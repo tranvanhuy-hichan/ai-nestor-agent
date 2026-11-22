@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react'
+import { createContext, Fragment, useContext, useState, type ReactNode } from 'react'
 import { Check, Copy, Download, FileText } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button'
@@ -29,18 +29,26 @@ function Code({ code, lang }: { code: string; lang: string }) {
   )
 }
 
+export interface DocumentSource { id: string; name: string; loc?: string; chunkId?: string }
+export const DocumentSourceContext = createContext<((source: DocumentSource) => void) | null>(null)
+
 /** Thẻ nguồn của kho tài liệu: [[src:id|tên file|vị trí]] hiện thành chip nhỏ; bấm để xem đúng đoạn trích trong một thẻ, tải file gốc là tùy chọn. */
-function SourceChip({ id, name, loc }: { id: string; name: string; loc: string }) {
+function SourceChip({ id, name, loc: taggedLocation }: { id: string; name: string; loc: string }) {
+  const openSource = useContext(DocumentSourceContext)
+  const chunkId = /#chunk=(\d+)$/.exec(taggedLocation)?.[1]
+  const loc = taggedLocation.replace(/#chunk=\d+$/, '')
+  const params = new URLSearchParams({ loc })
+  if (chunkId) params.set('chunk_id', chunkId)
   const lang = useLang()
   const [open, setOpen] = useState(false)
   const shown = lang === 'en' ? loc.replace(/^trang /, 'page ').replace(/d\u00f2ng /, 'rows ').replace(/^m\u1ee5c /, 'section ').replace(/^\u0111o\u1ea1n /, 'paragraphs ') : loc
   const ext = /\.[A-Za-z0-9]{2,5}$/.exec(name)?.[0] ?? ''
   const base = name.slice(0, name.length - ext.length)
   const short = base.length > 24 ? `${base.slice(0, 22)}…${ext}` : name
-  const passage = useQuery({ queryKey: ['kb-passage', id, loc], queryFn: () => api.get<{ text: string; truncated: boolean; has_file: boolean }>(`/api/knowledge/${id}/passage?loc=${encodeURIComponent(loc)}`), enabled: open, staleTime: 600_000 })
+  const passage = useQuery({ queryKey: ['kb-passage', id, taggedLocation], queryFn: () => api.get<{ text: string; truncated: boolean; has_file: boolean }>(`/api/knowledge/${encodeURIComponent(id)}/passage?${params}`), enabled: open, staleTime: 600_000 })
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} title={`${name} · ${loc}`}
+      <button type="button" onClick={() => openSource ? openSource({ id, name, loc, chunkId }) : setOpen(true)} title={`${name} · ${loc}`}
         className="mx-0.5 inline-flex max-w-full translate-y-[-1px] items-center gap-1 rounded-md border border-line bg-panel2 px-1.5 py-px align-middle text-[11px] leading-5 text-muted transition hover:border-accent/60 hover:text-fg">
         <FileText className="size-3 shrink-0" /><span className="truncate">{short}</span><span className="shrink-0 text-accent">{shown}</span>
       </button>

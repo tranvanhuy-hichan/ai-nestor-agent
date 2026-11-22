@@ -31,10 +31,12 @@ async def lifespan(_: FastAPI):
     log_capture = gateway.start_log_capture()
     db.init()
     ensure_workspace(cfgmod.load())
+    from .services import knowledge
     from .services.system import work_runs
 
     jobs.recover_interrupted()
     work_runs.recover_interrupted()
+    knowledge.resume_indexing()
     scheduler.start()
     mcp_manager.start()
     cfg = cfgmod.load()

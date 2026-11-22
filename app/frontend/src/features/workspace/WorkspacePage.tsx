@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useState } from 'react'
 import { ChevronRight, Code2, Download, Eye, Folder, FolderOpen, File as FileIcon, FileSpreadsheet, FileText, Image as ImageIcon, Sparkles, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -113,6 +114,7 @@ function Editor({ file }: { file: string }) {
 }
 
 function WorkspaceFilesBrowser() {
+  const { confirmAction } = useDialogs()
   const qc = useQueryClient()
   const toast = useToast()
   const [viewingFile, setViewingFile] = useState<WsFile | null>(null)
@@ -189,8 +191,8 @@ function WorkspaceFilesBrowser() {
                     </a>
                     {!f.readonly && !f.is_system && (
                       <button
-                        onClick={() => {
-                          if (confirm(t('Xóa tệp "{name}" khỏi workspace?', { name: f.name }))) {
+                        onClick={async () => {
+                          if (await confirmAction(t('Xóa tệp "{name}" khỏi workspace?', { name: f.name }), { action: t('Xóa'), danger: true })) {
                             del.mutate(f.path)
                           }
                         }}

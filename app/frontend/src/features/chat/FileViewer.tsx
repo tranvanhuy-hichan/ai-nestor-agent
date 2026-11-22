@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Download, ExternalLink, Save, Trash2 } from 'lucide-react'
@@ -13,6 +14,7 @@ const IMG = /\.(png|jpe?g|gif|webp|svg|bmp)$/i
 const rawUrl = (sid: string, path: string) => `/api/sessions/${sid}/file?path=${encodeURIComponent(path)}&raw=true`
 
 export function FileViewer({ sid, path, onBack }: { sid: string; path: string; onBack: () => void }) {
+  const { confirmAction } = useDialogs()
   const qc = useQueryClient()
   const toast = useToast()
   const isImg = IMG.test(path)
@@ -34,7 +36,7 @@ export function FileViewer({ sid, path, onBack }: { sid: string; path: string; o
         {(isHtml || isMd) && <button onClick={() => setPreview(!preview)} className="rounded border border-line px-2 py-0.5 text-[11px] text-muted hover:text-fg">{preview ? t('Mã nguồn') : t('Xem trước')}</button>}
         <a href={rawUrl(sid, path)} download={path.split('/').pop()} aria-label={t('Tải xuống')} className="rounded p-1 text-muted hover:bg-panel2 hover:text-fg"><Download className="size-4" /></a>
         <a href={rawUrl(sid, path)} target="_blank" rel="noreferrer noopener" aria-label={t('Mở trong tab mới')} className="rounded p-1 text-muted hover:bg-panel2 hover:text-fg"><ExternalLink className="size-4" /></a>
-        <button onClick={() => { if (confirm(t('Xóa {path}?', { path }))) del.mutate() }} aria-label={t('Xóa file')} className="rounded p-1 text-muted hover:bg-panel2 hover:text-bad"><Trash2 className="size-4" /></button>
+        <button onClick={async () => { if (await confirmAction(t('Xóa {path}?', { path }), { action: t('Xóa'), danger: true })) del.mutate() }} aria-label={t('Xóa file')} className="rounded p-1 text-muted hover:bg-panel2 hover:text-bad"><Trash2 className="size-4" /></button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {isImg ? (

@@ -10,7 +10,7 @@ datas, binaries, hidden = [], [], collect_submodules("nestor")
 hidden += collect_submodules("mcp", filter=lambda n: not n.startswith("mcp.cli"))
 datas += collect_data_files("mcp")
 datas += collect_data_files("nestor", includes=["cv_templates/*.mjs"])
-for pkg in ("playwright", "uvicorn", "croniter"):
+for pkg in ("playwright", "uvicorn", "croniter", "pypdfium2_raw"):
     d, b, h = collect_all(pkg)
     datas += d; binaries += b; hidden += h
 hidden += ["uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.http.auto", "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on"]

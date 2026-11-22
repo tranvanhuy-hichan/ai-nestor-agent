@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { BarChart3, CalendarClock, FileText, GitPullRequest, Sparkles, Video, ChevronDown, Languages, Moon, Newspaper, CircleCheck, CircleX, History, HeartPulse, Pencil, Play, Plus, Trash2, type LucideIcon } from 'lucide-react'
@@ -115,6 +116,7 @@ function JobModal({ draft, onClose }: { draft: Draft | null; onClose: () => void
 }
 
 function JobCard({ j, onEdit, refresh }: { j: Job; onEdit: () => void; refresh: () => void }) {
+  const { confirmAction } = useDialogs()
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -155,7 +157,7 @@ function JobCard({ j, onEdit, refresh }: { j: Job; onEdit: () => void; refresh: 
         <Button size="sm" onClick={() => run.mutate()} loading={run.isPending}><Play className="size-3.5" />{t('Chạy thử ngay')}</Button>
         <Button size="sm" variant="ghost" onClick={() => setHistoryOpen(true)}><History className="size-3.5" />{t('Lịch sử chạy')}</Button>
         <Button size="sm" variant="ghost" onClick={onEdit}><Pencil className="size-3.5" />{t('Sửa')}</Button>
-        <Button size="sm" variant="ghost" onClick={() => { if (confirm(t('Xóa "{name}"?', { name: j.name }))) del.mutate() }}><Trash2 className="size-3.5" />{t('Xóa')}</Button>
+        <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction(t('Xóa "{name}"?', { name: j.name }), { action: t('Xóa'), danger: true })) del.mutate() }}><Trash2 className="size-3.5" />{t('Xóa')}</Button>
       </div>
       {historyOpen && <Modal open wide onClose={() => { setHistoryOpen(false); refresh() }} title={`${t('Lịch sử chạy')} · ${j.name}`}>
         {history.isLoading ? <Loading /> : history.error ? <ErrorNote error={history.error} /> : history.data?.length

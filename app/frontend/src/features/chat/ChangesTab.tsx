@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FilePlus2, FileX2, GitBranch, Pencil, Undo2 } from 'lucide-react'
@@ -13,6 +14,7 @@ const ICON = { new: FilePlus2, modified: Pencil, deleted: FileX2 }
 const TONE = { new: 'text-ok', modified: 'text-warn', deleted: 'text-bad' }
 
 export function Diff({ sid, file, onBack, onReverted }: { sid: string; file: GitFile; onBack: () => void; onReverted: () => void }) {
+  const { confirmAction } = useDialogs()
   const toast = useToast()
   const q = useQuery({ queryKey: ['git-diff', sid, file.path], queryFn: () => api.get<{ diff: string; truncated: boolean }>(`/api/sessions/${sid}/git/diff?path=${encodeURIComponent(file.path)}`) })
   const revert = useMutation({
@@ -26,7 +28,7 @@ export function Diff({ sid, file, onBack, onReverted }: { sid: string; file: Git
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <button onClick={onBack} aria-label={t('Quay lại')} className="rounded p-1 text-muted hover:bg-panel2 hover:text-fg"><ArrowLeft className="size-4" /></button>
         <span className="min-w-0 flex-1 truncate font-mono text-xs">{file.path}</span>
-        <Button size="sm" variant="danger" loading={revert.isPending} onClick={() => { if (confirm(file.status === 'new' ? t('Xóa file mới này?') : t('Hoàn tác file này về bản gốc?'))) revert.mutate() }}><Undo2 className="size-3.5" />{t('Hoàn tác')}</Button>
+        <Button size="sm" variant="danger" loading={revert.isPending} onClick={async () => { if (await confirmAction(file.status === 'new' ? t('Xóa file mới này?') : t('Hoàn tác file này về bản gốc?'), { action: t('Hoàn tác'), danger: true })) revert.mutate() }}><Undo2 className="size-3.5" />{t('Hoàn tác')}</Button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto bg-bg py-2 font-mono text-[12px] leading-[1.55]">
         {q.isLoading ? <Loading /> : !q.data?.diff ? <p className="p-6 text-center text-sm text-muted">{t('Không có thay đổi để hiển thị (file nhị phân hoặc rỗng).')}</p> : lines.map((l, i) => (

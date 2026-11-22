@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Brain, Check, Gauge, RotateCcw } from 'lucide-react'
 import { BrandIcon, detectBrand } from '@/components/ui/BrandIcon'
@@ -41,14 +42,15 @@ export function SettingsMenu({ providers, provider, onProvider, effort, onEffort
   temperature?: number; onTemperature?: (t: number) => void
   maxTokens?: number; onMaxTokens?: (m: number) => void
 }) {
+  const { confirmAction } = useDialogs()
   const perm = PERMISSIONS.find((x) => x.id === permission) ?? PERMISSIONS[0]
   const eff = EFFORTS.find((e) => e.id === (effortOff ? 'auto' : effort)) ?? EFFORTS[0]
   const currentProvider = providers.find((x) => x.id === provider)
   const modelName = currentProvider?.model || provider
   const brand = detectBrand(currentProvider || provider)
 
-  const choosePerm = (id: Permission) => {
-    if (id === 'full' && !confirm(t('Toàn quyền: agent sẽ chạy lệnh và đọc/ghi file mà không hỏi bạn. Chỉ bật khi bạn tin tưởng yêu cầu của mình. Tiếp tục?'))) return false
+  const choosePerm = async (id: Permission) => {
+    if (id === 'full' && !(await confirmAction(t('Toàn quyền: agent sẽ chạy lệnh và đọc/ghi file mà không hỏi bạn. Chỉ bật khi bạn tin tưởng yêu cầu của mình. Tiếp tục?'), { action: t('Bật toàn quyền'), title: t('Đổi quyền của agent'), danger: true }))) return false
     onPermission(id)
     return true
   }
@@ -183,7 +185,7 @@ export function SettingsMenu({ providers, provider, onProvider, effort, onEffort
               <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted">{t('Quyền hạn của Agent')}</p>
               <div role="radiogroup" aria-label={t('Quyền')} className="space-y-0.5">
                 {PERMISSIONS.map((p) => (
-                  <Row key={p.id} on={p.id === permission} hint={t(p.desc)} onClick={() => { if (choosePerm(p.id)) close() }}>
+                  <Row key={p.id} on={p.id === permission} hint={t(p.desc)} onClick={async () => { if (await choosePerm(p.id)) close() }}>
                     <p.icon className={cn('size-4 shrink-0', p.tone)} />
                     <div className="min-w-0 flex-1">
                       <div className="font-medium">{t(p.label)}</div>

@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleAlert, CircleCheck, ExternalLink, Trash2 } from 'lucide-react'
@@ -15,6 +16,7 @@ import { missingText } from './SkillsPage'
 import { t } from '@/lib/i18n.ts'
 
 export function SkillModal({ name, onClose }: { name: string | null; onClose: () => void }) {
+  const { confirmAction } = useDialogs()
   const qc = useQueryClient()
   const toast = useToast()
   const cfg = useConfig()
@@ -42,7 +44,7 @@ export function SkillModal({ name, onClose }: { name: string | null; onClose: ()
     <Modal open={!!name} onClose={onClose} wide title={d ? `${d.emoji} ${d.name}`.trim() : t('Skill')}
       footer={d && (
         <>
-          <Button variant="danger" onClick={() => { if (confirm(t('Xóa skill "{name}" khỏi workspace?', { name: d.name }))) remove.mutate() }} loading={remove.isPending}><Trash2 className="size-4" />{t('Xóa')}</Button>
+          <Button variant="danger" onClick={async () => { if (await confirmAction(t('Xóa skill "{name}" khỏi workspace?', { name: d.name }), { action: t('Xóa'), danger: true })) remove.mutate() }} loading={remove.isPending}><Trash2 className="size-4" />{t('Xóa')}</Button>
           <Button onClick={onClose}>{t('Đóng')}</Button>
         </>
       )}

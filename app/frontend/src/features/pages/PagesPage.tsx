@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -121,6 +122,7 @@ function PageEditor({ page, pages, onSaved, onOpen, chatOpen, onToggleChat, onDe
   page: PageFull; pages: PageInfo[]; onSaved: () => void; onOpen: (id: string) => void; chatOpen: boolean; onToggleChat: () => void; onDelete: (title: string) => void
 }) {
   const toast = useToast()
+  const { askText } = useDialogs()
   const imageInput = useRef<HTMLInputElement>(null)
   const logoInput = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
@@ -199,7 +201,7 @@ function PageEditor({ page, pages, onSaved, onOpen, chatOpen, onToggleChat, onDe
       Table, TableRow, TableHeader, TableCell,
       CodeBlockLowlight.configure({ lowlight }),
       Toggle,
-      Callout,
+      Callout.configure({ editIcon: (current) => askText(t('Đổi biểu tượng'), t('Emoji cho khối này:'), current) }),
       PageLink.configure({
         onOpen: (pageId: string) => openRef.current(pageId),
         resolveTitle: (pageId: string) => pagesRef.current.find((p) => p.id === pageId)?.title,
@@ -567,6 +569,7 @@ function PageChat({ page, notebookId, onClose, draft, onToggleDraft, beforeSend,
 }
 
 export function PagesPage() {
+  const { confirmAction } = useDialogs()
   const { id } = useParams()
   const nav = useNavigate()
   const qc = useQueryClient()
@@ -599,10 +602,10 @@ export function PagesPage() {
     onError: (error) => toast(errMsg(error), 'bad'),
   })
   const pages = list.data ?? []
-  const askDelete = (entry: PageInfo) => {
+  const askDelete = async (entry: PageInfo) => {
     const hasChildren = pages.some((child) => child.parent === entry.id)
     const question = hasChildren ? t('Xóa ghi chú "{name}" và mọi trang con của nó?', { name: entry.title }) : t('Xóa ghi chú "{name}"?', { name: entry.title })
-    if (!remove.isPending && confirm(question)) remove.mutate(entry)
+    if (!remove.isPending && await confirmAction(question, { action: t('Xóa'), danger: true })) remove.mutate(entry)
   }
   if (id) {
     if (page.isLoading) return <Loading />

@@ -1,7 +1,8 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, Copy, Download, ExternalLink, File as FileIcon, FileSearch, FileSpreadsheet, FileText, FolderUp, Layers, LoaderCircle, MoreVertical, Presentation, ScanSearch, Send, Sparkles, Square, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Check, Copy, Download, File as FileIcon, FileSearch, FileSpreadsheet, FileText, FolderUp, Layers, LoaderCircle, MoreVertical, Presentation, ScanSearch, Send, Sparkles, Square, Trash2, Upload } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Field, Textarea } from '@/components/ui/Form'
@@ -16,6 +17,8 @@ import { MessageView } from '@/features/chat/MessageView'
 import { SessionContext } from '@/features/chat/session'
 import { useChat } from '@/features/chat/useChat'
 import { useConfig } from '@/lib/queries'
+import { DocumentSourceContext, type DocumentSource } from '@/features/chat/Markdown'
+import { DocumentPreview } from './DocumentPreview'
 
 interface KbList { docs: KbDoc[]; stats: { docs: number; chunks: number; indexing: number }; supported: string[]; semantic: string | null }
 interface ChunkItem { id: number; ord: number; loc: string; text: string }
@@ -81,7 +84,7 @@ const store = {
 }
 
 /** Menu ba chấm gom các hành động của 1 tài liệu (xem, xem đoạn trích, tải về, xóa). */
-function DocRowMenu({ doc, onPreviewChunks, onDelete }: { doc: KbDoc; onPreviewChunks: () => void; onDelete: () => void }) {
+function DocRowMenu({ doc, onOpen, onPreviewChunks, onOcr, onDelete }: { doc: KbDoc; onOpen: () => void; onPreviewChunks: () => void; onOcr: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -96,10 +99,12 @@ function DocRowMenu({ doc, onPreviewChunks, onDelete }: { doc: KbDoc; onPreviewC
         className="rounded p-1.5 text-muted hover:bg-panel2 hover:text-fg"><MoreVertical className="size-4" /></button>
       {open && (
         <div role="menu" className="fade-in absolute right-0 top-full z-20 mt-1 w-52 rounded-xl border border-line bg-panel p-1.5 shadow-2xl">
-          <a role="menuitem" href={`/api/knowledge/${doc.id}/file?inline=true`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}
-            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2"><ExternalLink className="size-4 text-muted" />{t('Xem file gốc')}</a>
+          <button role="menuitem" onClick={() => { setOpen(false); onOpen() }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2"><FileSearch className="size-4 text-muted" />{t('Xem file gốc')}</button>
           <button role="menuitem" onClick={() => { setOpen(false); onPreviewChunks() }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2"><Layers className="size-4 text-muted" />{t('Xem các đoạn trích')}</button>
+          {doc.ext === '.pdf' && <button role="menuitem" disabled={doc.status === 'indexing'} onClick={() => { setOpen(false); onOcr() }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2 disabled:opacity-50"><ScanSearch className="size-4 text-muted" />{t('Chạy OCR')}</button>}
           <a role="menuitem" href={`/api/knowledge/${doc.id}/file`} download onClick={() => setOpen(false)}
             className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2"><Download className="size-4 text-muted" />{t('Tải về file gốc')}</a>
           <button role="menuitem" onClick={() => { setOpen(false); onDelete() }}
@@ -116,7 +121,7 @@ function loadCategoryChat(categoryId: string, create = false) {
 }
 
 /** Khung chat ben phai, gioi han dung trong pham vi tai lieu cua 1 danh muc (kieu NotebookLM). */
-function CategoryChat({ categoryId, categoryName, width, onWidth }: { categoryId: string; categoryName: string; width: number; onWidth: (w: number) => void }) {
+function CategoryChat({ categoryId, categoryName, width, onWidth, mobileOpen }: { categoryId: string; categoryName: string; width: number; onWidth: (w: number) => void; mobileOpen: boolean }) {
   const cfg = useConfig()
   const chat = useChat()
   const [text, setText] = useState('')
@@ -167,12 +172,12 @@ function CategoryChat({ categoryId, categoryName, width, onWidth }: { categoryId
 
   return (
     <SessionContext.Provider value={chat.sessionId}>
-      <aside aria-label={t('Hỏi đáp về danh mục này')} style={{ width }} className="relative hidden shrink-0 flex-col border-l border-line bg-panel md:flex">
+      <aside aria-label={t('Hỏi đáp về danh mục này')} style={{ '--chat-width': `${width}px` } as React.CSSProperties} className={cn('relative w-full max-w-full shrink-0 flex-col bg-panel md:flex md:w-[var(--chat-width)] md:max-w-[65%] md:border-l md:border-line', mobileOpen ? 'flex' : 'hidden')}>
         <div role="separator" aria-orientation="vertical" aria-label={t('Kéo để đổi độ rộng')}
           onPointerDown={(e) => { drag.current = true; e.currentTarget.setPointerCapture(e.pointerId) }}
           onPointerMove={(e) => { if (drag.current) onWidth(Math.min(window.innerWidth * 0.65, Math.max(320, window.innerWidth - e.clientX))) }}
           onPointerUp={(e) => { drag.current = false; e.currentTarget.releasePointerCapture(e.pointerId) }}
-          className="group absolute left-0 top-0 z-10 flex h-full w-3 -translate-x-1/2 cursor-col-resize items-center justify-center touch-none">
+          className="group absolute left-0 top-0 z-10 hidden h-full md:flex w-3 -translate-x-1/2 cursor-col-resize items-center justify-center touch-none">
           <div className="h-full w-px bg-line transition group-hover:w-1 group-hover:bg-accent" />
         </div>
         <header className="shrink-0 border-b border-line px-4 pb-3 pt-4">
@@ -219,6 +224,7 @@ function CategoryChat({ categoryId, categoryName, width, onWidth }: { categoryId
 }
 
 export function CategoryPage() {
+  const { confirmAction } = useDialogs()
   const { categoryId } = useParams()
   const nav = useNavigate()
   const qc = useQueryClient()
@@ -229,6 +235,12 @@ export function CategoryPage() {
   const [analyzing, setAnalyzing] = useState(false)
   const [focus, setFocus] = useState('')
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [source, setSource] = useState<(DocumentSource & { revision: number; categoryId: string | undefined }) | null>(null)
+  const [mobileChat, setMobileChat] = useState(false)
+  const openSource = (next: DocumentSource) => {
+    setSource((current) => ({ ...next, categoryId, revision: (current?.revision ?? 0) + 1 }))
+    setMobileChat(false)
+  }
   const [previewDoc, setPreviewDoc] = useState<KbDoc | null>(null)
   const [chatWidth, setChatWidth] = useState(() => {
     const saved = store.get('kb-chat-width')
@@ -243,28 +255,25 @@ export function CategoryPage() {
     queryFn: () => api.get<KbList>(`/api/knowledge?category_id=${categoryId}`),
     refetchInterval: (q) => (q.state.data?.stats.indexing ? 1500 : 10_000),
   })
-  const supported = new Set(list.data?.supported ?? [])
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['kb', categoryId] }); void qc.invalidateQueries({ queryKey: ['kb-categories'] }) }
 
   const upload = async (items: Item[]) => {
-    const ok = items.filter((i) => supported.size === 0 || supported.has('.' + (i.name.split('.').pop() ?? '').toLowerCase()))
-    const skipped = items.length - ok.length
-    if (!ok.length) return toast(t('Không có file nào được hỗ trợ (PDF, Word, Excel, PowerPoint, văn bản).'), 'bad')
+    if (!items.length) return
     let added = 0, dup = 0, failed = 0
-    for (let i = 0; i < ok.length; i++) {
-      setProgress({ done: i, total: ok.length })
+    for (let i = 0; i < items.length; i++) {
+      setProgress({ done: i, total: items.length })
       try {
-        const r = await fetch(`/api/knowledge/upload?name=${encodeURIComponent(ok[i].name)}&category_id=${categoryId}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: ok[i].file })
+        const r = await fetch(`/api/knowledge/upload?name=${encodeURIComponent(items[i].name)}&category_id=${categoryId}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: items[i].file })
         if (!r.ok) throw new Error((await r.json().catch(() => ({ detail: r.statusText }))).detail)
         if ((await r.json()).duplicate) dup++; else added++
       } catch (e) {
         failed++
-        toast(`${ok[i].name}: ${errMsg(e)}`, 'bad')
+        toast(`${items[i].name}: ${errMsg(e)}`, 'bad')
       }
     }
     setProgress(null)
     refresh()
-    toast(t('Đã thêm {n} tài liệu', { n: added }) + (dup ? t(' · {n} trùng', { n: dup }) : '') + (skipped ? t(' · bỏ qua {n} file không hỗ trợ', { n: skipped }) : '') + (failed ? t(' · {n} lỗi', { n: failed }) : ''))
+    toast(t('Đã thêm {n} tài liệu', { n: added }) + (dup ? t(' · {n} trùng', { n: dup }) : '') + (failed ? t(' · {n} lỗi', { n: failed }) : ''))
   }
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault()
@@ -280,6 +289,16 @@ export function CategoryPage() {
     onSuccess: () => { toast(t('Đã bắt đầu phân tích. Kết quả sẽ có ở trang Tác vụ.')); setAnalyzing(false); setFocus(''); nav('/tasks') },
     onError: (e) => toast(errMsg(e), 'bad'),
   })
+  const runOcr = useMutation({
+    mutationFn: (id: string) => api.post<{ started: boolean }>(`/api/knowledge/${id}/ocr`),
+    onSuccess: ({ started }, id) => {
+      refresh()
+      void qc.invalidateQueries({ queryKey: ['kb-preview', id] })
+      void qc.invalidateQueries({ queryKey: ['kb-ocr', id] })
+      if (started) toast(t('Đã đưa PDF vào hàng đợi OCR'))
+    },
+    onError: (e) => toast(errMsg(e), 'bad'),
+  })
   const del = useMutation({ mutationFn: (id: string) => api.del(`/api/knowledge/${id}`), onSuccess: refresh, onError: (e) => toast(errMsg(e), 'bad') })
 
   if (!categoryId) return null
@@ -290,63 +309,73 @@ export function CategoryPage() {
   const stats = list.data?.stats
 
   return (
-    <div className="flex h-full min-h-0">
-      <div className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full px-4 pb-24 pt-5 sm:px-8">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
-            <nav aria-label={t('Đường dẫn')} className="flex min-w-0 items-center gap-1.5 text-xl font-bold tracking-tight sm:text-2xl">
-              <Link to="/documents" className="shrink-0 rounded-md p-1 text-muted hover:text-accent" aria-label={t('Tài liệu')} title={t('Tài liệu')}><ArrowLeft className="size-5" /></Link>
-              <span className="truncate">{category.icon} {category.name}</span>
-            </nav>
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => filePick.current?.click()}><Upload className="size-4" />{t('Chọn file')}</Button>
-              <Button onClick={() => dirPick.current?.click()}><FolderUp className="size-4" />{t('Chọn thư mục')}</Button>
-              <Button disabled={!stats?.docs} title={stats?.docs ? t('Đọc kỹ tài liệu, nêu rủi ro và đề xuất phương án (chạy nền)') : t('Thêm tài liệu trước khi hỏi')} onClick={() => setAnalyzing(true)}><ScanSearch className="size-4" />{t('Phân tích tài liệu')}</Button>
-            </div>
-          </div>
-          <input ref={filePick} type="file" multiple hidden accept={[...supported].join(',')} onChange={(e) => { fromInput(e.target.files); e.target.value = '' }} />
-          <input ref={dirPick} type="file" hidden multiple {...({ webkitdirectory: '', directory: '' } as object)} onChange={(e) => { fromInput(e.target.files); e.target.value = '' }} />
-
-          <div onDragOver={(e) => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)} onDrop={(e) => void onDrop(e)}
-            className={cn('mb-4 grid place-items-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition', drag ? 'border-accent bg-accent/5' : 'border-line bg-panel')}>
-            <div>
-              <FileSearch className="mx-auto mb-2 size-8 text-accent" />
-              <p className="font-medium">{progress ? t('Đang tải {done}/{total}…', { done: progress.done + 1, total: progress.total }) : t('Kéo thả file hoặc thư mục vào đây')}</p>
-              {progress && <div className="mx-auto mt-3 h-2 w-64 overflow-hidden rounded-full bg-panel2"><div className="h-full bg-accent transition-all duration-300" style={{ width: `${Math.round(((progress.done + 1) / progress.total) * 100)}%` }} /></div>}
-              <p className="mt-1 text-sm text-muted">PDF · Word · Excel (.xlsx) · PowerPoint (.pptx) · TXT · Markdown · CSV</p>
-            </div>
-          </div>
-
-          {!!stats?.indexing && (
-            <div className="mb-4 flex items-center gap-3 rounded-xl border border-info/30 bg-info/10 px-4 py-3 text-xs text-info">
-              <span className="size-2 animate-ping rounded-full bg-info" />
-              <span className="font-medium">{t('Đang phân tích đoạn trích và embedding {n} tài liệu (chạy nền)…', { n: stats.indexing })}</span>
-            </div>
-          )}
-
-          <div className="rounded-xl border border-line bg-panel">
-            {docs.length === 0 ? (
-              <p className="p-8 text-center text-sm text-muted">{t('Chưa có tài liệu nào trong danh mục này. Kéo thả hợp đồng, báo cáo hoặc bảng tính vào ô phía trên để bắt đầu.')}</p>
-            ) : docs.map((d) => {
-              const Icon = icon(d.ext)
-              return (
-                <div key={d.id} className="flex items-start gap-3 border-b border-line px-5 py-3 last:border-b-0">
-                  <Icon className="mt-0.5 size-5 shrink-0 text-muted" />
-                  <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-2"><span className="truncate font-medium" title={d.name}>{d.name}</span>
-                      {d.status === 'ready' ? <Badge tone="ok">{t('Sẵn sàng')}</Badge> : d.status === 'indexing' ? <Badge tone="info">{t('Đang xử lý…')}</Badge> : <Badge tone="bad">{t('Lỗi')}</Badge>}</p>
-                    <p className="mt-0.5 text-xs text-muted">{size(d.size)}{d.pages && (d.ext === '.pdf' || d.ext === '.pptx') ? ` · ${t('{n} trang', { n: d.pages })}` : ''}{d.chunks ? ` · ${t('{n} đoạn', { n: d.chunks })}` : ''} · {timeAgo(d.added)}</p>
-                    {d.note && <p className={cn('mt-1 text-xs', d.status === 'error' ? 'text-bad' : 'text-warn')}>{d.note}</p>}
-                  </div>
-                  <DocRowMenu doc={d} onPreviewChunks={() => setPreviewDoc(d)}
-                    onDelete={() => { if (confirm(t('Xóa "{name}" khỏi kho tài liệu?', { name: d.name }))) del.mutate(d.id) }} />
-                </div>
-              )
-            })}
-          </div>
-        </div>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 gap-2 border-b border-line p-2 md:hidden">
+        <Button size="sm" variant={!mobileChat ? 'primary' : 'ghost'} onClick={() => setMobileChat(false)}>{t('Tài liệu')}</Button>
+        <Button size="sm" variant={mobileChat ? 'primary' : 'ghost'} onClick={() => setMobileChat(true)}>{t('Trò chuyện')}</Button>
       </div>
-      <CategoryChat categoryId={categoryId} categoryName={category.name} width={chatWidth} onWidth={setChatWidth} />
+      <div className="flex min-h-0 flex-1">
+        <div className={cn('min-w-0 flex-1 overflow-y-auto', mobileChat && 'hidden md:block')}>
+          {source?.categoryId === categoryId && source ? (
+            <DocumentPreview key={source.revision} source={source} onClose={() => setSource(null)} />
+          ) : <div className="mx-auto w-full px-4 pb-24 pt-5 sm:px-8">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+              <nav aria-label={t('Đường dẫn')} className="flex min-w-0 items-center gap-1.5 text-xl font-bold tracking-tight sm:text-2xl">
+                <Link to="/documents" className="shrink-0 rounded-md p-1 text-muted hover:text-accent" aria-label={t('Tài liệu')} title={t('Tài liệu')}><ArrowLeft className="size-5" /></Link>
+                <span className="truncate">{category.icon} {category.name}</span>
+              </nav>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => filePick.current?.click()}><Upload className="size-4" />{t('Chọn file')}</Button>
+                <Button onClick={() => dirPick.current?.click()}><FolderUp className="size-4" />{t('Chọn thư mục')}</Button>
+                <Button disabled={!stats?.docs} title={stats?.docs ? t('Đọc kỹ tài liệu, nêu rủi ro và đề xuất phương án (chạy nền)') : t('Thêm tài liệu trước khi hỏi')} onClick={() => setAnalyzing(true)}><ScanSearch className="size-4" />{t('Phân tích tài liệu')}</Button>
+              </div>
+            </div>
+            <input ref={filePick} type="file" multiple hidden onChange={(e) => { fromInput(e.target.files); e.target.value = '' }} />
+            <input ref={dirPick} type="file" hidden multiple {...({ webkitdirectory: '', directory: '' } as object)} onChange={(e) => { fromInput(e.target.files); e.target.value = '' }} />
+
+            <div onDragOver={(e) => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)} onDrop={(e) => void onDrop(e)}
+              className={cn('mb-4 grid place-items-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition', drag ? 'border-accent bg-accent/5' : 'border-line bg-panel')}>
+              <div>
+                <FileSearch className="mx-auto mb-2 size-8 text-accent" />
+                <p className="font-medium">{progress ? t('Đang tải {done}/{total}…', { done: progress.done + 1, total: progress.total }) : t('Kéo thả file hoặc thư mục vào đây')}</p>
+                {progress && <div className="mx-auto mt-3 h-2 w-64 overflow-hidden rounded-full bg-panel2"><div className="h-full bg-accent transition-all duration-300" style={{ width: `${Math.round(((progress.done + 1) / progress.total) * 100)}%` }} /></div>}
+                <p className="mt-1 text-sm text-muted">{t('Mọi loại tệp · tối đa 60 MB mỗi tệp')}</p>
+              </div>
+            </div>
+
+            {!!stats?.indexing && (
+              <div className="mb-4 flex items-center gap-3 rounded-xl border border-info/30 bg-info/10 px-4 py-3 text-xs text-info">
+                <span className="size-2 animate-ping rounded-full bg-info" />
+                <span className="font-medium">{t('Đang lập chỉ mục {n} tài liệu trong nền…', { n: stats.indexing })}</span>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-line bg-panel">
+              {docs.length === 0 ? (
+                <p className="p-8 text-center text-sm text-muted">{t('Chưa có tài liệu nào trong danh mục này. Kéo thả hợp đồng, báo cáo hoặc bảng tính vào ô phía trên để bắt đầu.')}</p>
+              ) : docs.map((d) => {
+                const Icon = icon(d.ext)
+                return (
+                  <div key={d.id} className="flex items-start gap-3 border-b border-line px-5 py-3 last:border-b-0">
+                    <Icon className="mt-0.5 size-5 shrink-0 text-muted" />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex flex-wrap items-center gap-2"><button type="button" className="min-w-0 truncate text-left font-medium hover:text-accent" title={d.name} onClick={() => openSource(d)}>{d.name}</button>
+                        {d.status === 'ready' ? <Badge tone="ok">{t('Sẵn sàng')}</Badge> : d.status === 'indexing' ? <Badge tone="info">{t('Đang xử lý…')}</Badge> : d.status === 'stored' ? <Badge>{t('Chỉ lưu file')}</Badge> : <Badge tone="bad">{t('Lỗi')}</Badge>}</p>
+                      <p className="mt-0.5 text-xs text-muted">{size(d.size)}{d.pages && (d.ext === '.pdf' || d.ext === '.pptx') ? ` · ${t('{n} trang', { n: d.pages })}` : ''}{d.chunks ? ` · ${t('{n} đoạn', { n: d.chunks })}` : ''}{d.status === 'ready' && d.embedding_count !== undefined ? ` · ${d.embedding_count ? t('Embedding {n}/{total}', { n: d.embedding_count, total: d.chunks }) : t('Tìm theo từ khóa')}` : ''} · {timeAgo(d.added)}</p>
+                      {d.note && <p className={cn('mt-1 text-xs', d.status === 'error' ? 'text-bad' : 'text-warn')}>{d.note}</p>}
+                    </div>
+                    <DocRowMenu doc={d} onOpen={() => openSource(d)} onPreviewChunks={() => setPreviewDoc(d)} onOcr={() => runOcr.mutate(d.id)}
+                      onDelete={async () => { if (await confirmAction(t('Xóa "{name}" khỏi kho tài liệu?', { name: d.name }), { action: t('Xóa'), danger: true })) del.mutate(d.id) }} />
+                  </div>
+                )
+              })}
+            </div>
+          </div>}
+        </div>
+        <DocumentSourceContext.Provider value={openSource}>
+          <CategoryChat key={categoryId} categoryId={categoryId} categoryName={category.name} width={chatWidth} onWidth={setChatWidth} mobileOpen={mobileChat} />
+        </DocumentSourceContext.Provider>
+      </div>
 
       <ChunksModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
 

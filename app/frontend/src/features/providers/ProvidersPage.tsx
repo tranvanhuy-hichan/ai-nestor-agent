@@ -10,6 +10,7 @@ import { Field, Input } from '@/components/ui/Form'
 import { ErrorNote, Loading, Page, PageHeader } from '@/components/ui/misc'
 import { Tabs } from '@/components/ui/Tabs'
 import { EmbeddingPanel } from './EmbeddingPanel'
+import { OcrPanel } from './OcrPanel'
 import { LimitsBars } from './LimitsBars'
 import { LocalModelPicker } from './LocalModelPicker'
 import { useToast } from '@/components/ui/Toast'
@@ -259,7 +260,8 @@ export function ProvidersPage() {
   const [models, setModels] = useState<string[]>([])
   const [openCards, setOpenCards] = useState<Set<string>>(new Set())
   const [params, setParams] = useSearchParams()
-  const tab = params.get('tab') === 'embedding' ? 'embedding' : 'chat'
+  const requestedTab = params.get('tab')
+  const tab = requestedTab === 'embedding' || requestedTab === 'ocr' ? requestedTab : 'chat'
 
   useEffect(() => {
     if (cfg.data) setDraft({ providers: cfg.data.config.providers, default_provider: cfg.data.config.default_provider, fallback: cfg.data.config.fallback, memory: cfg.data.config.memory })
@@ -308,12 +310,12 @@ export function ProvidersPage() {
   return (
     <Page>
       <PageHeader title={t('Mô hình AI')}
-        action={<Button variant="primary" disabled={!dirty} loading={save.isPending} onClick={onSave}>{t('Lưu thay đổi')}</Button>} />
+        action={tab !== 'ocr' && <Button variant="primary" disabled={!dirty} loading={save.isPending} onClick={onSave}>{t('Lưu thay đổi')}</Button>} />
 
       <Tabs value={tab} onChange={(v) => setParams(v === 'chat' ? {} : { tab: v }, { replace: true })}
-        tabs={[{ id: 'chat', label: t('Model xử lý') }, { id: 'embedding', label: t('Model embedding') }]} />
+        tabs={[{ id: 'chat', label: t('Model xử lý') }, { id: 'embedding', label: t('Model embedding') }, { id: 'ocr', label: 'OCR' }]} />
       <div className="mt-5">
-        {tab === 'embedding' ? <EmbeddingPanel memory={draft.memory} onChange={(patch) => setDraft({ ...draft, memory: { ...draft.memory, ...patch } })} providerInfo={draft.providers} isDirty={dirty} /> : (
+        {tab === 'ocr' ? <OcrPanel /> : tab === 'embedding' ? <EmbeddingPanel memory={draft.memory} onChange={(patch) => setDraft({ ...draft, memory: { ...draft.memory, ...patch } })} providerInfo={draft.providers} isDirty={dirty} /> : (
           <>
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">

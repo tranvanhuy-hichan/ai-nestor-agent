@@ -1,5 +1,6 @@
 """Hỏi đáp trên tài liệu: đọc từng định dạng, ghi vị trí, tìm kiếm kết hợp, tool, API và trạng thái lỗi."""
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -86,13 +87,14 @@ def test_search_is_accent_insensitive_and_semantic_path_works(tmp_path):
     assert hit["name"] == "a.txt" and set(hit["how"]) == {"từ khóa", "ngữ nghĩa"}
 
 
-def test_duplicate_scanned_encrypted_and_unsupported(tmp_path):
+def test_duplicate_scanned_and_binary(tmp_path):
     a = tmp_path / "x.txt"; a.write_text("nội dung đủ dài để lập chỉ mục chính xác", encoding="utf-8")
     first = knowledge.add_file(a, "x.txt")
     again = knowledge.add_file(a, "ban-sao.txt")
     assert again["id"] == first["id"] and again["duplicate"] and len(knowledge.list_docs()) == 1
-    with pytest.raises(knowledge.KnowledgeError):
-        knowledge.add_file(tmp_path / "x.txt", "tep.exe")
+    binary = knowledge.add_bytes("tep.exe", b"MZ\x00\x01")
+    assert binary["status"] == "stored" and binary["chunks"] == 0
+    assert Path(binary["path"]).read_bytes() == b"MZ\x00\x01"
     empty = tmp_path / "trong.pdf"; make_pdf(empty, ["", ""])
     d = knowledge.add_file(empty, "trong.pdf")
     assert knowledge.get(d["id"])["status"] == "error" and "OCR" in knowledge.get(d["id"])["note"]
@@ -116,12 +118,13 @@ def test_tool_hidden_when_empty_and_cites_sources(tmp_path):
     assert "kb_search" in agent.knowledge_note() and "tt" not in agent.knowledge_note()[:0]
 
 
-def test_folder_import_skips_hidden_and_unsupported(tmp_path):
+def test_folder_import_stores_binary_and_skips_hidden(tmp_path):
     d = tmp_path / "kho"; (d / "con").mkdir(parents=True); (d / ".git").mkdir()
     (d / "con" / "a.md").write_text("# Quy trình\nBước một là kiểm tra hồ sơ.", encoding="utf-8")
-    (d / ".git" / "b.txt").write_text("ẩn không lấy", encoding="utf-8"); (d / "anh.png").write_bytes(b"png")
+    (d / ".git" / "b.txt").write_text("ẩn không lấy", encoding="utf-8"); (d / "anh.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     r = knowledge.add_folder(d)
-    assert r["added"] == 1 and r["skipped"] == 1 and knowledge.list_docs()[0]["name"].endswith("a.md")
+    assert r["added"] == 2 and r["skipped"] == 0
+    assert {doc["name"]: doc["status"] for doc in knowledge.list_docs()} == {"anh.png": "stored", "con/a.md": "ready"}
 
 
 def test_api_upload_search_download_delete(tmp_path):
@@ -136,7 +139,10 @@ def test_api_upload_search_download_delete(tmp_path):
     hit = c.post("/api/knowledge/search", json={"query": "nghỉ phép mấy ngày"}).json()[0]
     assert hit["name"] == "chinh-sach.txt" and "12 ngày" in hit["text"]
     assert "12 ngày" in c.get(f"/api/knowledge/{did}/file").text
-    assert c.post("/api/knowledge/upload", params={"name": "a.exe"}, content=b"x").status_code == 400
+    binary = c.post("/api/knowledge/upload", params={"name": "a.exe"}, content=b"MZ\x00\x01").json()
+    assert binary["status"] == "stored"
+    assert c.get(f"/api/knowledge/{binary['id']}/file").content == b"MZ\x00\x01"
+    assert c.get(f"/api/knowledge/{did}/preview").json()["text"].endswith("12 ngày mỗi năm.")
     assert c.post("/api/knowledge/search", json={"query": " "}).status_code == 400
     assert c.delete(f"/api/knowledge/{did}").status_code == 200 and c.delete(f"/api/knowledge/{did}").status_code == 404
 
@@ -286,6 +292,61 @@ def test_passage_returns_only_that_chunk_text(tmp_env, tmp_path):
     r = TestClient(app).get(f"/api/knowledge/{doc['id']}/passage", params={"loc": loc})
     assert r.status_code == 200 and "budgets" in r.json()["text"] and r.json()["name"].endswith("note.txt") and r.json()["has_file"]
     assert TestClient(app).get("/api/knowledge/nope/passage", params={"loc": "x"}).status_code == 404
+
+
+def test_pdf_embedding_and_citation_target_the_exact_chunk(tmp_path):
+    from nestor.services.tools.tools_kb import format_hits
+
+    cfg = cfgmod.load()
+    cfg.memory.embeddings = "hash"
+    cfgmod.save(cfg)
+    pdf = tmp_path / "report.pdf"
+    first = "First page contains a general introduction."
+    other = "A generic passage about staff and resources. " * 26
+    target = "The satellite authorization expires in November."
+    make_pdf(pdf, [first, other + target])
+    doc = knowledge.add_file(pdf, pdf.name)
+    hit = next(h for h in knowledge.search("satellite authorization expires November") if target in h["text"])
+    assert hit["loc"] == "trang 2"
+    from nestor.core.db import db
+    with db() as c:
+        assert c.execute("SELECT 1 FROM kb_vecs WHERE chunk_id=?", (hit["chunk_id"],)).fetchone()
+    from nestor.services.embeddings import get_embedder
+    assert knowledge.vector_counts(get_embedder(cfg).model_id, doc["category_id"])[doc["id"]] == doc["chunks"]
+    formatted = format_hits([hit])
+    assert f"trang 2#chunk={hit['chunk_id']}" in formatted
+    assert knowledge.plain_sources(formatted)[1][0]["loc"] == "trang 2"
+    passage = knowledge.passage(doc["id"], hit["loc"], chunk_id=hit["chunk_id"])
+    assert passage["text"] == hit["text"] and first not in passage["text"]
+    assert hit["chunk_id"] in {chunk["id"] for chunk in knowledge.doc_chunks(doc["id"], loc=hit["loc"], chunk_id=hit["chunk_id"])}
+
+
+def test_retry_ocr_keeps_native_citations_and_indexes_the_scan(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from nestor.main import app
+
+    pdf = tmp_path / "mixed.pdf"
+    make_pdf(pdf, ["Original text on the first page.", ""])
+    def unavailable():
+        raise knowledge.OcrError("thiếu Tesseract")
+    monkeypatch.setattr(knowledge.OcrEngine, "detect", unavailable)
+    doc = knowledge.add_file(pdf, pdf.name)
+    old = knowledge.doc_chunks(doc["id"])[0]
+    words = [{"text": "Giấy phép vệ tinh còn hiệu lực.", "x": .1, "y": .2, "width": .3, "height": .04}]
+
+    class Engine:
+        def read_page(self, path, index):
+            assert index == 1
+            return words
+
+    monkeypatch.setattr(knowledge.OcrEngine, "detect", Engine)
+    result = TestClient(app).post(f"/api/knowledge/{doc['id']}/ocr")
+    assert result.status_code == 202 and result.json()["started"]
+    chunks = knowledge.doc_chunks(doc["id"])
+    assert chunks[0] == old and chunks[1]["loc"] == "trang 2"
+    assert any(hit["text"] == words[0]["text"] for hit in knowledge.search("giay phep ve tinh"))
+    assert TestClient(app).get(f"/api/knowledge/{doc['id']}/ocr/2").json() == {"words": words}
+    assert knowledge.delete(doc["id"]) and knowledge.ocr_words(doc["id"], 2) == []
 
 
 def test_telegram_reply_sources_become_footer():

@@ -8,7 +8,7 @@ import httpx
 
 from nestor.core import config as cfgmod
 from nestor.core.db import db
-from nestor.services import chat_runner, notifications, pairing, sessions, workfiles
+from nestor.services import chat_runner, knowledge, notifications, pairing, sessions, workfiles
 
 log = logging.getLogger("telegram")
 CHUNK = 4000
@@ -32,7 +32,7 @@ def clean_reply(text: str) -> str:
     """Telegram khong ve duoc the nguon [[src:...]]: bo khoi cau va dua thanh dong 'Nguon' o cuoi."""
     found: dict[str, None] = {}
     for m in _SRC.finditer(text):
-        found[f"{m.group(1).strip()} ({m.group(2).strip()})"] = None
+        found[f"{m.group(1).strip()} ({knowledge.display_source_location(m.group(2))})"] = None
     out = _SRC.sub("", text).strip()
     return out + ("\n\nNguồn: " + "; ".join(found)) if found else out
 

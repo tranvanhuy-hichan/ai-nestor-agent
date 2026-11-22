@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Brain, Check, Cloud, Copy, ExternalLink, Laptop, Terminal } from 'lucide-react'
+import { Brain, Check, Cloud, Copy, Download, ExternalLink, Laptop, Terminal } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader } from '@/components/ui/Card'
@@ -57,10 +57,15 @@ function MemoryStatusLine({ isDirty }: { isDirty?: boolean }) {
 
 export function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
-  const onCopy = () => {
-    void navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const toast = useToast()
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast(t('Không sao chép được. Hãy chọn và sao chép lệnh thủ công.'), 'bad')
+    }
   }
   return (
     <button
@@ -96,7 +101,16 @@ export function Choice({ on, onClick, title, desc, badge, children }: { on: bool
   )
 }
 
+type PullStatus = {
+  phase: 'idle' | 'running' | 'done' | 'error'
+  error: string
+  model?: string
+  percent?: number | null
+}
+
 export function EmbeddingPanel({ memory, onChange, providerInfo, isDirty }: { memory: Mem; onChange: (patch: Partial<Mem>) => void; providerInfo: ProviderInfo; isDirty?: boolean }) {
+  const qc = useQueryClient()
+  const toast = useToast()
   const q = useQuery({ queryKey: ['memory-status'], queryFn: () => api.get<MemoryStatus>('/api/memory/status') })
   const installed = q.data?.ollama_models ?? []
   const on = memory.embeddings !== 'off'
@@ -108,6 +122,26 @@ export function EmbeddingPanel({ memory, onChange, providerInfo, isDirty }: { me
     : [{ id: 'text-embedding-3-small', desc: tk('Nhanh và rẻ.') }, { id: 'text-embedding-3-large', desc: tk('Chất lượng cao hơn.') }]
   const localModel = memory.model || 'bge-m3'
   const isInstalled = (m: string) => installed.some((n) => n === m || n.startsWith(m + ':'))
+
+  const pullStatus = useQuery({
+    queryKey: ['embedding-model-pull'],
+    queryFn: () => api.get<PullStatus>('/api/memory/model-pull'),
+    enabled: on && tab === 'local' && memory.embeddings !== 'hash',
+    refetchInterval: (query) => query.state.data?.phase === 'running' ? 1200 : false,
+  })
+  const pull = useMutation({
+    mutationFn: (model: string) => api.post<PullStatus>('/api/memory/model-pull', { model }),
+    onSuccess: (data) => qc.setQueryData(['embedding-model-pull'], data),
+    onError: (error) => toast(errMsg(error), 'bad'),
+  })
+  const download = pullStatus.data
+  const canPull = /^(?:[a-zA-Z0-9_-]+\/)?[a-zA-Z0-9_][a-zA-Z0-9_.-]*(?::[a-zA-Z0-9_.-]+)?$/.test(localModel) && localModel.length <= 160
+  useEffect(() => {
+    if (download?.phase === 'done') {
+      void qc.invalidateQueries({ queryKey: ['memory-status'] })
+      void qc.invalidateQueries({ queryKey: ['ollama-recommend'] })
+    }
+  }, [download?.phase, download?.model, qc])
 
   const pickLocal = () => onChange({ embeddings: 'ollama', provider: null, model: tab === 'api' || !memory.model ? 'bge-m3' : memory.model })
   const pickApi = () => {
@@ -136,21 +170,34 @@ export function EmbeddingPanel({ memory, onChange, providerInfo, isDirty }: { me
           </div>
 
           {tab === 'local' ? (
-            <div className="space-y-3" role="radiogroup" aria-label={t('Model embedding')}>
-              <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label={t('Model embedding')}>
                 {LOCAL_MODELS.map((m) => (
                   <Choice key={m.id} on={localModel === m.id} onClick={() => onChange({ model: m.id })} title={<span className="font-mono">{m.name}</span>}
                     badge={<>{m.star && <Badge tone="accent">{t('Khuyên dùng')}</Badge>}{isInstalled(m.id) ? <Badge tone="ok">{t('Đã cài')}</Badge> : <Badge>{m.size}</Badge>}</>}
                     desc={t(m.desc)} />
                 ))}
               </div>
-              {!isInstalled(localModel) && (
-                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-panel2 px-3 py-2.5 text-xs">
-                  <Terminal className="size-4 shrink-0 text-accent" />
-                  <span className="text-muted">{t('Chưa có model này. Mở terminal và chạy:')}</span>
-                  <code className="rounded bg-bg px-2 py-1 font-mono text-[12px]">ollama pull {localModel}</code>
-                  <CopyButton text={`ollama pull ${localModel}`} />
-                  <a href="https://ollama.com/download" target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-accent hover:underline">{t('Chưa có Ollama?')}<ExternalLink className="size-3" /></a>
+              {memory.embeddings !== 'hash' && (!isInstalled(localModel) || download?.phase === 'running') && (
+                <div className="space-y-3 rounded-lg border border-line bg-panel2 px-3 py-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {canPull && <Button size="sm" variant="primary" loading={pull.isPending || download?.phase === 'running'}
+                      onClick={() => pull.mutate(localModel)}><Download className="size-4" />{t('Tải model tự động')}</Button>}
+                    {download?.phase === 'running' && <span role="status" className="text-xs text-muted">
+                      {t('Đang tải {name}…', { name: download.model ?? localModel })}{download.percent != null && ` ${download.percent}%`}
+                    </span>}
+                  </div>
+                  {download?.phase === 'error' && download.model === localModel && <p role="alert" className="text-xs text-bad">{download.error}</p>}
+                  <details className="text-xs">
+                    <summary className="cursor-pointer select-none text-muted hover:text-fg">{t('Hướng dẫn cài thủ công')}</summary>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <Terminal className="size-4 shrink-0 text-accent" />
+                      <span className="text-muted">{t('Chưa có model này. Mở terminal và chạy:')}</span>
+                      <code className="rounded bg-bg px-2 py-1 font-mono text-[12px]">ollama pull {localModel}</code>
+                      <CopyButton text={`ollama pull ${localModel}`} />
+                      <a href="https://ollama.com/download" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">{t('Chưa có Ollama?')}<ExternalLink className="size-3" /></a>
+                    </div>
+                  </details>
                 </div>
               )}
               <details className="text-sm">

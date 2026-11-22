@@ -11,7 +11,7 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 NESTOR_HOME=/app NESTOR_CONFIG=/app/data/config.json NESTOR_TEMPLATE=/app/template/workspace
 WORKDIR /app
 COPY app/backend/ app/backend/
-RUN apt-get update && apt-get install -y --no-install-recommends nodejs fonts-liberation && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs fonts-liberation tesseract-ocr tesseract-ocr-vie tesseract-ocr-eng && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir -e app/backend
 RUN python -m playwright install --with-deps chromium
 COPY --from=web /web/dist app/frontend/dist

@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -67,9 +68,24 @@ function FileTab({ sid, path, draft, onDraft, onSaved }: { sid: string; path: st
   )
 }
 
+function readDrafts(key: string): Record<string, string> {
+  try {
+    const data: unknown = JSON.parse(sessionStorage.getItem(key) ?? '{}')
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return {}
+    return Object.fromEntries(Object.entries(data).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+  } catch {
+    return {}
+  }
+}
+
 /** Chế độ Code: giao diện kiểu IDE (cây thư mục, trình soạn thảo, terminal) với chat của agent ở bên phải. */
 export function CodeWorkspace() {
   const { sid = '' } = useParams()
+  return <ProjectWorkspace key={sid} sid={sid} />
+}
+
+function ProjectWorkspace({ sid }: { sid: string }) {
+  const { confirmAction } = useDialogs()
   const nav = useNavigate()
   const qc = useQueryClient()
   const chat = useChat()
@@ -77,11 +93,14 @@ export function CodeWorkspace() {
   const skills = useSkills()
   const mcp = useMcp()
   const toast = useToast()
-  const [pane, setPane] = useState<'files' | 'editor' | 'chat'>('chat') // màn hình hẹp chỉ hiện một khung
+  const draftsKey = `nestor-code-drafts:${sid}`
+  const [drafts, setDrafts] = useState(() => readDrafts(draftsKey))
+  const latestDrafts = useRef(drafts)
+  const storageFailed = useRef(false)
+  const [tabs, setTabs] = useState<Tab[]>(() => Object.keys(drafts).map((path) => ({ key: `file:${path}`, path, kind: 'file' })))
+  const [active, setActive] = useState<string | null>(() => tabs[0]?.key ?? null)
+  const [pane, setPane] = useState<'files' | 'editor' | 'chat'>(() => tabs.length ? 'editor' : 'chat')
   const [side, setSide] = useState<'files' | 'changes'>('files')
-  const [tabs, setTabs] = useState<Tab[]>([])
-  const [active, setActive] = useState<string | null>(null)
-  const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [terminal, setTerminal] = useState(() => store.get('code-terminal', '0') === '1')
   const [chatW, setChatW] = useState(() => Number(store.get('code-chat-w', '440')))
   const [text, setText] = useState('')
@@ -111,11 +130,20 @@ export function CodeWorkspace() {
     const el = scroller.current
     if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [chat.items, chat.status])
-  useEffect(() => {
-    const warn = (e: BeforeUnloadEvent) => { if (Object.keys(drafts).length) e.preventDefault() }
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [drafts])
+  const updateDraft = (path: string, value: string | undefined) => {
+    const { [path]: _, ...rest } = latestDrafts.current
+    const next = value === undefined ? rest : { ...rest, [path]: value }
+    latestDrafts.current = next
+    setDrafts(next)
+    try {
+      if (Object.keys(next).length) sessionStorage.setItem(draftsKey, JSON.stringify(next))
+      else sessionStorage.removeItem(draftsKey)
+      storageFailed.current = false
+    } catch {
+      if (!storageFailed.current) toast(t('Không thể lưu bản nháp trong trình duyệt. Hãy lưu tệp trước khi rời trang.'), 'bad')
+      storageFailed.current = true
+    }
+  }
 
   const openTab = useCallback((path: string, kind: Tab['kind'] = 'file', status?: GitFile['status']) => {
     const key = `${kind}:${path}`
@@ -123,10 +151,15 @@ export function CodeWorkspace() {
     setActive(key)
     setPane('editor')
   }, [])
-  const closeTab = (key: string) => {
+  const closeTab = async (key: string) => {
     const tab = tabs.find((x) => x.key === key)
-    if (tab && tab.kind === 'file' && drafts[tab.path] !== undefined && !confirm(t('Đóng {path} mà chưa lưu?', { path: tab.path }))) return
-    if (tab?.kind === 'file') setDrafts(({ [tab.path]: _, ...rest }) => rest)
+    if (tab?.kind === 'file' && Object.hasOwn(latestDrafts.current, tab.path)) {
+      const discard = await confirmAction(t('Đóng {path} mà chưa lưu?', { path: tab.path }), {
+        action: t('Bỏ bản nháp'), title: t('Bản nháp chưa lưu'), danger: true,
+      })
+      if (!discard) return
+      updateDraft(tab.path, undefined)
+    }
     const left = tabs.filter((x) => x.key !== key)
     setTabs(left)
     if (active === key) setActive(left[left.length - 1]?.key ?? null)
@@ -205,7 +238,7 @@ export function CodeWorkspace() {
                     {tab.kind === 'diff' ? <GitCompare className="size-3.5 text-warn" /> : <FileCode className="size-3.5" />}
                     <span className="max-w-[12rem] truncate">{tab.path.split('/').pop()}</span>
                     {tab.kind === 'diff' && <span className="text-[10px] text-muted">diff</span>}
-                    {tab.kind === 'file' && drafts[tab.path] !== undefined && <span className="size-2 rounded-full bg-accent" aria-label={t('Chưa lưu')} />}
+                    {tab.kind === 'file' && Object.hasOwn(drafts, tab.path) && <span className="size-2 rounded-full bg-accent" aria-label={t('Chưa lưu')} />}
                   </button>
                   <button onClick={() => closeTab(tab.key)} aria-label={t('Đóng')} className="rounded p-0.5 text-muted opacity-0 transition hover:bg-panel2 hover:text-fg group-hover:opacity-100 focus:opacity-100"><X className="size-3" /></button>
                 </div>
@@ -218,7 +251,7 @@ export function CodeWorkspace() {
               ) : activeTab.kind === 'diff' ? (
                 <Diff key={activeTab.key} sid={sid} file={{ path: activeTab.path, status: activeTab.status ?? 'modified' }} onBack={() => closeTab(activeTab.key)} onReverted={() => { closeTab(activeTab.key); afterRevert() }} />
               ) : (
-                <FileTab key={activeTab.key} sid={sid} path={activeTab.path} draft={drafts[activeTab.path]} onDraft={(v) => setDrafts((d) => { const { [activeTab.path]: _, ...rest } = d; return v === undefined ? rest : { ...rest, [activeTab.path]: v } })} onSaved={() => { void qc.invalidateQueries({ queryKey: ['file', sid, activeTab.path] }); void qc.invalidateQueries({ queryKey: ['git', sid] }) }} />
+                <FileTab key={activeTab.key} sid={sid} path={activeTab.path} draft={Object.hasOwn(drafts, activeTab.path) ? drafts[activeTab.path] : undefined} onDraft={(v) => updateDraft(activeTab.path, v)} onSaved={() => { void qc.invalidateQueries({ queryKey: ['file', sid, activeTab.path] }); void qc.invalidateQueries({ queryKey: ['git', sid] }) }} />
               )}
             </div>
             {terminal && <div className="h-56 shrink-0 border-t border-line bg-bg"><div className="flex h-7 items-center border-b border-line px-3 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('Terminal')}</div><div className="h-[calc(100%-1.75rem)]"><TerminalTab items={chat.items} sid={sid} /></div></div>}

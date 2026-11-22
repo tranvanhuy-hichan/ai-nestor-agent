@@ -1,6 +1,6 @@
 // Ứng dụng desktop Nestor Agent: mở một cửa sổ riêng, bên trong là giao diện web do server Nestor (đóng gói sẵn) phục vụ.
 // Người dùng không cần biết server, cổng hay dòng lệnh: bấm mở là dùng được. Dữ liệu nằm ở thư mục dữ liệu của người dùng.
-const { app, BrowserWindow, Menu, dialog, nativeTheme, shell } = require('electron')
+const { app, BrowserWindow, Menu, nativeTheme, shell } = require('electron')
 const { spawn, execFileSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
@@ -72,15 +72,33 @@ function stopServer() {
   } catch { /* tiến trình đã thoát */ }
 }
 
-async function onServerCrashed(code) {
-  const r = await dialog.showMessageBox(win ?? undefined, {
-    type: 'error', buttons: [L('Khởi động lại', 'Restart'), L('Thoát', 'Quit')], defaultId: 0, cancelId: 1,
-    message: L('Nestor đã dừng đột ngột', 'Nestor stopped unexpectedly'),
-    detail: L(`Mã thoát: ${code}. Nhật ký: ${path.join(app.getPath('userData'), 'server.log')}`, `Exit code: ${code}. Log: ${path.join(app.getPath('userData'), 'server.log')}`),
-  })
-  if (r.response === 0) { app.relaunch(); }
+function exitApp(restart = false) {
+  if (restart) app.relaunch()
   quitting = true
   app.quit()
+}
+
+function showServerError(title, detail, canRestart = false) {
+  const window = win
+  if (!window || window.isDestroyed()) { exitApp(); return }
+  const screen = errorScreen(title, detail, canRestart)
+  const onAction = (event, url) => {
+    if (url !== 'nestor-action://quit/' && url !== 'nestor-action://restart/') return
+    event.preventDefault()
+    if (window.webContents.getURL() !== screen) return
+    exitApp(canRestart && url === 'nestor-action://restart/')
+  }
+  window.webContents.on('will-navigate', onAction)
+  void window.loadURL(screen).then(() => {
+    if (!window.isDestroyed()) window.show()
+  }).catch((error) => {
+    log(`error screen failed: ${error.message}`)
+    exitApp()
+  })
+}
+
+function onServerCrashed(code) {
+  showServerError(L('Nestor đã dừng đột ngột', 'Nestor stopped unexpectedly'), L(`Mã thoát: ${code}.`, `Exit code: ${code}.`), true)
 }
 
 const img = (name) => { try { return 'data:image/png;base64,' + fs.readFileSync(path.join(__dirname, 'assets', name)).toString('base64') } catch { return '' } }
@@ -105,6 +123,38 @@ body{margin:0;height:100vh;display:grid;place-items:center;background:${bg};colo
 .m{margin-top:14px;font-size:12px;opacity:.8}
 @keyframes s{from{transform:translateX(-100%)}to{transform:translateX(300%)}}
 </style><div class="c"><img class="mark" src="${mark}" alt=""><span class="word"></span><p class="s">${slogan}</p><div class="bar"><i></i></div><div class="m">${msg}</div></div>`)
+}
+
+const escapeHtml = (value) => String(value).replace(/[&<>"]/g, (char) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
+})[char])
+
+function errorScreen(title, detail, canRestart) {
+  const dark = nativeTheme.shouldUseDarkColors
+  const mark = img(dark ? 'nestor-mark.png' : 'nestor-mark-light.png')
+  const logPath = path.join(app.getPath('userData'), 'server.log')
+  return 'data:text/html;charset=utf-8,' + encodeURIComponent(`<!doctype html>
+<html lang="${L('vi', 'en')}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>${escapeHtml(title)}</title><style>
+:root{color-scheme:${dark ? 'dark' : 'light'};--bg:${dark ? '#0e0e10' : '#f5f7fb'};--panel:${dark ? '#17171b' : '#fff'};--fg:${dark ? '#eef0f6' : '#14213d'};--muted:${dark ? '#a7a7b2' : '#5b6475'};--line:${dark ? '#303038' : '#e0e4ed'}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+main{width:min(100%,520px);padding:28px;border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:0 14px 44px #0002}
+img{width:42px;height:42px;object-fit:contain}
+h1{margin:12px 0 8px;font-size:22px;line-height:1.3}
+p{margin:0;color:var(--muted);overflow-wrap:anywhere;white-space:pre-wrap}
+.log{margin-top:16px;padding:12px;border-radius:9px;background:var(--bg)}
+code{display:block;overflow-wrap:anywhere}
+.actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:24px}
+a{display:inline-block;padding:8px 14px;border:1px solid var(--line);border-radius:8px;color:var(--fg);text-decoration:none;font-weight:600}
+.primary{background:#2563eb;border-color:#2563eb;color:white}
+a:hover{filter:brightness(1.15)}
+a:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}
+</style><main><img src="${mark}" alt="Nestor"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p>
+<div class="log"><p>${L('Nhật ký', 'Log')}</p><code>${escapeHtml(logPath)}</code></div>
+<div class="actions"><a href="nestor-action://quit/">${L('Thoát', 'Quit')}</a>
+${canRestart ? `<a class="primary" href="nestor-action://restart/">${L('Khởi động lại', 'Restart')}</a>` : ''}</div></main></html>`)
 }
 
 function createWindow() {
@@ -152,10 +202,7 @@ if (!app.requestSingleInstanceLock()) {
     } catch (e) {
       log(`start failed: ${e.stack || e}`)
       stopServer()
-      await dialog.showMessageBox({ type: 'error', message: L('Không khởi động được Nestor', 'Nestor could not start'),
-        detail: `${e.message}\n\n${L('Nhật ký', 'Log')}: ${path.join(app.getPath('userData'), 'server.log')}` })
-      quitting = true
-      app.quit()
+      showServerError(L('Không khởi động được Nestor', 'Nestor could not start'), e.message)
     }
   })
   app.on('window-all-closed', () => app.quit())

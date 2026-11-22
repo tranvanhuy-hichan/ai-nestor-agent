@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Clock, Download, File as FileIcon, FileSearch, FileSpreadsheet, FileText, HeartPulse, MessageSquarePlus, Pencil, Pin, Presentation, Search, Send, Trash2, X } from 'lucide-react'
@@ -14,6 +15,7 @@ const docIcon = (ext: string) => (ext === '.xlsx' || ext === '.xlsm' || ext === 
 const docSize = (n: number) => (n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 
 export function SessionList({ sessions, activeId, onOpen, onNew, onDeleted, showDocs }: { sessions: SessionInfo[]; activeId: string | null; onOpen: (id: string) => void; onNew: () => void; onDeleted: (id: string) => void; showDocs?: boolean }) {
+  const { confirmAction } = useDialogs()
   const qc = useQueryClient()
   const [q, setQ] = useState('')
   const [docQuery, setDocQuery] = useState('')
@@ -66,7 +68,7 @@ export function SessionList({ sessions, activeId, onOpen, onNew, onDeleted, show
                     {d.status === 'error' && <p className="text-[11px] text-bad">{t('Lỗi')}</p>}
                   </div>
                   <a href={`/api/knowledge/${d.id}/file`} download aria-label={t('Tải về')} className="rounded p-1 text-muted opacity-0 transition hover:text-fg focus:opacity-100 group-hover:opacity-100"><Download className="size-3.5" /></a>
-                  <button onClick={() => { if (confirm(t('Xóa "{name}" khỏi kho tài liệu?', { name: d.name }))) delDoc.mutate(d.id) }} aria-label={t('Xóa')} className="rounded p-1 text-muted opacity-0 transition hover:text-bad focus:opacity-100 group-hover:opacity-100"><Trash2 className="size-3.5" /></button>
+                  <button onClick={async () => { if (await confirmAction(t('Xóa "{name}" khỏi kho tài liệu?', { name: d.name }), { action: t('Xóa'), danger: true })) delDoc.mutate(d.id) }} aria-label={t('Xóa')} className="rounded p-1 text-muted opacity-0 transition hover:text-bad focus:opacity-100 group-hover:opacity-100"><Trash2 className="size-3.5" /></button>
                 </div>
               )
             })

@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Cable, ChevronRight, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
@@ -23,6 +24,7 @@ const STATUS: Record<McpServerInfo['status'], { label: string; tone: 'ok' | 'inf
 
 /** MCP truyen thong: server chay tren may ban (stdio) hoac server HTTP/SSE tu khai bao. Dich vu dang nhap bang tai khoan nam o tab "MCP dich vu". */
 export function McpTab({ addSignal = 0 }: { addSignal?: number }) {
+  const { confirmAction } = useDialogs()
   const mcp = useMcp()
   const cfg = useConfig()
   const save = useSaveConfig()
@@ -73,7 +75,7 @@ export function McpTab({ addSignal = 0 }: { addSignal?: number }) {
               </button>
               <Button size="sm" variant="ghost" onClick={() => reconnect.mutate(s.name)} aria-label={t('Kết nối lại {name}', { name: s.name })} disabled={s.status === 'disabled'}><RefreshCw className="size-4" /></Button>
               <Button size="sm" variant="ghost" onClick={() => setEditing({ name: s.name, cfg: s.config })} aria-label={t('Sửa {name}', { name: s.name })}><Pencil className="size-4" /></Button>
-              <Button size="sm" variant="ghost" onClick={() => { if (confirm(t('Xóa MCP server "{name}"?', { name: s.name }))) { const { [s.name]: _, ...rest } = servers; persist(rest, undefined, t('Đã xóa')) } }} aria-label={t('Xóa {name}', { name: s.name })}><Trash2 className="size-4" /></Button>
+              <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction(t('Xóa MCP server "{name}"?', { name: s.name }), { action: t('Xóa'), danger: true })) { const { [s.name]: _, ...rest } = servers; persist(rest, undefined, t('Đã xóa')) } }} aria-label={t('Xóa {name}', { name: s.name })}><Trash2 className="size-4" /></Button>
               <Switch checked={s.config.enabled} onChange={(v) => persist({ ...servers, [s.name]: { ...servers[s.name], enabled: v } })} label={t('Bật {name}', { name: s.name })} />
             </div>
             {s.error && <p className="mx-4 mb-4 rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 font-mono text-xs text-bad">{s.error}</p>}

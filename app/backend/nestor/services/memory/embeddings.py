@@ -91,7 +91,7 @@ class Embedder:
         return [_norm([float(x) for x in v]) for v in data]
 
 
-def _ollama_url(cfg) -> str:
+def ollama_url(cfg) -> str:
     p = cfg.providers.get(cfg.memory.provider or "")
     if p and "11434" in p.base_url:
         return p.base_url.rstrip("/").removesuffix("/v1")
@@ -135,7 +135,7 @@ def get_embedder(cfg) -> Embedder | None:
     if mode == "openai":
         return _openai(cfg)
     if mode == "ollama":
-        url = _ollama_url(cfg)
+        url = ollama_url(cfg)
         e = _pick_ollama(cfg, url)
         if e:
             return e
@@ -151,7 +151,7 @@ def get_embedder(cfg) -> Embedder | None:
     if pname and pname in cfg.providers:
         p = cfg.providers[pname]
         if "11434" in p.base_url:
-            e = _pick_ollama(cfg, _ollama_url(cfg))
+            e = _pick_ollama(cfg, ollama_url(cfg))
             if e:
                 return e
         elif p.type == "openai":

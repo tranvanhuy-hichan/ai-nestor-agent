@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, Cpu, HardDrive, MemoryStick, Power, Radio, RefreshCw, Search, Server, Terminal } from 'lucide-react'
@@ -86,6 +87,7 @@ function GatewayLogs({ paused }: { paused: boolean }) {
 }
 
 export function GatewayPage() {
+  const { confirmAction } = useDialogs()
   const qc = useQueryClient()
   const toast = useToast()
   const gateway = useQuery({ queryKey: ['gateway'], queryFn: () => api.get<Gateway>('/api/gateway'), refetchInterval: 4000, retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2 })
@@ -122,7 +124,7 @@ export function GatewayPage() {
         {data && <div className="flex flex-wrap gap-2">
           <Button loading={check.isPending} onClick={() => check.mutate()}>{t('Kiểm tra cập nhật')}</Button>
           {data.restart_manager && <Button loading={restart.isPending} disabled={!!waiting}
-            onClick={() => { if (confirm(t('Khởi động lại Gateway sẽ ngắt các phiên đang chạy. Tiếp tục?'))) restart.mutate(data.started) }}>
+            onClick={async () => { if (await confirmAction(t('Khởi động lại Gateway sẽ ngắt các phiên đang chạy. Tiếp tục?'), { action: t('Khởi động lại Gateway'), danger: true })) restart.mutate(data.started) }}>
             <RefreshCw className="size-4" />{t('Khởi động lại Gateway')}
           </Button>}
         </div>}

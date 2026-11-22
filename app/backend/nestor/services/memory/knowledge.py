@@ -1,5 +1,6 @@
 """Hỏi đáp trên tài liệu của người dùng: nhận PDF, Word, Excel, PowerPoint và văn bản, cắt thành đoạn có ghi vị trí (trang, sheet, slide),
 lập chỉ mục từ khóa (FTS5) và vector, rồi tìm kết hợp. Nguồn gốc của mọi câu trả lời là `(tên file, vị trí)` để người dùng kiểm chứng."""
+import codecs
 import csv
 import hashlib
 import io
@@ -11,6 +12,7 @@ import threading
 import time
 import uuid
 import zipfile
+from collections import defaultdict, deque
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -19,6 +21,7 @@ from nestor.core.db import db
 from nestor.core.text import fold
 from nestor.services import embeddings, vectorstore
 from .memory_index import chunk_text
+from .pdf_ocr import OcrEngine, OcrError
 
 log = logging.getLogger("nestor.knowledge")
 MAX_UPLOAD = 60 * 1024 * 1024
@@ -28,6 +31,7 @@ MAX_FOLDER_FILES = 500
 MAX_UNZIPPED = 300 * 1024 * 1024
 CHUNK = 900
 RRF_K = 60
+OFFICE = {".docx", ".xlsx", ".xlsm", ".pptx"}
 SUPPORTED = {".pdf", ".docx", ".xlsx", ".xlsm", ".pptx", ".txt", ".md", ".csv", ".tsv", ".json", ".log", ".html", ".htm", ".xml", ".rst"}
 
 
@@ -59,6 +63,8 @@ def ensure_schema() -> None:
         c.execute("CREATE INDEX IF NOT EXISTS idx_kbc_doc ON kb_chunks(doc_id, ord)")
         c.execute("""CREATE TABLE IF NOT EXISTS kb_vecs(
             chunk_id INTEGER NOT NULL, model TEXT NOT NULL, dim INTEGER, vec BLOB, PRIMARY KEY(chunk_id, model))""")
+        c.execute("""CREATE TABLE IF NOT EXISTS kb_ocr_pages(
+            doc_id TEXT NOT NULL, page INTEGER NOT NULL, words TEXT NOT NULL, PRIMARY KEY(doc_id, page))""")
         try:
             c.execute("CREATE VIRTUAL TABLE IF NOT EXISTS kb_fts USING fts5(folded, chunk_id UNINDEXED)")
         except Exception:  # noqa: BLE001 - không có FTS5 thì lùi về LIKE
@@ -147,24 +153,60 @@ def _guard_zip(z: zipfile.ZipFile) -> None:
         raise KnowledgeError("file nén quá lớn để mở an toàn")
 
 
-def _read_pdf(path: Path) -> tuple[list[tuple[str, str]], int, str]:
+def _read_pdf(path: Path, *, doc_id: str | None = None) -> tuple[list[tuple[str, str]], int, str]:
     from pypdf import PdfReader
     r = PdfReader(str(path))
     if r.is_encrypted and not r.decrypt(""):
         raise KnowledgeError("PDF có mật khẩu, hãy gỡ mật khẩu rồi thêm lại")
-    out, blank = [], 0
+    out, blank, recognized = [], 0, 0
     n = min(len(r.pages), MAX_PAGES)
+    engine = None
+    unavailable = ""
+    failure = ""
     for i in range(n):
         try:
             t = (r.pages[i].extract_text() or "").strip()
         except Exception:  # noqa: BLE001 - một trang hỏng không làm hỏng cả file
             t = ""
+        if not t and doc_id:
+            page_number = i + 1
+            with db() as c:
+                cache = c.execute("SELECT words FROM kb_ocr_pages WHERE doc_id=? AND page=?", (doc_id, page_number)).fetchone()
+            words = json.loads(cache["words"]) if cache else []
+            if cache is None and not unavailable:
+                if engine is None:
+                    try:
+                        engine = OcrEngine.detect()
+                    except OcrError as exc:
+                        unavailable = str(exc)
+                if engine is not None:
+                    with db() as c:
+                        if not c.execute("SELECT 1 FROM kb_docs WHERE id=?", (doc_id,)).fetchone():
+                            return [], 0, ""
+                    try:
+                        words = engine.read_page(path, i)
+                        with db() as c:
+                            c.execute(
+                                "INSERT OR IGNORE INTO kb_ocr_pages(doc_id,page,words) "
+                                "SELECT ?,?,? WHERE EXISTS (SELECT 1 FROM kb_docs WHERE id=?)",
+                                (doc_id, page_number, json.dumps(words, ensure_ascii=False), doc_id),
+                            )
+                    except (OcrError, ImportError, OSError, RuntimeError, ValueError) as exc:
+                        failure = str(exc)
+                        log.debug("OCR %s trang %s: %s", doc_id, page_number, exc)
+            t = "".join(word["text"] for word in words).strip()
+            recognized += bool(t)
         if t:
             out.append((f"trang {i + 1}", t))
         else:
             blank += 1
-    note = f"{blank}/{n} trang không có chữ (có thể là bản quét ảnh, cần OCR)" if blank and blank >= max(1, n // 2) else ""
-    return out, n, note
+    notes = []
+    if recognized:
+        notes.append(f"OCR đã nhận dạng {recognized} trang")
+    if blank and (doc_id or blank >= max(1, n // 2)):
+        reason = unavailable or failure
+        notes.append(f"{blank}/{n} trang chưa đọc được chữ" + (f" (OCR: {reason})" if reason else " (có thể cần OCR hoặc trang trống)"))
+    return out, n, ". ".join(notes)
 
 
 def _xml_text(root: ET.Element, ns: str, tag: str) -> str:
@@ -240,16 +282,44 @@ def _read_pptx(path: Path) -> tuple[list[tuple[str, str]], int, str]:
     return segs, len(segs), ""
 
 
-def _read_text(path: Path, ext: str) -> tuple[list[tuple[str, str]], int, str]:
-    raw = path.read_bytes()
+def _decode_text(raw: bytes, *, partial: bool = False) -> str:
     for enc in ("utf-8-sig", "utf-16", "cp1258", "cp1252"):
         try:
-            text = raw.decode(enc)
+            text = codecs.getincrementaldecoder(enc)().decode(raw, final=not partial)
             break
         except UnicodeError:
             continue
     else:
         text = raw.decode("utf-8", "replace")
+    return text
+
+
+def is_text(path: Path, ext: str) -> bool:
+    if ext in OFFICE or ext == ".pdf":
+        return False
+    if ext in SUPPORTED:
+        return True
+    with path.open("rb") as source:
+        sample = source.read(8192)
+    try:
+        text = codecs.getincrementaldecoder("utf-8-sig")().decode(sample, final=False)
+    except UnicodeError:
+        return False
+    return bool(text) and all(ch.isprintable() or ch in "\n\r\t" for ch in text)
+
+
+def text_preview(d: dict) -> dict:
+    limit = 2 * 1024 * 1024
+    path = Path(d["path"])
+    if not is_text(path, d["ext"]):
+        return {"text": None, "truncated": False}
+    with path.open("rb") as source:
+        raw = source.read(limit + 1)
+    return {"text": _decode_text(raw[:limit], partial=len(raw) > limit), "truncated": len(raw) > limit}
+
+
+def _read_text(path: Path, ext: str) -> tuple[list[tuple[str, str]], int, str]:
+    text = _decode_text(path.read_bytes())
     if ext in (".html", ".htm", ".xml"):
         text = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", text)
         text = re.sub(r"(?s)<[^>]+>", " ", text)
@@ -280,7 +350,7 @@ def extract(path: Path, ext: str) -> tuple[list[tuple[str, str]], int, str]:
         return _read_xlsx(path)
     if ext == ".pptx":
         return _read_pptx(path)
-    if ext in SUPPORTED:
+    if is_text(path, ext):
         return _read_text(path, ext)
     raise KnowledgeError(f"chưa hỗ trợ định dạng {ext or 'này'} (hỗ trợ: PDF, Word .docx, Excel .xlsx, PowerPoint .pptx, văn bản)")
 
@@ -310,11 +380,10 @@ def add_file(src: Path, name: str, source: str = "upload", *, category_id: str |
     if not get_category(category_id):
         raise KnowledgeError("không có danh mục này")
     ext = Path(name).suffix.lower()
-    if ext not in SUPPORTED:
-        raise KnowledgeError(f"chưa hỗ trợ định dạng {ext or 'này'} (hỗ trợ: PDF, Word .docx, Excel .xlsx, PowerPoint .pptx, văn bản)")
     size = src.stat().st_size
     if size > MAX_UPLOAD:
         raise KnowledgeError("file quá lớn (tối đa 60MB)")
+    indexable = ext in SUPPORTED or is_text(src, ext)
     sha = _sha(src)
     with db() as c:
         dup = c.execute("SELECT * FROM kb_docs WHERE sha=?", (sha,)).fetchone()
@@ -326,62 +395,154 @@ def add_file(src: Path, name: str, source: str = "upload", *, category_id: str |
     if keep_copy:
         d = _store_dir(cfg) / did
         d.mkdir(parents=True, exist_ok=True)
-        dest = d / re.sub(r"[^\w.\- ()]", "_", name)[:120]
+        dest = d / ("original" + (ext if re.fullmatch(r"\.[a-z0-9]{1,16}", ext) else ""))
         shutil.copyfile(src, dest)
         path = str(dest)
-    with db() as c:
-        c.execute("INSERT INTO kb_docs(id,name,path,source,ext,size,sha,status,added,category_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                  (did, name[:200], path, source, ext, size, sha, "indexing", time.time(), category_id))
-    _spawn(_index, did)
+    try:
+        with db() as c:
+            inserted = c.execute(
+                "INSERT INTO kb_docs(id,name,path,source,ext,size,sha,status,added,category_id) VALUES(?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(sha) DO NOTHING",
+                (did, name[:200], path, source, ext, size, sha, "indexing" if indexable else "stored", time.time(), category_id),
+            ).rowcount
+            dup = c.execute("SELECT * FROM kb_docs WHERE sha=?", (sha,)).fetchone() if not inserted else None
+    except Exception:
+        if keep_copy:
+            shutil.rmtree(d, ignore_errors=True)
+        raise
+    if dup is not None:
+        if keep_copy:
+            shutil.rmtree(d, ignore_errors=True)
+        return {**dict(dup), "duplicate": True}
+    if indexable:
+        _spawn(_index, did)
     return get(did) or {}
 
 
-def _index(did: str) -> None:
-    ensure_schema()
+def _remove_chunks(c, ids: list[int]) -> None:
+    has_fts = _fts(c)
+    for start in range(0, len(ids), 500):
+        part = ids[start:start + 500]
+        params = ",".join("?" * len(part))
+        c.execute(f"DELETE FROM kb_vecs WHERE chunk_id IN ({params})", part)
+        if has_fts:
+            c.execute(f"DELETE FROM kb_fts WHERE chunk_id IN ({params})", part)
+        c.execute(f"DELETE FROM kb_chunks WHERE id IN ({params})", part)
+
+
+def _save_chunks(did: str, rows: list[tuple[str, str]]) -> list[tuple[int, str]]:
+    """Keep IDs for unchanged passages so citations survive an OCR retry."""
     with db() as c:
-        d = c.execute("SELECT * FROM kb_docs WHERE id=?", (did,)).fetchone()
+        c.execute("BEGIN IMMEDIATE")
+        if not c.execute("SELECT 1 FROM kb_docs WHERE id=?", (did,)).fetchone():
+            return []
+        old = defaultdict(deque)
+        for row in c.execute("SELECT id,loc,text FROM kb_chunks WHERE doc_id=? ORDER BY ord", (did,)):
+            old[(row["loc"], row["text"])].append(row["id"])
+        saved = []
+        has_fts = _fts(c)
+        for ord_, (loc, text) in enumerate(rows):
+            ids = old[(loc, text)]
+            if ids:
+                chunk_id = ids.popleft()
+                c.execute("UPDATE kb_chunks SET ord=? WHERE id=?", (ord_, chunk_id))
+            else:
+                cur = c.execute("INSERT INTO kb_chunks(doc_id,ord,loc,text) VALUES(?,?,?,?)", (did, ord_, loc, text))
+                chunk_id = cur.lastrowid
+                if has_fts:
+                    c.execute("INSERT INTO kb_fts(folded,chunk_id) VALUES(?,?)", (fold(text), chunk_id))
+            saved.append((chunk_id, text))
+        _remove_chunks(c, [chunk_id for ids in old.values() for chunk_id in ids])
+        return saved
+
+
+def _index(did: str) -> None:
+    d = get(did)
     if not d:
         return
     try:
-        segs, pages, note = extract(Path(d["path"]), d["ext"])
-        rows: list[tuple[str, str]] = []
-        for loc, text in segs:
-            for ch in chunk_text(text, CHUNK):
-                if len(ch) >= 12:
-                    rows.append((loc, ch))
+        path = Path(d["path"])
+        if d["ext"] == ".pdf":
+            segs, pages, note = _read_pdf(path, doc_id=did)
+        else:
+            segs, pages, note = extract(path, d["ext"])
+        rows = [(loc, ch) for loc, text in segs for ch in chunk_text(text, CHUNK) if len(ch) >= 12]
         if len(rows) > MAX_CHUNKS:
             rows, note = rows[:MAX_CHUNKS], (note + " " if note else "") + f"chỉ lập chỉ mục {MAX_CHUNKS} đoạn đầu"
         if not rows:
             raise KnowledgeError(note or "không đọc được chữ nào trong file")
-        with db() as c:
-            c.execute("DELETE FROM kb_chunks WHERE doc_id=?", (did,))
-            ids = []
-            for i, (loc, text) in enumerate(rows):
-                cur = c.execute("INSERT INTO kb_chunks(doc_id,ord,loc,text) VALUES(?,?,?,?)", (did, i, loc, text))
-                ids.append(cur.lastrowid)
-            if _fts(c):
-                c.executemany("INSERT INTO kb_fts(folded, chunk_id) VALUES(?,?)", [(fold(t), cid) for cid, (_, t) in zip(ids, rows)])
-        vec_note = _embed_chunks(ids, [t for _, t in rows])
+        saved = _save_chunks(did, rows)
+        vec_note = _embed_chunks(saved) if saved else ""
         note = " ".join(x for x in (note, vec_note) if x)
         with db() as c:
             c.execute("UPDATE kb_docs SET status='ready', pages=?, chunks=?, note=? WHERE id=?", (pages, len(rows), note, did))
     except Exception as e:  # noqa: BLE001 - tài liệu lỗi chỉ đánh dấu lỗi, không làm hỏng server
         log.info("index %s lỗi: %s", did, e)
         with db() as c:
-            c.execute("UPDATE kb_docs SET status='error', note=? WHERE id=?", (str(e)[:300], did))
+            c.execute("UPDATE kb_docs SET status=?, note=? WHERE id=?", ("ready" if d["chunks"] else "error", str(e)[:300], did))
 
 
-def _embed_chunks(ids: list[int], texts: list[str]) -> str:
-    """Nhúng vector theo lô. Lỗi (Ollama tắt...) thì vẫn tìm được bằng từ khóa; trả về ghi chú nếu có."""
+def retry_ocr(did: str) -> bool:
+    d = get(did)
+    if not d:
+        raise KnowledgeError("không có tài liệu này")
+    if d["ext"] != ".pdf":
+        raise KnowledgeError("OCR chỉ hỗ trợ PDF")
+    with db() as c:
+        changed = c.execute("UPDATE kb_docs SET status='indexing' WHERE id=? AND status!='indexing'", (did,)).rowcount
+        if changed:
+            c.execute("DELETE FROM kb_ocr_pages WHERE doc_id=? AND words='[]'", (did,))
+    if changed:
+        _spawn(_index, did)
+    return bool(changed)
+
+
+def resume_indexing() -> None:
+    ensure_schema()
+    with db() as c:
+        ids = [row["id"] for row in c.execute("SELECT id FROM kb_docs WHERE status='indexing'")]
+    if ids:
+        def resume():
+            for did in ids:
+                _index(did)
+        _spawn(resume)
+
+
+def ocr_words(did: str, page: int) -> list[dict]:
+    with db() as c:
+        row = c.execute("SELECT words FROM kb_ocr_pages WHERE doc_id=? AND page=?", (did, page)).fetchone()
+    return json.loads(row["words"]) if row else []
+
+
+def _embed_chunks(chunks: list[tuple[int, str]]) -> str:
+    """Only embed missing vectors for the active model, including after an interrupted index."""
     cfg = cfgmod.load()
     if cfg.memory.embeddings == "off":
         return ""
     try:
-        for i in range(0, len(ids), 32):
-            vecs, model = embeddings.embed(cfg, texts[i:i + 32])
+        engine = embeddings.get_embedder(cfg)
+        if engine is None:
+            return ""
+        for i in range(0, len(chunks), 32):
+            batch = chunks[i:i + 32]
+            placeholders = ",".join("?" * len(batch))
             with db() as c:
-                c.executemany("INSERT OR REPLACE INTO kb_vecs(chunk_id,model,dim,vec) VALUES(?,?,?,?)",
-                              [(cid, model, len(v), vectorstore._pack(v)) for cid, v in zip(ids[i:i + 32], vecs)])
+                existing = {
+                    row["chunk_id"] for row in c.execute(
+                        f"SELECT chunk_id FROM kb_vecs WHERE model=? AND chunk_id IN ({placeholders})",
+                        (engine.model_id, *(chunk_id for chunk_id, _ in batch)),
+                    )
+                }
+            pending = [(chunk_id, text) for chunk_id, text in batch if chunk_id not in existing]
+            if not pending:
+                continue
+            vecs, model = engine.embed([text for _, text in pending])
+            with db() as c:
+                c.executemany(
+                    "INSERT OR REPLACE INTO kb_vecs(chunk_id,model,dim,vec) "
+                    "SELECT id,?,?,? FROM kb_chunks WHERE id=?",
+                    [(model, len(v), vectorstore._pack(v), cid) for (cid, _), v in zip(pending, vecs)],
+                )
     except Exception as e:  # noqa: BLE001
         return f"chưa nhúng được vector ({str(e)[:80]}), vẫn tìm được theo từ khóa"
     return ""
@@ -417,31 +578,40 @@ def ensure_vectors() -> int:
         _ensuring.release()
 
 
-def add_bytes(name: str, data: bytes, source: str = "upload", *, category_id: str | None = None) -> dict:
+def add_bytes(name: str, data: bytes | bytearray, source: str = "upload", *, category_id: str | None = None) -> dict:
     """Thêm tài liệu từ nội dung file thô (tải lên qua giao diện hoặc API)."""
     import tempfile
     if len(data) > MAX_UPLOAD:
         raise KnowledgeError("file quá lớn (tối đa 60MB)")
-    clean = re.sub(r"[\\/]+", "/", name).split("/")[-1].strip() or "tai-lieu"
     with tempfile.TemporaryDirectory() as tmp:
-        src = Path(tmp) / clean
+        src = Path(tmp) / "upload"
         src.write_bytes(data)
-        return add_file(src, name.replace("\\", "/")[-200:], source, category_id=category_id)
+        return add_file(src, name.replace("\\", "/").strip()[-200:] or "tai-lieu", source, category_id=category_id)
 
 
 SRC_TAG = re.compile(r"\[\[src:([^|\]]+)\|([^|\]]+)\|([^\]]+)\]\]")
 
 
+def display_source_location(loc: str) -> str:
+    return re.sub(r"#chunk=\d+$", "", loc.strip())
+
+
 def plain_sources(text: str) -> tuple[str, list[dict]]:
-    """Với ứng dụng bên ngoài: đổi thẻ nguồn [[src:...]] thành chữ thường `[tên file, vị trí]` và trả danh sách nguồn không trùng."""
-    seen: dict[tuple, dict] = {}
-    for m in SRC_TAG.finditer(text):
-        seen.setdefault((m.group(1), m.group(3)), {"doc_id": m.group(1).strip(), "name": m.group(2).strip(), "loc": m.group(3).strip()})
-    return SRC_TAG.sub(lambda m: f"[{m.group(2).strip()}, {m.group(3).strip()}]", text), list(seen.values())
+    """Đổi thẻ nguồn thành chữ thường và trả danh sách nguồn không trùng."""
+    seen: dict[tuple[str, str], dict] = {}
+
+    def replace(match: re.Match) -> str:
+        did, name, location = match.groups()
+        did, name, loc = did.strip(), name.strip(), display_source_location(location)
+        seen.setdefault((did, loc), {"doc_id": did, "name": name, "loc": loc})
+        return f"[{name}, {loc}]"
+
+    plain = SRC_TAG.sub(replace, text)
+    return plain, list(seen.values())
 
 
 def add_folder(folder: Path, *, category_id: str | None = None) -> dict:
-    """Thêm mọi file được hỗ trợ trong một thư mục (đệ quy, bỏ thư mục ẩn). Giữ bản sao để file di chuyển cũng không mất."""
+    """Thêm mọi file trong một thư mục (đệ quy, bỏ thư mục ẩn). Giữ bản sao để file di chuyển cũng không mất."""
     ensure_schema()
     if not folder.is_dir():
         raise KnowledgeError("không phải thư mục")
@@ -451,9 +621,6 @@ def add_folder(folder: Path, *, category_id: str | None = None) -> dict:
     added, dup, skipped = 0, 0, 0
     files = [p for p in sorted(folder.rglob("*")) if p.is_file() and not any(part.startswith(".") for part in p.relative_to(folder).parts)]
     for p in files:
-        if p.suffix.lower() not in SUPPORTED:
-            skipped += 1
-            continue
         if added + dup >= MAX_FOLDER_FILES:
             skipped += 1
             continue
@@ -481,13 +648,23 @@ def list_docs(category_id: str | None = None) -> list[dict]:
         return [dict(r) for r in c.execute("SELECT * FROM kb_docs ORDER BY added DESC")]
 
 
+def vector_counts(model: str, category_id: str | None) -> dict[str, int]:
+    with db() as c:
+        scope, params = (" AND d.category_id=?", (category_id,)) if category_id else ("", ())
+        rows = c.execute(
+            "SELECT ch.doc_id, COUNT(*) AS count FROM kb_vecs v JOIN kb_chunks ch ON ch.id=v.chunk_id "
+            "JOIN kb_docs d ON d.id=ch.doc_id WHERE v.model=?" + scope + " GROUP BY ch.doc_id", (model, *params)
+        ).fetchall()
+    return {row["doc_id"]: row["count"] for row in rows}
+
+
 def has_docs(category_id: str | None = None) -> bool:
     try:
         ensure_schema()
         with db() as c:
             if category_id:
-                return c.execute("SELECT 1 FROM kb_docs WHERE status='ready' AND category_id=? LIMIT 1", (category_id,)).fetchone() is not None
-            return c.execute("SELECT 1 FROM kb_docs WHERE status='ready' LIMIT 1").fetchone() is not None
+                return c.execute("SELECT 1 FROM kb_docs WHERE chunks>0 AND status IN ('ready','indexing') AND category_id=? LIMIT 1", (category_id,)).fetchone() is not None
+            return c.execute("SELECT 1 FROM kb_docs WHERE chunks>0 AND status IN ('ready','indexing') LIMIT 1").fetchone() is not None
     except Exception:  # noqa: BLE001
         return False
 
@@ -498,14 +675,10 @@ def delete(did: str) -> bool:
     if not d:
         return False
     with db() as c:
+        c.execute("BEGIN IMMEDIATE")
         ids = [r["id"] for r in c.execute("SELECT id FROM kb_chunks WHERE doc_id=?", (did,))]
-        for i in range(0, len(ids), 500):
-            part = ids[i:i + 500]
-            q = ",".join("?" * len(part))
-            c.execute(f"DELETE FROM kb_vecs WHERE chunk_id IN ({q})", part)
-            if _fts(c):
-                c.execute(f"DELETE FROM kb_fts WHERE chunk_id IN ({q})", part)
-        c.execute("DELETE FROM kb_chunks WHERE doc_id=?", (did,))
+        _remove_chunks(c, ids)
+        c.execute("DELETE FROM kb_ocr_pages WHERE doc_id=?", (did,))
         c.execute("DELETE FROM kb_docs WHERE id=?", (did,))
     shutil.rmtree(_store_dir(cfgmod.load()) / did, ignore_errors=True)
     return True
@@ -591,7 +764,7 @@ def search(query: str, limit: int = 6, category_id: str | None = None) -> list[d
     with db() as c:
         q = ",".join("?" * len(top))
         rows = {r["id"]: r for r in c.execute(f"SELECT c.id, c.loc, c.text, d.id AS doc_id, d.name FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id WHERE c.id IN ({q})", top)}
-    return [{"doc_id": rows[i]["doc_id"], "name": rows[i]["name"], "loc": rows[i]["loc"], "text": rows[i]["text"], "score": round(score[i], 4), "how": sorted(how[i])} for i in top if i in rows]
+    return [{"chunk_id": i, "doc_id": rows[i]["doc_id"], "name": rows[i]["name"], "loc": rows[i]["loc"], "text": rows[i]["text"], "score": round(score[i], 4), "how": sorted(how[i])} for i in top if i in rows]
 
 
 def overview(focus: str, per_doc: int = 3, limit: int = 16, category_id: str | None = None) -> list[dict]:
@@ -601,12 +774,12 @@ def overview(focus: str, per_doc: int = 3, limit: int = 16, category_id: str | N
     with db() as c:
         if category_id:
             rows = c.execute("SELECT c.id, c.loc, c.text, d.id AS doc_id, d.name FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id "
-                             "WHERE d.status='ready' AND d.category_id=? AND c.ord < ? ORDER BY d.added DESC, c.doc_id, c.ord", (category_id, per_doc)).fetchall()
+                             "WHERE d.chunks>0 AND d.status IN ('ready','indexing') AND d.category_id=? AND c.ord < ? ORDER BY d.added DESC, c.doc_id, c.ord", (category_id, per_doc)).fetchall()
         else:
             rows = c.execute("SELECT c.id, c.loc, c.text, d.id AS doc_id, d.name FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id "
-                             "WHERE d.status='ready' AND c.ord < ? ORDER BY d.added DESC, c.doc_id, c.ord", (per_doc,)).fetchall()
+                             "WHERE d.chunks>0 AND d.status IN ('ready','indexing') AND c.ord < ? ORDER BY d.added DESC, c.doc_id, c.ord", (per_doc,)).fetchall()
     for r in rows:
-        out.append({"doc_id": r["doc_id"], "name": r["name"], "loc": r["loc"], "text": r["text"]})
+        out.append({"chunk_id": r["id"], "doc_id": r["doc_id"], "name": r["name"], "loc": r["loc"], "text": r["text"]})
         seen.add((r["doc_id"], r["loc"], r["text"][:40]))
     for h in search(focus, 10, category_id) if focus.strip() else []:
         if (h["doc_id"], h["loc"], h["text"][:40]) not in seen:
@@ -620,28 +793,33 @@ def category_chat_context(cid: str) -> str:
     if not cat:
         return ""
     docs = list_docs(cid)
-    names = ", ".join(d["name"] for d in docs if d["status"] == "ready") or "chưa có tài liệu nào sẵn sàng"
+    names = ", ".join(d["name"] for d in docs if d["chunks"] and d["status"] in ("ready", "indexing")) or "chưa có tài liệu nào sẵn sàng"
     return (f'Người dùng đang mở danh mục tài liệu "{cat["name"]}" (mã {cid}) và chat ở khung bên phải của danh mục đó. '
             "CHỈ được trả lời dựa trên tài liệu của danh mục này (gọi kb_search để tìm, phạm vi đã tự động giới hạn đúng danh mục). "
             "Không dùng kiến thức chung hay tài liệu của danh mục khác. Luôn chèn thẻ nguồn [[src:...]] sau mỗi ý dựa vào tài liệu. "
             f"Tài liệu trong danh mục này: {names}.")
 
 
-def stats() -> dict:
+def stats(category_id: str | None = None) -> dict:
     ensure_schema()
     with db() as c:
-        r = c.execute("SELECT COUNT(*) docs, COALESCE(SUM(chunks),0) chunks FROM kb_docs WHERE status='ready'").fetchone()
-        pending = c.execute("SELECT COUNT(*) n FROM kb_docs WHERE status='indexing'").fetchone()["n"]
-    return {"docs": r["docs"], "chunks": r["chunks"], "indexing": pending}
+        where, params = (" WHERE category_id=?", (category_id,)) if category_id else ("", ())
+        r = c.execute("SELECT COUNT(*) FILTER (WHERE chunks>0 AND status IN ('ready','indexing')) AS docs, "
+                      "COALESCE(SUM(chunks) FILTER (WHERE chunks>0 AND status IN ('ready','indexing')), 0) AS chunks, "
+                      "COUNT(*) FILTER (WHERE status='indexing') AS indexing FROM kb_docs" + where, params).fetchone()
+    return dict(r)
 
 
-def passage(did: str, loc: str, limit_chars: int = 6000) -> dict | None:
+def passage(did: str, loc: str, limit_chars: int = 6000, *, chunk_id: int | None = None) -> dict | None:
     """Noi dung doan van ma mot the nguon [[src:id|ten|vi tri]] tro toi (de hien tren the xem nhanh, khong phai tai ca file)."""
     d = get(did)
     if not d:
         return None
     with db() as c:
-        rows = c.execute("SELECT text FROM kb_chunks WHERE doc_id=? AND loc=? ORDER BY ord", (did, loc)).fetchall()
+        if chunk_id is not None:
+            rows = c.execute("SELECT text FROM kb_chunks WHERE doc_id=? AND id=?", (did, chunk_id)).fetchall()
+        else:
+            rows = c.execute("SELECT text FROM kb_chunks WHERE doc_id=? AND loc=? ORDER BY ord", (did, loc)).fetchall()
     text, truncated = "", False
     for r in rows:
         if len(text) + len(r["text"]) > limit_chars:
@@ -652,10 +830,14 @@ def passage(did: str, loc: str, limit_chars: int = 6000) -> dict | None:
     return {"name": d["name"], "loc": loc, "text": text.strip(), "truncated": truncated, "has_file": bool(d.get("path") and Path(d["path"]).is_file())}
 
 
-def doc_chunks(did: str, limit: int = 200) -> list[dict]:
-    """Lấy danh sách các đoạn trích (chunks) của một tài liệu để người dùng xem trước cách chia đoạn và nội dung."""
+def doc_chunks(did: str, limit: int = 200, *, offset: int = 0, loc: str | None = None, chunk_id: int | None = None) -> list[dict]:
+    """Lấy các đoạn liên tiếp, bắt đầu gần vị trí trích dẫn nếu có."""
     ensure_schema()
     with db() as c:
-        rows = c.execute("SELECT id, ord, loc, text FROM kb_chunks WHERE doc_id=? ORDER BY ord LIMIT ?", (did, limit)).fetchall()
+        if loc is not None:
+            clause, param = ("id=?", chunk_id) if chunk_id is not None else ("loc=?", loc)
+            target = c.execute("SELECT MIN(ord) target FROM kb_chunks WHERE doc_id=? AND " + clause, (did, param)).fetchone()["target"]
+            if target is not None:
+                offset = max(0, target - 10)
+        rows = c.execute("SELECT id, ord, loc, text FROM kb_chunks WHERE doc_id=? AND ord>=? ORDER BY ord LIMIT ?", (did, offset, limit)).fetchall()
     return [dict(r) for r in rows]
-

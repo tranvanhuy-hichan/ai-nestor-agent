@@ -1,23 +1,26 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { AppearanceCard } from '@/features/settings/AppearanceCard'
-import { useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowUpRight, Bot, Brain, DatabaseBackup, Download, Globe, Image, Network, Palette, Shield, Upload, Wrench } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, Bot, Brain, DatabaseBackup, Download, Globe, Image, Network, Palette, ScanText, Search, Shield, Upload, Wrench, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { Field, Input, Select } from '@/components/ui/Form'
-import { ErrorNote, Loading, Page, PageHeader } from '@/components/ui/misc'
+import { EmptyState, ErrorNote, Loading, Page } from '@/components/ui/misc'
 import { Switch } from '@/components/ui/Switch'
 import { useToast } from '@/components/ui/Toast'
 import { useConfig, useSaveConfig } from '@/lib/queries'
 import type { AppConfig, ExtraCfg, SecretsStatus, ToolInfo } from '@/lib/types'
-import { cn, errMsg } from '@/lib/utils'
+import { errMsg } from '@/lib/utils'
 import { t, tk } from '@/lib/i18n.ts'
 import { SearchBox } from '@/components/ui/SearchBox'
 import { paginate, Pagination } from '@/components/ui/Pagination'
 import { searchableText } from '@/lib/featureCatalog'
+import { EmbeddingPanel } from '@/features/providers/EmbeddingPanel'
+import { OcrPanel } from '@/features/providers/OcrPanel'
 import { FeaturesTab } from './FeaturesTab'
 
 const TOOLS_PER_PAGE = 10
@@ -72,12 +75,13 @@ function PasswordCard({ has }: { has: boolean }) {
 }
 
 function BackupRestoreCard() {
+  const { confirmAction } = useDialogs()
   const toast = useToast()
   const [restoring, setRestoring] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleRestore = async (file: File) => {
-    if (!confirm(t('Khôi phục sẽ ghi đè toàn bộ dữ liệu hiện tại bằng dữ liệu trong file sao lưu. Hệ thống sẽ tự động tạo một bản sao lưu dự phòng trước khi áp dụng. Bạn có chắc chắn muốn khôi phục?'))) {
+    if (!(await confirmAction(t('Khôi phục sẽ ghi đè toàn bộ dữ liệu hiện tại bằng dữ liệu trong file sao lưu. Hệ thống sẽ tự động tạo một bản sao lưu dự phòng trước khi áp dụng. Bạn có chắc chắn muốn khôi phục?'), { action: t('Khôi phục'), title: t('Khôi phục bản sao lưu'), danger: true }))) {
       return
     }
     setRestoring(true)
@@ -148,16 +152,78 @@ function BackupRestoreCard() {
 
 
 const SECTIONS = [
-  { id: 'appearance', label: tk('Giao diện'), Icon: Palette, terms: [tk('Giao diện sáng'), tk('Giao diện tối'), tk('Phông chữ mã nguồn')] },
-  { id: 'agent', label: tk('Agent'), Icon: Bot, terms: [tk('Model nhanh cho câu đơn giản'), tk('Số bước tối đa mỗi lượt'), tk('Thư mục workspace'), tk('Gợi ý tạo kỹ năng từ việc lặp lại')] },
-  { id: 'memory', label: tk('Bộ nhớ & Ngữ cảnh'), Icon: Brain, terms: [tk('Số tin nhắn gửi kèm'), tk('Tóm tắt hội thoại khi vượt quá (ký tự)'), tk('Tìm kiếm theo nghĩa (embedding)'), tk('Tự lập chỉ mục tin nhắn mới')] },
-  { id: 'browser', label: tk('Trình duyệt & Máy tính'), Icon: Globe, terms: [tk('Đường dẫn Chromium/Chrome'), tk('Chạy ẩn'), tk('Cho phép địa chỉ nội bộ'), tk('Điều khiển máy tính')] },
-  { id: 'media', label: tk('Ảnh và hình ảnh'), Icon: Image, terms: [tk('Provider tạo ảnh'), tk('Model tạo ảnh'), tk('Provider để xem ảnh')] },
-  { id: 'delegation', label: tk('Agent con và việc dài'), Icon: Network, terms: [tk('Chạy song song'), tk('Độ sâu tối đa'), tk('Vai trò của agent con')] },
-  { id: 'tools', label: tk('Công cụ'), Icon: Wrench, terms: ['ClawHub', 'MCP'] },
-  { id: 'security', label: tk('An toàn & Bảo mật'), Icon: Shield, terms: [tk('Xác nhận trước khi chạy lệnh shell'), tk('Mật khẩu'), tk('Sandbox chạy lệnh (Docker)'), tk('Mã hóa khóa bí mật')] },
-  { id: 'backup', label: tk('Sao lưu & Khôi phục'), Icon: DatabaseBackup, terms: [tk('Sao lưu'), tk('Khôi phục')] },
+  { id: 'appearance', label: tk('Giao diện'), desc: tk('Màu giao diện, phông chữ và ký tự ghép.'), Icon: Palette, terms: 'theme dark light font ligatures sang toi' },
+  { id: 'agent', label: tk('Agent'), desc: tk('Model cho câu đơn giản, giới hạn bước và thư mục làm việc.'), Icon: Bot, terms: 'workspace ky nang goi y so buoc' },
+  { id: 'memory', label: tk('Bộ nhớ & Ngữ cảnh'), desc: tk('Lịch sử hội thoại, tóm tắt và lập chỉ mục tin nhắn.'), Icon: Brain, terms: 'memory context auto index ngu nghia so tin nhan compact' },
+  { id: 'browser', label: tk('Trình duyệt & Máy tính'), desc: tk('Chrome, chế độ chạy ẩn và điều khiển màn hình.'), Icon: Globe, terms: 'chromium headless man hinh dia chi noi bo' },
+  { id: 'media', label: tk('Ảnh và hình ảnh'), desc: tk('Chọn model để tạo và đọc hình ảnh.'), Icon: Image, terms: 'vision image provider' },
+  { id: 'delegation', label: tk('Agent con và việc dài'), desc: tk('Vai trò agent con, chạy song song và giới hạn tác vụ nền.'), Icon: Network, terms: 'subagent delegation do sau so buoc' },
+  { id: 'tools', label: tk('Công cụ'), desc: tk('Bật, tắt công cụ và thiết lập địa chỉ ClawHub.'), Icon: Wrench, terms: 'tools clawhub mcp' },
+  { id: 'security', label: tk('An toàn & Bảo mật'), desc: tk('Mật khẩu, mã hóa khóa API và quyền chạy lệnh.'), Icon: Shield, terms: 'password sandbox docker shell mang khoa bi mat xac nhan' },
+  { id: 'backup', label: tk('Sao lưu & Khôi phục'), desc: tk('Tải bản sao lưu hoặc khôi phục dữ liệu từ tệp.'), Icon: DatabaseBackup, terms: 'backup restore import export' },
 ] as const
+
+const MODEL_SECTIONS = [
+  { id: 'embedding', label: tk('Model embedding'), desc: tk('Chọn và tải model tìm kiếm theo nghĩa.'), Icon: Brain, terms: 'ollama gemini vector semantic search' },
+  { id: 'ocr', label: 'OCR', desc: tk('Cài Tesseract và bộ ngôn ngữ để đọc PDF scan.'), Icon: ScanText, terms: 'tieng viet tieng anh tesseract nhan dang chu' },
+] as const
+
+type SettingItem = (typeof SECTIONS)[number] | (typeof MODEL_SECTIONS)[number]
+
+const GROUPS = [
+  { title: tk('Cá nhân hóa'), ids: ['appearance'] },
+  { title: tk('Agent & Công cụ'), ids: ['agent', 'memory', 'browser', 'media', 'delegation', 'tools'] },
+  { title: tk('Mô hình & Tài liệu'), ids: ['embedding', 'ocr'] },
+  { title: tk('Bảo mật & Dữ liệu'), ids: ['security', 'backup'] },
+]
+
+function SettingCards({ items }: { items: readonly SettingItem[] }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      {items.map(({ id, label, desc, Icon }) => (
+          <Link key={id} to={`?tab=${id}`}
+            className="group flex min-w-0 items-center gap-3 rounded-xl border border-line bg-panel p-4 transition hover:border-accent/50 hover:bg-panel2">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent"><Icon className="size-4" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{t(label)}</span><span className="mt-1 block text-xs leading-relaxed text-muted">{t(desc)}</span></span>
+            <ArrowRight aria-hidden className="size-4 shrink-0 text-muted group-hover:text-accent" />
+          </Link>
+      ))}
+    </div>
+  )
+}
+
+function SettingsDialog({ title, onClose, children, footer, wide }: {
+  title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide: boolean
+}) {
+  const element = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
+  const closeButton = useRef<HTMLButtonElement>(null)
+
+  useLayoutEffect(() => {
+    const dialog = element.current
+    dialog?.showModal()
+    closeButton.current?.focus()
+    return () => dialog?.close()
+  }, [])
+
+  return (
+    <dialog ref={element} aria-labelledby={titleId}
+      onCancel={(event) => { event.preventDefault(); onClose() }}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose() }}
+      className={`fixed inset-0 m-auto max-h-[88dvh] w-[calc(100%_-_1.5rem)] overflow-hidden rounded-2xl border border-line bg-panel p-0 text-fg shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm ${wide ? 'max-w-2xl' : 'max-w-lg'}`}>
+      <div className="flex max-h-[88dvh] flex-col">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+          <h2 id={titleId} className="text-base font-semibold">{title}</h2>
+          <button ref={closeButton} type="button" onClick={onClose} aria-label={t('Đóng')} className="rounded-md p-1.5 text-muted hover:bg-panel2 hover:text-fg">
+            <X className="size-4" />
+          </button>
+        </header>
+        <div className="min-h-0 overflow-y-auto p-3 sm:p-4">{children}</div>
+        {footer && <footer className="shrink-0 border-t border-line px-4 py-3 sm:px-5">{footer}</footer>}
+      </div>
+    </dialog>
+  )
+}
 
 function extraConfig({ browser, memory, media, computer, agents }: AppConfig): ExtraCfg {
   return { browser, memory, media, computer, agents }
@@ -175,8 +241,10 @@ export function SettingsPage() {
   const [toolPage, setToolPage] = useState(0)
   const [params, setParams] = useSearchParams()
   const requested = params.get('tab')
-  const active = SECTIONS.find((section) => section.id === (requested === 'features' ? 'browser' : requested)) ?? SECTIONS[0]
-  const tab = active.id
+  const items = [...SECTIONS, ...MODEL_SECTIONS]
+  const active = items.find((section) => section.id === (requested === 'features' ? 'browser' : requested))
+  const tab = active?.id
+  const searching = !!query.trim()
 
   if (cfg.error && !cfg.data) return <Page><ErrorNote error={cfg.error} /></Page>
   if (!cfg.data) return <Loading />
@@ -188,41 +256,60 @@ export function SettingsPage() {
   const reset = () => { setAgentEdit(null); setHubEdit(null); setExtraEdit(null) }
   const num = (k: 'max_steps' | 'max_history' | 'compact_chars') => (e: React.ChangeEvent<HTMLInputElement>) => setAgentEdit({ ...agent, [k]: Number(e.target.value) })
   const searchWords = searchableText(query.trim()).split(/\s+/).filter(Boolean)
-  const matches = SECTIONS.filter(({ label, terms }) => {
-    const index = searchableText([t(label), ...terms.map((term) => t(term))].join(' '))
+  const matches = items.filter(({ label, desc, terms }) => {
+    const index = searchableText([t(label), t(desc), terms].join(' '))
     return searchWords.every((word) => index.includes(word))
   })
-  const select = (id: typeof tab) => setParams(id === 'appearance' ? {} : { tab: id })
+  const clearSearch = () => setQuery('')
+  const saveChanges = () => save.mutate({ ...config, ...extra, agent, clawhub_url: hub }, {
+    onSuccess: () => { reset(); toast(t('Đã lưu cài đặt')) }, onError: (e) => toast(errMsg(e), 'bad'),
+  })
+  const closeSettings = () => { if (!save.isPending) setParams({}, { replace: true }) }
+  const saveBar = dirty && (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p role="status" className="text-sm font-medium">{t('Có thay đổi chưa lưu')}</p>
+      <div className="flex flex-wrap gap-2">
+        <Button disabled={save.isPending} onClick={reset}>{t('Bỏ thay đổi')}</Button>
+        <Button variant="primary" loading={save.isPending} onClick={saveChanges}>{t('Lưu thay đổi')}</Button>
+      </div>
+    </div>
+  )
   const filteredTools = tools.filter((tool) => searchableText(`${tool.name} ${t(tool.description)}`).includes(searchableText(toolQuery.trim())))
   const page = Math.min(toolPage, Math.max(0, Math.ceil(filteredTools.length / TOOLS_PER_PAGE) - 1))
 
   return (
     <Page>
-      <PageHeader title={t('Cài đặt')} action={dirty && <div className="flex flex-wrap gap-2">
-        <Button disabled={save.isPending} onClick={reset}>{t('Bỏ thay đổi')}</Button>
-        <Button variant="primary" loading={save.isPending}
-          onClick={() => save.mutate({ ...config, ...extra, agent, clawhub_url: hub }, {
-            onSuccess: () => { reset(); toast(t('Đã lưu cài đặt')) }, onError: (e) => toast(errMsg(e), 'bad'),
-          })}>{t('Lưu thay đổi')}</Button>
-      </div>} />
-      <div className="grid items-start gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <Card className="min-w-0 space-y-2 p-2.5 [&>div]:!w-full">
+      <div>
+        <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold tracking-tight">{t('Cài đặt')}</h1>
           <SearchBox value={query} onChange={setQuery} placeholder={t('Tìm cài đặt…')} label={t('Tìm cài đặt')} />
-          <nav aria-label={t('Nhóm cài đặt')} className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
-            {matches.map(({ id, label, Icon }) => (
-              <button key={id} type="button" onClick={() => select(id)} aria-current={tab === id ? 'page' : undefined}
-                className={cn('flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-2 text-left text-sm transition',
-                  tab === id ? 'bg-accent/12 font-medium text-accent' : 'text-muted hover:bg-panel2 hover:text-fg')}>
-                <Icon className="size-4 shrink-0" />{t(label)}
-              </button>
+        </header>
+        {searching ? (
+          <section aria-label={t('Kết quả tìm cài đặt')}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">{t('Kết quả tìm cài đặt')}</h2>
+              <Button size="sm" variant="ghost" onClick={clearSearch}>{t('Xóa tìm kiếm')}</Button>
+            </div>
+            {matches.length ? <SettingCards items={matches} /> : <EmptyState icon={Search} title={t('Không tìm thấy mục cài đặt.')} />}
+          </section>
+        ) : (
+          <div className="space-y-6">
+            {GROUPS.map(({ title, ids }) => (
+              <section key={title}>
+                <h2 className="mb-3 text-sm font-semibold text-muted">{t(title)}</h2>
+                <SettingCards items={items.filter((item) => ids.includes(item.id))} />
+              </section>
             ))}
-          </nav>
-          {!matches.length && <p className="px-2 py-1 text-sm text-muted">{t('Không tìm thấy mục cài đặt.')}</p>}
-        </Card>
-        <section aria-labelledby="settings-section" className="min-w-0 space-y-4">
-          <h2 id="settings-section" className={tab === 'appearance' ? 'sr-only' : 'text-lg font-semibold'}>{t(active.label)}</h2>
-          <fieldset disabled={save.isPending} className="min-w-0 space-y-4">
+          </div>
+        )}
+        {active && (
+          <SettingsDialog key={tab} title={t(active.label)} onClose={closeSettings} footer={saveBar}
+            wide={tab === 'security' || tab === 'tools' || tab === 'browser' || tab === 'delegation' || tab === 'embedding' || tab === 'ocr'}>
+            <fieldset disabled={save.isPending} className="min-w-0 space-y-3">
             {tab === 'appearance' && <AppearanceCard />}
+            {tab === 'ocr' && <OcrPanel />}
+            {tab === 'embedding' && <EmbeddingPanel memory={extra.memory}
+              onChange={(patch) => setExtraEdit({ ...extra, memory: { ...extra.memory, ...patch } })} providerInfo={config.providers} isDirty={dirty} />}
             {tab === 'agent' && <Card>
               <CardHeader title={t('Thực thi')} action={<Link to="/providers" className="inline-flex items-center gap-1 text-sm text-accent hover:underline">{t('Mô hình AI')}<ArrowUpRight className="size-4" /></Link>} />
               <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -257,7 +344,8 @@ export function SettingsPage() {
             {tab === 'tools' && (
               <>
                 <Card>
-                  <CardHeader title={t('Công cụ')} action={<SearchBox value={toolQuery} onChange={(value) => { setToolQuery(value); setToolPage(0) }} placeholder={t('Tìm công cụ…')} label={t('Tìm công cụ')} />} />
+                  <CardHeader title={t('Công cụ')} />
+                  <div className="px-5 py-3"><SearchBox value={toolQuery} onChange={(value) => { setToolQuery(value); setToolPage(0) }} placeholder={t('Tìm công cụ…')} label={t('Tìm công cụ')} /></div>
                   {!filteredTools.length && <p className="px-5 pb-4 text-sm text-muted">{t('Không có công cụ phù hợp.')}</p>}
                   <div className="divide-y divide-line">
                     {paginate(filteredTools, page, TOOLS_PER_PAGE).map((tool) => (
@@ -299,8 +387,10 @@ export function SettingsPage() {
               </>
             )}
             {tab === 'backup' && <BackupRestoreCard />}
-          </fieldset>
-        </section>
+            </fieldset>
+          </SettingsDialog>
+        )}
+        {!active && dirty && <div className="sticky bottom-0 z-10 mt-5 rounded-xl border border-accent/30 bg-panel p-3 shadow-xl sm:px-4">{saveBar}</div>}
       </div>
     </Page>
   )

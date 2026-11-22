@@ -1,3 +1,4 @@
+import { useDialogs } from '@/components/ui/Dialogs'
 import { useState } from 'react'
 import { Link2, MessageCircle, Send, Settings, UsersRound } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -20,6 +21,7 @@ export function PairingPanel({ status, onConfigure }: {
   status: { telegram: ChannelStatus & { bot: string }; zalo: ChannelStatus & { oa_id?: string } }
   onConfigure: (id: Channel) => void
 }) {
+  const { confirmAction } = useDialogs()
   const qc = useQueryClient()
   const requests = useQuery({ queryKey: ['pairing'], queryFn: () => api.get<Request[]>('/api/channels/pairing'), refetchInterval: 3000 })
   const [codes, setCodes] = useState<Partial<Record<Channel, { code: string; expires: number }>>>({})
@@ -78,8 +80,8 @@ export function PairingPanel({ status, onConfigure }: {
             {channel.allowed_users.length > 0 && <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-bg/50">
               {channel.allowed_users.map((user_id) => <li key={user_id} className="flex min-w-0 items-center justify-between gap-2 px-3 py-1">
                 <code className="truncate text-xs" title={String(user_id)}>{user_id}</code>
-                <Button size="sm" variant="ghost" disabled={remove.isPending} onClick={() => {
-                  if (confirm(t('Gỡ quyền của {id}?', { id: user_id }))) remove.mutate({ channel: id, user_id })
+                <Button size="sm" variant="ghost" disabled={remove.isPending} onClick={async () => {
+                  if (await confirmAction(t('Gỡ quyền của {id}?', { id: user_id }), { action: t('Gỡ quyền'), danger: true })) remove.mutate({ channel: id, user_id })
                 }}>{t('Gỡ quyền')}</Button>
               </li>)}
             </ul>}

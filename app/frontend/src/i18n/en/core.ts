@@ -1,4 +1,15 @@
 const dict: Record<string, string> = {
+  'Xác nhận thao tác': 'Confirm action',
+  'Bật toàn quyền': 'Enable full access',
+  'Đổi quyền của agent': 'Change agent permissions',
+  'Không thể lưu bản nháp trong trình duyệt. Hãy lưu tệp trước khi rời trang.': 'Could not store the draft in this browser. Save the file before leaving.',
+  'Bỏ bản nháp': 'Discard draft',
+  'Bản nháp chưa lưu': 'Unsaved draft',
+  'Thu hồi': 'Revoke',
+  'Thêm máy chủ': 'Add server',
+  'Gỡ': 'Remove',
+  'Khôi phục bản sao lưu': 'Restore backup',
+
   // --- Khung giao dien
   'Trang chủ': 'Home',
   'Chuyển sang {name}': 'Switch to {name}',

@@ -23,7 +23,7 @@ def status():
     st = vectorstore.stats()
     ollama_models_list = []
     try:
-        url = embeddings._ollama_url(cfg)
+        url = embeddings.ollama_url(cfg)
         ollama_models_list = embeddings.ollama_models(url)
     except Exception:
         pass
