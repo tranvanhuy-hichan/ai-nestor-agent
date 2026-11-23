@@ -105,6 +105,68 @@ finally:
     assert "Shell after chat" in ANSI.sub("", after)
 
 
+def test_chat_scrolls_while_waiting_and_streaming(tmp_path):
+    script = r"""
+import os
+import time
+from pathlib import Path
+
+from nestor.cli import main
+from nestor.services import chat_runner
+
+def stream_chat(sid, prompt, *args, **kwargs):
+    if prompt == "first question":
+        reply = "\n".join(f"Earlier reply row {row:02d}" for row in range(45))
+        reply = "```\n" + reply + "\n```"
+    else:
+        marker = Path(os.environ["NESTOR_HOME"]) / "finish-reply"
+        end = time.monotonic() + 8
+        while not marker.exists() and time.monotonic() < end:
+            time.sleep(0.05)
+        first_chunk = "Second reply is streaming."
+        yield {"type": "delta", "text": first_chunk}
+        finish = marker.with_name("end-stream")
+        end = time.monotonic() + 8
+        while not finish.exists() and time.monotonic() < end:
+            time.sleep(0.05)
+        last_chunk = " Second reply is ready."
+        yield {"type": "delta", "text": last_chunk}
+        reply = first_chunk + last_chunk
+    if prompt == "first question":
+        yield {"type": "delta", "text": reply}
+    yield {"type": "assistant", "content": reply, "provider": "local",
+           "usage": {"prompt": 1, "completion": 1}}
+
+chat_runner.stream_chat = stream_chat
+main(["chat"])
+"""
+    p = Pty([sys.executable, "-c", script], env_for(tmp_path, "en"))
+    p.read_until("Ctrl+D to exit")
+    p.send(b"first question\r")
+    p.read_until("Earlier reply row 44")
+    p.send(b"second question\r")
+    p.read_until("Responding…")
+    p.mark()
+    p.send(b"\x1b[<64;2;4M" * 8)
+    p.read_until("Earlier reply row 05", timeout=4)
+    assert re.search(r"\x1b\[[0-9;]*mEarlier reply row 05", p.text)
+    assert "Second reply is streaming" not in p.text
+    p.send(b"\x1b[<65;2;4M" * 8)
+    p.read_until("Earlier reply row 44")
+    (tmp_path / "finish-reply").touch()
+    p.read_until("Second reply is streaming")
+    p.mark()
+    p.send(b"\x1b[<64;2;4M" * 8)
+    p.read_until("Earlier reply row 05", timeout=4)
+    assert re.search(r"\x1b\[[0-9;]*mEarlier reply row 05", p.text)
+    p.send(b"\x1b[<65;2;4M" * 8)
+    p.read_until("Second reply is streaming")
+    (tmp_path / "end-stream").touch()
+    p.read_until("Second reply is ready")
+    p.send(b"/exit\r")
+    assert p.finish() == 0, ANSI.sub("", p.text)[-900:]
+
+
 def test_onboard_language_menu_back_and_save(tmp_path):
     p = Pty([sys.executable, "-m", "nestor", "onboard"], env_for(tmp_path, "en"))
     p.read_until("Language / Ngôn ngữ")

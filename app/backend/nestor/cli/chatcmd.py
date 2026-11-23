@@ -78,8 +78,7 @@ class _ChatTranscript:
 
     @contextmanager
     def screen(self):
-        # While a reply streams, mouse tracking is off. Prevent the terminal
-        # from sending wheel events as Up/Down keys that recall prompt history.
+        # Prevent wheel events from recalling prompt history while mouse tracking is off.
         self.terminal.write("\x1b[?1049h\x1b[?1007s\x1b[?1007l\x1b[H")
         self.terminal.flush()
         try:
@@ -202,11 +201,137 @@ def _busy_chat_footer(cfg, st, prompt: str, enabled: bool, terminal=None):
             termios.tcsetattr(fd, termios.TCSANOW, previous)
 
 
+class _BusyTranscript:
+    """Keep the transcript scrollable above the footer during a live reply."""
+
+    def __init__(self, transcript):
+        from collections import deque
+        from prompt_toolkit.input.vt100_parser import Vt100Parser
+
+        self.history = transcript.text()
+        self.live = StringIO()
+        self.terminal = transcript.terminal
+        self.fd = sys.stdin.fileno()
+        self.columns, rows = shutil.get_terminal_size((80, 24))
+        self.bottom = rows - _FOOTER_ROWS
+        self.view_end: int | None = None
+        self.previous = None
+        self.keys = deque()
+        self.parser = Vt100Parser(self.keys.append)
+        self.lock = threading.Lock()
+        self.done = threading.Event()
+        self.thread = None
+
+    def start(self):
+        import termios
+
+        if self.bottom <= 1 or self.columns < 8:
+            return
+        self.previous = termios.tcgetattr(self.fd)
+        mode = self.previous.copy()
+        mode[3] &= ~(termios.ICANON | termios.ECHO)
+        mode[6] = mode[6].copy()
+        mode[6][termios.VMIN] = 0
+        mode[6][termios.VTIME] = 0
+        termios.tcsetattr(self.fd, termios.TCSANOW, mode)
+        self.terminal.write("\x1b[?1000h\x1b[?1006h")
+        self.terminal.flush()
+        self.done.clear()
+        self.thread = threading.Thread(target=self._listen, daemon=True)
+        self.thread.start()
+
+    def _lines(self):
+        from rich.console import Console
+        from rich.text import Text
+
+        output = StringIO()
+        console = Console(file=output, width=self.columns - 1, force_terminal=True,
+                          color_system="truecolor", legacy_windows=False)
+        text = Text.from_ansi(self.history + self.live.getvalue())
+        console.print(text, end="", overflow="fold", highlight=False)
+        return output.getvalue().split("\n")
+
+    def _draw(self, lines):
+        from rich.cells import cell_len
+
+        end = len(lines) if self.view_end is None else self.view_end
+        visible = lines[max(0, end - self.bottom):end]
+        frames = [f"\x1b[{i};1H\x1b[2K{line}" for i, line in enumerate(visible, 1)]
+        frames.extend(f"\x1b[{i};1H\x1b[2K" for i in range(len(visible) + 1, self.bottom + 1))
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", visible[-1]) if visible else ""
+        frames.append(f"\x1b[{max(1, len(visible))};{cell_len(plain) + 1}H")
+        self.terminal.write("".join(frames))
+        self.terminal.flush()
+
+    def write(self, text):
+        with self.lock:
+            self.live.write(text)
+            if self.view_end is None:
+                self.terminal.write(text)
+                self.terminal.flush()
+
+    def paint_spinner(self, text):
+        with self.lock:
+            if self.view_end is None:
+                self.terminal.write(text)
+                self.terminal.flush()
+
+    def _listen(self):
+        while not self.done.is_set():
+            self.poll()
+
+    def poll(self):
+        from select import select
+        from prompt_toolkit.keys import Keys
+
+        if self.previous is None:
+            return False
+        if not select([self.fd], [], [], 0.08)[0] or self.done.is_set():
+            return
+        self.parser.feed(os.read(self.fd, 4096).decode("ascii", errors="ignore"))
+        change = 0
+        while self.keys:
+            key = self.keys.popleft()
+            if key.key == Keys.Vt100MouseEvent:
+                if key.data.startswith("\x1b[<64;"):
+                    change += 3
+                elif key.data.startswith("\x1b[<65;"):
+                    change -= 3
+        if change:
+            with self.lock:
+                lines = self._lines()
+                end = len(lines) if self.view_end is None else self.view_end
+                end = min(len(lines), max(self.bottom, end - change))
+                new_end = None if end == len(lines) else end
+                if new_end != self.view_end:
+                    self.view_end = new_end
+                    self._draw(lines)
+
+    def stop(self):
+        import termios
+
+        if self.previous is None:
+            return
+        self.done.set()
+        self.thread.join()
+        try:
+            self.terminal.write("\x1b[?1006l\x1b[?1000l")
+            if self.view_end is not None:
+                self.view_end = None
+                self._draw(self._lines())
+            self.terminal.flush()
+        finally:
+            termios.tcsetattr(self.fd, termios.TCSANOW, self.previous)
+            self.previous = None
+            self.parser.reset()
+            self.keys.clear()
+
+
 class ThinkingSpinner:
     """Hieu ung animation spinner khi Nestor / model dang suy nghi hoac goi tool."""
     FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
-    def __init__(self, message: str = "Nestor đang suy nghĩ...", terminal=None):
+    def __init__(self, message: str = "Nestor đang suy nghĩ...", terminal=None, viewport=None):
         self.message = message
         self._stop = threading.Event()
         self._active = False
@@ -215,6 +340,7 @@ class ThinkingSpinner:
         self._terminal = terminal if terminal is not None else sys.stdout
         self._isatty = self._terminal.isatty()
         self._lock = threading.Lock()
+        self._viewport = viewport
 
     def start(self, message: str | None = None) -> None:
         if not self._isatty:
@@ -245,8 +371,11 @@ class ThinkingSpinner:
                 if self._stop.is_set():
                     break
                 try:
-                    self._terminal.write(line)
-                    self._terminal.flush()
+                    if self._viewport:
+                        self._viewport.paint_spinner(line)
+                    else:
+                        self._terminal.write(line)
+                        self._terminal.flush()
                 except Exception:
                     pass
             idx += 1
@@ -262,8 +391,11 @@ class ThinkingSpinner:
         with self._lock:
             if clear and self._isatty:
                 try:
-                    self._terminal.write("\r\033[K")
-                    self._terminal.flush()
+                    if self._viewport:
+                        self._viewport.paint_spinner("\r\033[K")
+                    else:
+                        self._terminal.write("\r\033[K")
+                        self._terminal.flush()
                 except Exception:
                     pass
 
@@ -280,7 +412,8 @@ def _trace(ev: dict) -> str | None:
 
 
 def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | None = None,
-            spinner: ThinkingSpinner | None = None, transcript: _ChatTranscript | None = None) -> dict:
+            spinner: ThinkingSpinner | None = None, transcript: _ChatTranscript | None = None,
+            viewport: _BusyTranscript | None = None) -> dict:
     """Doc su kien tu stream_chat. live=True: in chu khi model dang sinh; ask=True: hoi y/N khi can phe duyet."""
     from .math_text import MathStream
 
@@ -289,6 +422,7 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
     answer_streamed = False
     in_thinking = False
     terminal = transcript.terminal if transcript is not None else sys.stdout
+    write = viewport.write if viewport is not None else terminal.write
     math_stream = MathStream() if live and (transcript is not None or terminal.isatty()) else None
     try:
         for ev in events:
@@ -327,7 +461,7 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
                     in_thinking = False
                     sys.stdout.write("\n\n")
                     sys.stdout.flush()
-                terminal.write(math_stream.feed(ev["text"]) if math_stream else ev["text"])
+                write(math_stream.feed(ev["text"]) if math_stream else ev["text"])
                 terminal.flush()
                 streamed = True
                 answer_streamed = True
@@ -341,10 +475,10 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
                 out["output"], out["provider"] = ev["content"], ev["provider"]
                 out["usage"] = {k: out["usage"][k] + ev["usage"][k] for k in out["usage"]}
                 if math_stream is not None:
-                    terminal.write(math_stream.feed("", final=True))
+                    write(math_stream.feed("", final=True))
                     math_stream = MathStream()
                 if live and transcript is not None and answer_streamed:
-                    transcript.terminal.write("\n")
+                    write("\n")
                     transcript.terminal.flush()
                     if ev["content"]:
                         transcript.buffer.write(_chat_markdown(ev["content"]) + "\n")
@@ -378,9 +512,13 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
                     sys.stdout.write("\n\n")
                     sys.stdout.flush()
                 label = KIND.get(ev["kind"], (ev["kind"], ev["kind"]))
+                if viewport is not None:
+                    viewport.stop()
                 with redirect_stdout(terminal):
                     print(f"\n{yellow('⚠')} {L('Agent muốn', 'The agent wants to')} {bold(L(label[0], label[1]))}:\n  {ev['detail'][:500]}", file=sys.stderr if not live else terminal)
                     allowed = ask and ask_yes_no(L("Cho phép?", "Allow?"), False)
+                if viewport is not None:
+                    viewport.start()
                 chat_runner.resolve_approval(ev["id"], allowed)
             elif t == "notice" and (verbose or live):
                 print(dim(f"· {ev['message']}"), file=sys.stderr if not live else sys.stdout)
@@ -399,7 +537,7 @@ def consume(events, *, live: bool, verbose: bool, ask: bool, deadline: float | N
         if spinner:
             spinner.stop(clear=True)
         if math_stream is not None and math_stream.pending:
-            terminal.write(math_stream.feed("", final=True))
+            write(math_stream.feed("", final=True))
             terminal.flush()
         events.close()
     return out
@@ -961,16 +1099,24 @@ def _chat_loop(cfg, st, reader, transcript=None) -> int:
         effort = None if st["effort"] == "auto" else st["effort"]
         t0 = time.time()
         events = chat_runner.stream_chat(st["sid"], line, st["provider"], source="cli", permission=st["perm"], effort=effort)
-        spinner = ThinkingSpinner(L("Nestor đang suy nghĩ...", "Nestor is thinking..."), terminal=terminal)
+        viewport = _BusyTranscript(transcript) if transcript is not None and reader is not None and tty() else None
+        spinner = ThinkingSpinner(L("Nestor đang suy nghĩ...", "Nestor is thinking..."), terminal=terminal, viewport=viewport)
         try:
             if transcript is not None:
                 transcript.redraw()
             with _busy_chat_footer(cfg, st, prompt_str, enabled=reader is not None, terminal=terminal):
-                spinner.start()
+                if viewport is not None:
+                    viewport.start()
                 try:
-                    res = consume(events, live=True, verbose=False, ask=True, spinner=spinner, transcript=transcript)
+                    spinner.start()
+                    res = consume(events, live=True, verbose=False, ask=True, spinner=spinner,
+                                  transcript=transcript, viewport=viewport)
                 finally:
-                    spinner.stop(clear=True)
+                    try:
+                        spinner.stop(clear=True)
+                    finally:
+                        if viewport is not None:
+                            viewport.stop()
         except KeyboardInterrupt:
             print(dim(f"\n({L('đã dừng', 'stopped')})"))
             continue
