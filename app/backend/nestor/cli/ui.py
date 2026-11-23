@@ -13,7 +13,7 @@ def set_lang(lang: str) -> None:
 
 
 def lang() -> str:
-    """Thu tu uu tien: --lang, NESTOR_LANG, config.language, bien moi truong he thong LANG."""
+    """Prefer the CLI override, then NESTOR_LANG, and default to English."""
     global _lang
     if _lang:
         return _lang
@@ -21,15 +21,7 @@ def lang() -> str:
 
     pick = getenv("LANG")
     if pick not in ("vi", "en"):
-        try:
-            from ..core import config as cfgmod
-
-            pick = cfgmod.load().language
-        except Exception:  # noqa: BLE001 - config hong khong duoc chan viec in tro giup
-            pick = "auto"
-    if pick not in ("vi", "en"):
-        sys_lang = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or "").lower()
-        pick = "vi" if sys_lang.startswith("vi") else "en"
+        pick = "en"
     _lang = pick
     return pick
 
@@ -107,7 +99,7 @@ def _split(opt) -> tuple[str, str]:
 
 def _fit(label: str, hint: str = "", reserve: int = 6) -> str:
     """Cat cho vua mot dong de menu khong bi tran dong (neu tran thi ve lai se hong)."""
-    width = max(30, shutil.get_terminal_size((80, 24)).columns - reserve)
+    width = max(1, shutil.get_terminal_size((80, 24)).columns - reserve)
     plain = _ANSI.sub("", label)
     if len(plain) > width:
         label = plain[: width - 1] + "…"
@@ -159,7 +151,7 @@ class _Raw:
             return "space"
         if b == b"\t":
             return "tab"
-        if b == b"\x04":
+        if b in (b"", b"\x04"):
             raise EOFError
         if b == b"\x03":
             raise KeyboardInterrupt
@@ -182,17 +174,22 @@ class _Screen:
         self.n = len(lines)
 
 
-def select(prompt: str, options: list, default: int = 0) -> int:
+def select(prompt: str, options: list, default: int = 0, *, back: int | None = None) -> int:
     """Chon mot muc: mui ten len/xuong (hoac j/k), Home/End, phim so, Enter."""
     items = [_split(o) for o in options]
     idx, screen = max(0, min(default, len(items) - 1)), _Screen()
     help_line = dim("  " + L("↑/↓ di chuyển · Enter chọn", "↑/↓ move · Enter select"))
+    if back is not None:
+        help_line += dim(" · " + L("Esc quay lại", "Esc back"))
     with _Raw() as raw:
         while True:
-            lines = [f"{cyan('◆')} {bold(prompt)}"]
-            for i, (label, hint) in enumerate(items):
+            visible = max(1, shutil.get_terminal_size((80, 24)).lines - 5)
+            start = min(max(0, idx - visible // 2), max(0, len(items) - visible))
+            position = f" ({idx + 1}/{len(items)})" if len(items) > visible else ""
+            lines = [f"{cyan('◆')} {bold(_fit(prompt, reserve=3 + len(position)))}{position}"]
+            for i, (label, hint) in enumerate(items[start:start + visible], start):
                 lines.append(f"{cyan('❯')} {cyan(bold(_fit(label, hint)))}" if i == idx else f"  {_fit(label, hint)}")
-            screen.draw(lines + [help_line])
+            screen.draw(lines + [_fit(help_line)])
             k = raw.key()
             if k in ("up", "k"):
                 idx = (idx - 1) % len(items)
@@ -204,9 +201,12 @@ def select(prompt: str, options: list, default: int = 0) -> int:
                 idx = len(items) - 1
             elif k.isdigit() and 1 <= int(k) <= len(items):
                 idx = int(k) - 1
+            elif k == "esc" and back is not None:
+                idx = back
+                break
             elif k == "enter":
                 break
-        screen.draw([f"{green('◇')} {prompt}  {cyan(_ANSI.sub('', items[idx][0]))}"])
+        screen.draw([f"{green('◇')} {_fit(prompt, _ANSI.sub('', items[idx][0]))}"])
     return idx
 
 
@@ -289,15 +289,19 @@ def ask_yes_no(prompt: str, default: bool = True) -> bool:
     return confirm(prompt, default)
 
 
-def choose(prompt: str, options: list, default: int = 0) -> int:
+def choose(prompt: str, options: list, default: int = 0, *, back: int | None = None) -> int:
     """Menu chon mot muc; mui ten tren terminal that, danh so khi khong tuong tac."""
     if tty():
-        return select(prompt, options, default)
+        return select(prompt, options, default, back=back)
     labels = [_split(o)[0] for o in options]
     for i, o in enumerate(labels, 1):
         print(f"  {bold(str(i))}) {o}")
     while True:
-        raw = ask(prompt, str(default + 1))
+        try:
+            raw = input(f"{prompt} [{default + 1}]: ").strip() or str(default + 1)
+        except EOFError:
+            print()
+            return default if back is None else back
         if raw.isdigit() and 1 <= int(raw) <= len(labels):
             return int(raw) - 1
         print(red(L("  Hãy nhập một số trong danh sách.", "  Enter a number from the list.")))

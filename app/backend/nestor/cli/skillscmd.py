@@ -72,8 +72,8 @@ def resolve(hub: ClawHub, ref: str) -> tuple[str, str] | None:
     return matches[i]["slug"], matches[i]["owner"]
 
 
-def install(ref: str, yes: bool, overwrite: bool) -> int:
-    cfg = runtime.bootstrap()
+def install(ref: str, yes: bool, overwrite: bool, *, cfg: cfgmod.Config | None = None) -> int:
+    cfg = cfg if cfg is not None else runtime.bootstrap()
     hub = ClawHub(cfg.clawhub_url)
     try:
         target = resolve(hub, ref)

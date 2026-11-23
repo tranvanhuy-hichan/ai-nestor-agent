@@ -15,7 +15,7 @@ import httpx
 from ..core import config as cfgmod
 from ..core.env import getenv
 from ..core.paths import CODE_ROOT, DATA, DB_PATH, DIST, LOG_FILE, PID_FILE, ROOT
-from .banner import print_status_card
+from .banner import available_skill_rows, banner_field, banner_heading, document_processing_rows, print_banner
 from .ui import L, bad, bold, cyan, dim, green, info, ok, red, warn, yellow
 
 STATE_FILE = DATA / "server.json"
@@ -218,48 +218,54 @@ def status(as_json: bool = False) -> int:
     if as_json:
         print(json.dumps(data, ensure_ascii=False, indent=2))
         return 0 if data["running"] else 1
-    def field(label, value):
-        return f"{dim(label)}  {value}"
-
     enabled = L("bật", "on")
     disabled = L("tắt", "off")
     running = data["running"]
     state = green(L("● Đang chạy", "● Running")) if running else red(L("○ Đã dừng", "○ Stopped"))
-    gateway = field("Gateway", state)
-    rows = [(f"  {gateway}", f"{cyan(url)}  ")]
-    if running:
-        up = max(0, data["uptime_s"] or 0)
-        process = field("PID", f"{data['pid']}  ·  v{data['version']}")
-        uptime = field(L("Thời gian chạy", "Uptime"), f"{up // 3600}h {up % 3600 // 60:02d}m")
-        manager = "nestor start" if data["managed_by_cli"] else L("dịch vụ bên ngoài CLI", "external service")
-        rows.extend([
-            (f"  {process}", f"{uptime}  "),
-            (f"  {field(L('Quản lý', 'Managed by'), manager)}", ""),
-        ])
-    model = field(L("Model mặc định", "Default model"), cyan(f"{data['default_provider']} · {data['model']}"))
-    providers = field(L("Nhà cung cấp", "Providers"), ", ".join(data["providers"]))
-    activity = field(L("Hội thoại", "Conversations"), bold(str(sessions)))
-    mcp = field("MCP", bold(str(data["mcp_servers"])))
-    telegram = field("Telegram", green(enabled) if data["telegram"] else dim(disabled))
-    heartbeat = field("Heartbeat", green(enabled) if data["heartbeat"] else dim(disabled))
+    up = max(0, data["uptime_s"] or 0)
+    uptime = f"{up // 3600}h {up % 3600 // 60:02d}m" if running else "—"
+    manager = "nestor start" if data["managed_by_cli"] else (
+        L("dịch vụ bên ngoài CLI", "external service") if running else "—"
+    )
     password = green(L("đã đặt", "set")) if data["password"] else yellow(L("chưa đặt", "not set"))
-    security = field(L("Mật khẩu giao diện", "Interface password"), password)
-    sandbox = field("Sandbox", data["sandbox"])
-    rows.extend([
-        (f"  {model}", ""),
-        (f"  {providers}", ""),
-        (f"  {activity}", f"{mcp}  "),
-        (f"  {telegram}", f"{heartbeat}  "),
-        (f"  {security}", f"{sandbox}  "),
-        (f"  {field(L('Thư mục dữ liệu', 'Data folder'), data['home'])}", ""),
-    ])
+    sidebar = (
+        banner_heading(f"{data['default_provider']} · {data['model'] or '—'}"),
+    )
+    details = [
+        banner_heading("Gateway"),
+        banner_field(L("Trạng thái", "Status"), state),
+        banner_field("URL", cyan(url)),
+        banner_field("PID", str(data["pid"] or "—")),
+        banner_field(L("Phiên bản", "Version"), data["version"] or "—"),
+        banner_field(L("Thời gian chạy", "Uptime"), uptime),
+        banner_field(L("Quản lý", "Managed by"), manager),
+        "",
+        banner_heading(L("Nhà cung cấp và tích hợp", "Providers and integrations")),
+        banner_field(L("Nhà cung cấp", "Providers"), ", ".join(data["providers"]) or "—"),
+        banner_field(L("Hội thoại", "Conversations"), str(sessions)),
+        banner_field(L("Máy chủ MCP đã cấu hình", "Configured MCP servers"), str(data["mcp_servers"])),
+        banner_field("Telegram", green(enabled) if data["telegram"] else dim(disabled)),
+        banner_field("Heartbeat", green(enabled) if data["heartbeat"] else dim(disabled)),
+        "",
+        banner_heading(L("Bảo mật", "Security")),
+        banner_field(L("Mật khẩu giao diện", "Interface password"), password),
+        banner_field("Sandbox", data["sandbox"]),
+        "",
+        banner_heading(L("Kỹ năng và tài liệu", "Skills and documents")),
+        *document_processing_rows(cfg),
+        *available_skill_rows(cfg, max_categories=1, compact=True),
+    ]
     if running:
         tip = L("  nestor open  Giao diện web", "  nestor open  Web UI")
         if data["managed_by_cli"]:
             tip += L("   ·   nestor logs  Nhật ký", "   ·   nestor logs  Logs")
     else:
         tip = L("  nestor start  Khởi động gateway", "  nestor start  Start the gateway")
-    print_status_card(L("  ✦  Nestor Agent  /  Trạng thái", "  ✦  Nestor Agent  /  Status"), rows, tip)
+    print_banner(
+        L("Nestor Agent · Trạng thái", "Nestor Agent · Status"),
+        [(line, "") for line in details], tip, sidebar=sidebar,
+        sidebar_path=(L("Dữ liệu", "Data"), data["home"]),
+    )
     return 0 if data["running"] else 1
 
 

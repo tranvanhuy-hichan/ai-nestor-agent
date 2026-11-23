@@ -100,44 +100,96 @@ finally:
     chat, after = chat.split(leave)
     assert "Shell before chat" in ANSI.sub("", before)
     assert "Reply inside chat" in ANSI.sub("", chat)
+    assert chat.startswith("\x1b[?1007s\x1b[?1007l")
+    assert chat.endswith("\x1b[?1007r")
     assert "Shell after chat" in ANSI.sub("", after)
 
 
-def test_onboard_with_arrow_keys_space_and_enter(tmp_path):
+def test_onboard_language_menu_back_and_save(tmp_path):
     p = Pty([sys.executable, "-m", "nestor", "onboard"], env_for(tmp_path, "en"))
     p.read_until("Language / Ngôn ngữ")
-    p.send(UP)                      # English (mac dinh) -> Tieng Viet
-    p.send(b"\r")
-    p.read_until("Bạn tên là gì")   # giao dien da doi sang tieng Viet
-    p.send(b"Ann\r")
-    p.read_until("Chọn nhà cung cấp")
-    p.send(END)                     # nhay xuong muc cuoi: 'Bo qua'
-    p.send(b"\r")
-    p.read_until("Space để chọn")   # danh sach tick tinh nang
+    p.send(UP + b"\r")
+    p.read_until("Thiết lập Nestor")
+    p.send(DOWN + b"\r")
     p.mark()
-    p.send(b" ")                    # bo tick 'Hoi xac nhan truoc khi chay lenh shell' (dang tick san)
-    p.read_until("◻")               # o vuong rong xuat hien
+    p.read_until("Đổi thư mục workspace")
     p.send(b"\r")
-    p.read_until("Chạy Nestor Agent ngay bây giờ")
-    p.send(RIGHT)                   # Co -> Khong bang mui ten phai
+    p.read_until("Thư mục workspace [workspace]")
+    p.send(b"project\r")
+    p.read_until("Đổi thư mục workspace")
+    p.send(b"2\r")
+    p.read_until("Bạn tên là gì")
+    p.send(b"Ann\r")
+    p.send(b"\x1b")
+    p.read_until("Thiết lập Nestor")
+    p.send(b"4\r")
+    p.read_until("Web search · DuckDuckGo")
     p.send(b"\r")
+    p.read_until("❯ Bật")
+    p.send(DOWN + b"\r")
+    p.send(b"\x1b")
+    p.send(END + UP + b"\r")
     assert p.finish() == 0
     cfg = json.loads((tmp_path / "config.json").read_text())
-    assert cfg["language"] == "vi" and cfg["agent"]["confirm_exec"] is False and cfg["heartbeat"]["enabled"] is False
-    assert "Ann" in (tmp_path / "workspace" / "USER.md").read_text()
-    assert not (tmp_path / "data" / "server.pid").exists()  # da chon Khong, khong chay server
+    assert cfg["language"] == "vi"
+    assert cfg["agent"]["workspace"] == "project"
+    assert cfg["agent"]["tools_enabled"]["web_search"] is False
+    assert cfg["agent"]["confirm_exec"] is True
+    assert "Ann" in (tmp_path / "project" / "USER.md").read_text()
+    assert not (tmp_path / "data" / "server.pid").exists()
 
 
-def test_multiselect_all_with_a_key_then_confirm_exits_cleanly(tmp_path):
-    """'a' chon het; chi kiem tra menu ve dung va phan hoi phim, roi Ctrl+C thoat gon (khong de terminal o che do la)."""
+def test_onboard_back_then_exit_preserves_saved_config(tmp_path):
+    path = tmp_path / "config.json"
+    original = '{"language":"vi","agent":{"confirm_exec":false}}'
+    path.write_text(original)
     p = Pty([sys.executable, "-m", "nestor", "onboard", "--language", "en"], env_for(tmp_path, "en"))
-    p.read_until("What is your name")
+    p.read_until("Nestor setup")
+    p.send(b"5\r")
+    p.read_until("Shell command approval")
     p.send(b"\r")
-    p.read_until("Choose a provider")
-    p.send(END)
-    p.send(b"\r")
-    p.read_until("Space to toggle")
+    p.read_until("❯ Off")
+    p.send(UP + b"\r")
+    p.send(END + b"\r")
+    p.send(END + b"\r")
+    assert p.finish() == 0
+    assert path.read_text() == original
+
+
+def test_multiselect_all_with_a_key_then_interrupt_exits_cleanly(tmp_path):
+    script = "from nestor.cli.ui import multiselect; multiselect('Select options', ['First', 'Second'])"
+    p = Pty([sys.executable, "-c", script], env_for(tmp_path, "en"))
+    p.read_until("Space toggle")
     p.send(b"a")
     p.read_until("◼")
-    p.send(b"\x03")                 # Ctrl+C
-    assert p.finish() != 0          # bi ngat, khong treo
+    p.send(b"\x03")
+    assert p.finish() != 0
+
+
+def test_onboard_daemon_uses_selected_port_after_returning_to_main_menu(tmp_path):
+    script = """
+from nestor.cli import main
+from nestor.cli import daemon
+from nestor.core.config import load
+
+def start(host, port):
+    assert load().language == "en"
+    print(f"Selected address: {host}:{port}")
+    return 0
+
+daemon.start = start
+main()
+"""
+    p = Pty([sys.executable, "-c", script, "onboard", "--language", "en", "--start"], env_for(tmp_path, "en"))
+    p.read_until("Nestor setup")
+    p.send(END + UP + UP + b"\r")
+    p.read_until("Address and port for this launch")
+    p.send(DOWN + b"\r")
+    p.read_until("Listen address")
+    p.send(b"\r")
+    p.read_until("Port [")
+    p.send(b"18787\r")
+    p.send(b"\x1b")
+    p.send(END + UP + b"\r")
+    assert p.finish() == 0
+    assert "Selected address: 127.0.0.1:18787" in ANSI.sub("", p.text)

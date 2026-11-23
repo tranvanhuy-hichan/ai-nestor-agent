@@ -143,9 +143,9 @@ def test_scrolls_transcript_with_footer_still_on_screen(scroll_input, older_row)
                     terminal_input.send_text(scroll_input)
                 elif len(screens) == 2:
                     terminal_input.send_text("\x1b[<0;1;1M\x1b[<32;10;1M\x1b[<0;10;1m")
-                elif len(screens) in (3, 4):
-                    terminal_input.send_text("\x1bOQ")
-                elif len(screens) == 5:
+                elif len(screens) == 3:
+                    terminal_input.send_text("\x1b[<65;2;2M" * 4)
+                elif len(screens) == 4:
                     terminal_input.send_text("hello\r")
         session.app.after_render += after_render
         session.app.pre_run_callables.append(
@@ -175,8 +175,9 @@ def test_scrolls_transcript_with_footer_still_on_screen(scroll_input, older_row)
     assert all("#00e5ff" in style for style in styles[:5])
     assert "reverse" in styles[2]
     assert copied == ["Transcript"]
-    assert mouse_states[:5] == [True, True, True, False, True]
-    assert "F2" in screens[3][-1]
+    assert mouse_states[:4] == [True, True, True, True]
+    assert any("Transcript row 59" in row for row in screens[3])
+    assert all("F2" not in screen[-1] for screen in screens)
     for screen in (latest, scrolled):
         assert screen[-3].startswith("> ")
         assert "local / test-model" in screen[-1]

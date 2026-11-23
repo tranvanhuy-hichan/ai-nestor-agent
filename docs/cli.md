@@ -30,7 +30,7 @@ nestor [-h] [--version] [--lang {vi,en}] <lệnh> ...
 |---|---|
 | `-h`, `--help` | Hiện trợ giúp (dùng được ở mọi lệnh con) |
 | `--version` | Hiện phiên bản |
-| `--lang {vi,en}` | Ngôn ngữ của CLI. Mặc định theo cấu hình hoặc hệ thống. Có thể đặt bằng biến `NESTOR_LANG` |
+| `--lang {vi,en}` | Ngôn ngữ của CLI. Mặc định là tiếng Anh. Có thể đặt bằng biến `NESTOR_LANG` |
 
 `--lang` đứng **trước** tên lệnh: `nestor --lang en doctor`.
 
@@ -110,7 +110,9 @@ nestor dev [--port PORT]
 
 ### `nestor onboard`
 
-Trình hướng dẫn cài đặt lần đầu. Ở chế độ tương tác, dùng **mũi tên lên/xuống** để di chuyển, **Space** để đánh dấu, **Enter** để chọn. Nó hỏi: ngôn ngữ, tên, mô hình AI (có thử kết nối), tùy chọn an toàn (sandbox Docker, mật khẩu), Telegram, heartbeat và dịch vụ tự khởi động.
+Trình thiết lập tương tác mở bằng mục chọn ngôn ngữ, sau đó hiện menu để bạn tùy chọn phần cần cấu hình. Dùng **↑/↓** để di chuyển, **Enter** để chọn và **Esc** hoặc **Quay lại** để về menu trước. Terminal không hỗ trợ phím mũi tên sẽ hiện lựa chọn đánh số.
+
+Menu có Model AI, Workspace, Skills, tìm kiếm web và trình duyệt, an toàn và truy cập, Telegram, Heartbeat, bộ nhớ, giới hạn agent và Daemon. Chọn **Lưu và thoát** để lưu cấu hình. Chỉnh sửa tệp trong workspace, cài skill và thao tác với dịch vụ tự khởi động có hiệu lực ngay. Trong Daemon, bạn có thể đổi cổng cho lần khởi động, kiểm tra trạng thái và quản lý dịch vụ tự khởi động. Các thao tác khởi động và cài dịch vụ trong menu lưu cấu hình trước khi chạy.
 
 ```
 nestor onboard [--non-interactive] [--language {vi,en}] [--name NAME]

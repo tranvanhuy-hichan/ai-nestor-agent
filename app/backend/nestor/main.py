@@ -53,7 +53,7 @@ async def lifespan(_: FastAPI):
         gateway.stop_log_capture(log_capture)
 
 
-app = FastAPI(title="Nestor Agent", version="0.7.3", lifespan=lifespan)
+app = FastAPI(title="Nestor Agent", version="0.7.4", lifespan=lifespan)
 
 
 @app.middleware("http")

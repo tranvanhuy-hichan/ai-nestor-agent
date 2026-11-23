@@ -10,20 +10,12 @@ from ..core import config as cfgmod
 from ..core.presets import OLLAMA, PRESETS, Preset
 from ..services import auth, providers
 from . import daemon, runtime, service
-from .ui import L, ask, ask_secret, ask_yes_no, bold, choose, cyan, dim, err, green, info, multiselect, ok, red, set_lang, warn, yellow
+from .ui import L, ask, ask_secret, ask_yes_no, bold, choose, dim, err, green, ok, red, set_lang, warn, yellow
 
 
 def _banner() -> None:
     from .banner import print_onboard_banner
     print_onboard_banner()
-
-
-def _ollama_models() -> list[str]:
-    try:
-        r = httpx.get("http://localhost:11434/api/tags", timeout=2)
-        return [m["name"] for m in r.json().get("models", [])]
-    except (httpx.HTTPError, ValueError):
-        return []
 
 
 def _docker_ready() -> bool:
@@ -52,14 +44,18 @@ def _test_provider(p: cfgmod.ProviderCfg) -> list[str] | None:
         return None
 
 
-def _pick_model(models: list[str], default: str, interactive: bool) -> str:
+def _pick_model(models: list[str], default: str, interactive: bool) -> str | None:
     if not models:
         return ask(L("Tên model", "Model name"), default) if interactive else default
     shown = models[:12]
     default_i = shown.index(default) if default in shown else 0
     if not interactive:
         return default if default in models else models[0]
-    i = choose(L("Chọn model", "Pick a model"), shown + [L("(nhập tên khác)", "(type another name)")], default_i)
+    i = choose(L("Chọn model", "Pick a model"),
+               [*shown, L("(nhập tên khác)", "(type another name)"), L("← Quay lại", "← Back")],
+               default_i, back=len(shown) + 1)
+    if i == len(shown) + 1:
+        return None
     return ask(L("Tên model", "Model name"), default) if i == len(shown) else shown[i]
 
 
@@ -78,10 +74,7 @@ def add_provider(cfg: cfgmod.Config, preset: Preset, *, interactive: bool, model
         else:
             ok(L(f"Tìm thấy CLI: {exe}", f"Found the CLI: {exe}"))
             models = cli_provider.list_cli_models(p) if p.cli == "agy" else (cli_provider.CLAUDE_MODELS if p.cli == "claude" else [])
-        p.model = _pick_model(models, p.model, interactive)
-        name = _unique(cfg, preset.id)
-        cfg.providers[name] = p
-        return name
+        return _store_provider(cfg, preset, p, models, interactive)
     if preset.id == "custom" and interactive:
         p.base_url = ask("Base URL", p.base_url)
     if api_key:
@@ -110,9 +103,16 @@ def add_provider(cfg: cfgmod.Config, preset: Preset, *, interactive: bool, model
             models = []
         else:
             ok(L(f"Kết nối được ({len(models)} model).", f"Connected ({len(models)} models)."))
-    p.model = _pick_model(models, p.model, interactive)
+    return _store_provider(cfg, preset, p, models, interactive)
+
+
+def _store_provider(cfg, preset, provider, models, interactive):
+    model = _pick_model(models, provider.model, interactive)
+    if model is None:
+        return None
+    provider.model = model
     name = _unique(cfg, preset.id)
-    cfg.providers[name] = p
+    cfg.providers[name] = provider
     return name
 
 
@@ -123,51 +123,26 @@ def _drop_untouched_local(cfg: cfgmod.Config) -> None:
         cfg.fallback = [f for f in cfg.fallback if f != "local"]
 
 
-def _step_provider(cfg: cfgmod.Config, args, interactive: bool) -> None:
-    _step_provider_inner(cfg, args, interactive)
-    _drop_untouched_local(cfg)
-
-
-def _step_provider_inner(cfg: cfgmod.Config, args, interactive: bool) -> None:
-    print(f"\n{bold('1.')} {bold(L('Model AI', 'AI model'))}")
-    if not interactive:
-        if not args.provider:
-            return
-        preset = next((x for x in [OLLAMA, *PRESETS] if x.id == args.provider), None)
-        if not preset:
-            err(L(f"Không có provider mẫu '{args.provider}'.", f"Unknown provider preset '{args.provider}'."))
-            return
-        key = sys.stdin.read().strip() if args.api_key_stdin else None
-        name = add_provider(cfg, preset, interactive=False, model=args.model, base_url=args.base_url, api_key_env=args.api_key_env, api_key=key, skip_test=args.skip_test)
-        if name:
-            cfg.default_provider = name
-            ok(L(f"Đã thêm {name}.", f"Added {name}."))
+def _step_provider(cfg: cfgmod.Config, args) -> None:
+    if not args.provider:
         return
-    first = True
-    while True:
-        models = _ollama_models()
-        opts = ([f"{OLLAMA.label}  {green(L('đang chạy, ' + str(len(models)) + ' model', 'running, ' + str(len(models)) + ' models'))}" if models else f"{OLLAMA.label}  {dim(L('(chưa thấy Ollama chạy)', '(Ollama not detected)'))}"]
-                + [x.label for x in PRESETS] + [L("Bỏ qua / giữ nguyên", "Skip / keep as is")])
-        i = choose(L("Chọn nhà cung cấp", "Choose a provider"), opts, 0 if models else 1)
-        if i == len(opts) - 1:
-            break
-        preset = OLLAMA if i == 0 else PRESETS[i - 1]
-        name = add_provider(cfg, preset, interactive=True)
-        if name:
-            ok(L(f"Đã thêm {bold(name)}.", f"Added {bold(name)}."))
-            if first or ask_yes_no(L(f"Đặt {name} làm model mặc định?", f"Make {name} the default model?"), first):
-                if not first:
-                    cfg.fallback = [cfg.default_provider, *[f for f in cfg.fallback if f != cfg.default_provider]]
-                cfg.default_provider = name
-                cfg.fallback = [f for f in cfg.fallback if f != name]
-            first = False
-        if not ask_yes_no(L("Thêm provider khác (làm dự phòng)?", "Add another provider (as a fallback)?"), False):
-            break
+    preset = next((x for x in [OLLAMA, *PRESETS] if x.id == args.provider), None)
+    if not preset:
+        err(L(f"Không có provider mẫu '{args.provider}'.", f"Unknown provider preset '{args.provider}'."))
+        return
+    key = sys.stdin.read().strip() if args.api_key_stdin else None
+    name = add_provider(cfg, preset, interactive=False, model=args.model, base_url=args.base_url, api_key_env=args.api_key_env, api_key=key, skip_test=args.skip_test)
+    if name:
+        cfg.default_provider = name
+        _drop_untouched_local(cfg)
+        ok(L(f"Đã thêm {name}.", f"Added {name}."))
 
 
 def _set_password(cfg: cfgmod.Config) -> None:
     while True:
-        pw = ask_secret(L("Mật khẩu giao diện (≥ 8 ký tự)", "Interface password (8+ characters)"))
+        pw = ask_secret(L("Mật khẩu giao diện (≥ 8 ký tự, Enter để quay lại)", "Interface password (8+ characters, Enter to go back)"))
+        if not pw:
+            return
         if len(pw) < 8:
             print(red(L("  Quá ngắn.", "  Too short.")))
             continue
@@ -183,8 +158,8 @@ def _connect_telegram(cfg: cfgmod.Config, token: str, uid: str) -> bool:
         return False
     try:
         r = httpx.post(f"{cfg.channels.telegram.api_base}/bot{token}/getMe", timeout=10).json()
-    except httpx.HTTPError as e:
-        warn(L(f"Không gọi được Telegram: {e}", f"Could not reach Telegram: {e}"))
+    except (httpx.HTTPError, ValueError):
+        warn(L("Không gọi được Telegram.", "Could not reach Telegram."))
         return False
     if not r.get("ok"):
         warn(L(f"Token không hợp lệ: {r.get('description')}", f"Invalid token: {r.get('description')}"))
@@ -199,110 +174,56 @@ def _connect_telegram(cfg: cfgmod.Config, token: str, uid: str) -> bool:
 def _enable_heartbeat(cfg: cfgmod.Config) -> None:
     from ..services import heartbeat
 
-    cfg.heartbeat.enabled = True
     f = cfg.workspace_path() / "HEARTBEAT.md"
     if not f.exists():
         f.write_text(heartbeat.DEFAULT_FILE)
-    ok(L("Đã bật heartbeat (mỗi 60 phút). Sửa danh sách việc trong HEARTBEAT.md.", "Heartbeat enabled (every 60 min). Edit the task list in HEARTBEAT.md."))
+    cfg.heartbeat.enabled = True
 
 
-def _features(cfg: cfgmod.Config, args, interactive: bool) -> bool:
-    """Buoc 'thiet lap them': mot danh sach tick (Space) thay cho hang loat cau hoi Co/Khong. Tra ve True neu can cai dich vu nen."""
-    print(f"\n{bold('2.')} {bold(L('Tính năng', 'Features'))}")
-    docker = _docker_ready()
-    can_service = service._system() in ("Linux", "Darwin")
-    catalog = [
-        ("confirm", L("Hỏi xác nhận trước khi chạy lệnh shell", "Ask before running shell commands"), L("khuyên bật", "recommended"), cfg.agent.confirm_exec),
-        ("docker", L("Chạy lệnh trong sandbox Docker", "Run commands in a Docker sandbox"), L("cách ly, không có mạng", "isolated, no network"), cfg.agent.exec_sandbox == "docker"),
-        ("password", L("Đặt mật khẩu cho giao diện web", "Set a password for the web UI"), "", bool(cfg.auth.password_hash)),
-        ("telegram", L("Kết nối Telegram", "Connect Telegram"), L("nhắn tin từ điện thoại", "message from your phone"), cfg.channels.telegram.enabled),
-        ("heartbeat", L("Bật heartbeat", "Enable heartbeat"), L("agent chủ động báo tin", "the agent reports proactively"), cfg.heartbeat.enabled),
-        ("service", L("Tự chạy khi bật máy", "Start automatically at boot"), L("dịch vụ nền", "background service"), False),
-    ]
-    catalog = [c for c in catalog if (c[0] != "docker" or docker) and (c[0] != "service" or can_service)]
-    if not interactive:
-        chosen = {"confirm"} if cfg.agent.confirm_exec else set()
-        if args.sandbox == "docker":
-            chosen.add("docker")
-        if args.password_env:
-            chosen.add("password")
-        if args.telegram_token_env:
-            chosen.add("telegram")
-        if args.heartbeat:
-            chosen.add("heartbeat")
-        if args.service:
-            chosen.add("service")
-    else:
-        picked = multiselect(L("Bạn muốn thiết lập gì? (Space để chọn, Enter để tiếp tục)", "What do you want to set up? (Space to toggle, Enter to continue)"),
-                             [(c[1], c[2]) for c in catalog], {i for i, c in enumerate(catalog) if c[3]})
-        chosen = {catalog[i][0] for i in picked}
-    cfg.agent.confirm_exec = "confirm" in chosen
-    cfg.agent.exec_sandbox = "docker" if "docker" in chosen else "none"
-    if "password" in chosen and not cfg.auth.password_hash:
-        if interactive:
-            _set_password(cfg)
-        else:
-            pw = os.environ.get(args.password_env, "")
-            if len(pw) >= 8:
-                auth.set_password(cfg, pw)
-            else:
-                warn(L(f"Biến {args.password_env} trống hoặc ngắn hơn 8 ký tự, bỏ qua mật khẩu.", f"{args.password_env} is empty or shorter than 8 characters; password skipped."))
-    elif "password" not in chosen and interactive and cfg.auth.password_hash:
-        cfg.auth = cfgmod.AuthCfg()
-    if "telegram" in chosen:
-        if interactive:
-            print(dim(L("  Chat với @BotFather, gửi /newbot và làm theo để nhận token.", "  Chat with @BotFather, send /newbot and follow the steps to get a token.")))
-            token = ask_secret(L("Token bot Telegram", "Telegram bot token"))
-            uid = ask(L("ID Telegram của bạn (gửi /id cho bot để biết; bỏ trống để ghép đôi sau bằng mã)", "Your Telegram ID (send /id to the bot to find out; leave empty to pair later with a code)"))
-        else:
-            token, uid = os.environ.get(args.telegram_token_env, ""), ""
-        _connect_telegram(cfg, token, uid)
-    elif interactive and cfg.channels.telegram.enabled:
-        cfg.channels.telegram.enabled = False
-    if "heartbeat" in chosen:
-        _enable_heartbeat(cfg)
-    elif interactive:
-        cfg.heartbeat.enabled = False
-    ok(L("Xác nhận lệnh shell: ", "Shell confirmation: ") + (L("bật", "on") if cfg.agent.confirm_exec else L("tắt", "off")) + f" · sandbox: {cfg.agent.exec_sandbox} · "
-       + L("mật khẩu: ", "password: ") + (L("đã đặt", "set") if cfg.auth.password_hash else L("chưa", "not set")))
-    return "service" in chosen
-
-
-def run(args) -> int:
-    interactive = not args.non_interactive
-    if args.language:
-        set_lang(args.language)
-    _banner()
-    cfg = runtime.bootstrap()
-    print(dim(L(f"Dữ liệu sẽ nằm ở: {cfg.workspace_path().parent}", f"Your data will live in: {cfg.workspace_path().parent}")))
-
-    # 0. ngon ngu + ten
-    if interactive and not args.language:
-        i = choose(L("Ngôn ngữ / Language", "Language / Ngôn ngữ"), ["Tiếng Việt", "English"], 0 if L("v", "e") == "v" else 1)
-        set_lang(("vi", "en")[i])
-    cfg.language = "vi" if L("v", "e") == "v" else "en"
-    name = args.name if not interactive else ask(L("Bạn tên là gì? (để agent xưng hô, có thể bỏ trống)", "What is your name? (so the agent can address you; optional)"), args.name or "")
+def _write_profile(cfg: cfgmod.Config, name: str) -> None:
     user_md = cfg.workspace_path() / "USER.md"
     if name and not user_md.exists():
         user_md.write_text(f"# USER\n- {L('Tên', 'Name')}: {name}\n- {L('Ngôn ngữ ưu tiên', 'Preferred language')}: {'Tiếng Việt' if cfg.language == 'vi' else 'English'}\n")
         ok(L("Đã ghi USER.md.", "Wrote USER.md."))
 
-    _step_provider(cfg, args, interactive)
-    want_service = _features(cfg, args, interactive)
-    print(f"\n{bold('3.')} {bold(L('Tính cách agent', 'Agent persona'))}")
-    info(L("Sửa SOUL.md để đổi tính cách/quy tắc (giao diện web > Không gian làm việc).", "Edit SOUL.md to change the persona and rules (web UI > Workspace)."))
 
+def _save(cfg: cfgmod.Config) -> None:
     cfgmod.save(cfg)
     ok(L(f"Đã lưu cấu hình: {cfgmod.CONFIG_PATH}", f"Configuration saved: {cfgmod.CONFIG_PATH}"))
 
-    print(f"\n{bold('4.')} {bold(L('Khởi động', 'Launch'))}")
+
+def run(args) -> int:
+    if args.language:
+        set_lang(args.language)
+    elif not args.non_interactive:
+        i = choose("Language / Ngôn ngữ", ["Tiếng Việt", "English"], 0 if L("v", "e") == "v" else 1)
+        set_lang(("vi", "en")[i])
+    _banner()
+    if not args.non_interactive:
+        from . import onboard_menu
+
+        return onboard_menu.run(args)
+
+    cfg = runtime.bootstrap()
+    cfg.language = L("vi", "en")
+    _write_profile(cfg, args.name)
+    _step_provider(cfg, args)
+    cfg.agent.exec_sandbox = args.sandbox
+    if args.password_env and not cfg.auth.password_hash:
+        pw = os.environ.get(args.password_env, "")
+        if len(pw) >= 8:
+            auth.set_password(cfg, pw)
+        else:
+            warn(L(f"Biến {args.password_env} trống hoặc ngắn hơn 8 ký tự, bỏ qua mật khẩu.", f"{args.password_env} is empty or shorter than 8 characters; password skipped."))
+    if args.telegram_token_env:
+        _connect_telegram(cfg, os.environ.get(args.telegram_token_env, ""), "")
+    if args.heartbeat:
+        _enable_heartbeat(cfg)
+    _save(cfg)
     host, port = daemon.default_host(), daemon.default_port()
-    start_now = args.start if (not interactive or args.start is not None) else None
-    if start_now is None:
-        start_now = ask_yes_no(L("Chạy Nestor Agent ngay bây giờ?", "Start Nestor Agent now?"), True)
-    if want_service:
-        service.install(host, port)  # service tu dung server chay nen neu co, roi tu bat
-    elif start_now:
+    if args.service:
+        service.install(host, port)
+    elif args.start:
         daemon.start(host, port)
     print(f"\n{green(L('Xong!', 'Done!'))} {L('Các lệnh hữu ích', 'Useful commands')}:")
     for cmd, vi, en in [("nestor open", "mở giao diện web", "open the web UI"), ("nestor chat", "trò chuyện ngay trong terminal", "chat right in the terminal"),

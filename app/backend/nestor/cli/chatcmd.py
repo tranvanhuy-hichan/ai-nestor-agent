@@ -22,6 +22,7 @@ PERMS = ("default", "readonly", "guarded", "full", "plan")
 EFFORTS = ("auto", "low", "medium", "high", "thinking")
 
 
+_CHAT_PROMPT = bold(cyan("❯")) + " "
 _FOOTER_ROWS = 4
 _FOOTER_COMMANDS = ("/model", "/perm", "/effort", "/open")
 
@@ -77,12 +78,14 @@ class _ChatTranscript:
 
     @contextmanager
     def screen(self):
-        self.terminal.write("\x1b[?1049h\x1b[H")
+        # While a reply streams, mouse tracking is off. Prevent the terminal
+        # from sending wheel events as Up/Down keys that recall prompt history.
+        self.terminal.write("\x1b[?1049h\x1b[?1007s\x1b[?1007l\x1b[H")
         self.terminal.flush()
         try:
             yield
         finally:
-            self.terminal.write("\x1b[?1049l")
+            self.terminal.write("\x1b[?1007r\x1b[?1049l")
             self.terminal.flush()
 
     def redraw(self):
@@ -109,13 +112,13 @@ class _ChatTranscript:
                 if msg["role"] in ("user", "assistant") and msg.get("content"):
                     content = msg["content"]
                     if msg["role"] == "user":
-                        content = cyan("> ") + _user_message_text(content)
+                        content = _CHAT_PROMPT + _user_message_text(content)
                     else:
                         content = _chat_markdown(content)
                     self.buffer.write(f"{content}\n\n")
 
 
-def _chat_status(cfg, st, columns: int, selecting: bool = False, active_field: int | None = None) -> str:
+def _chat_status(cfg, st, columns: int, active_field: int | None = None) -> str:
     from prompt_toolkit.utils import get_cwidth
 
     provider = cfg.providers[st["provider"]]
@@ -129,8 +132,6 @@ def _chat_status(cfg, st, columns: int, selecting: bool = False, active_field: i
         f"{L('Phiên', 'Session')} {session}",
     )]
     left = "  " + fields[0]
-    if selecting:
-        left += "  ·  " + L("F2: Bật cuộn chuột", "F2: Enable mouse scrolling")
     separator = "  ·  "
     right = separator.join(fields[1:])
     gap = columns - get_cwidth(left) - get_cwidth(right)
@@ -482,7 +483,6 @@ def _make_reader(cfg, st, transcript=None):
 
     keys = KeyBindings()
     transcript_text = ""
-    mouse_enabled = transcript is not None
     footer_field = None
     footer_command = None
     continuation = False
@@ -518,12 +518,6 @@ def _make_reader(cfg, st, transcript=None):
         nonlocal footer_command
         footer_command = _FOOTER_COMMANDS[footer_field]
         event.app.exit(result=footer_command)
-
-    if transcript is not None:
-        @keys.add("f2")
-        def toggle_mouse(event):
-            nonlocal mouse_enabled
-            mouse_enabled = not mouse_enabled
 
     @lru_cache(maxsize=1)
     def wrapped_lines(width):
@@ -680,7 +674,7 @@ def _make_reader(cfg, st, transcript=None):
             def status_text():
                 cols = self.app.output.get_size().columns
                 field = footer_field if footer_active() else None
-                return ANSI(dim(_chat_status(cfg, st, cols - 1, selecting=transcript is not None and not mouse_enabled, active_field=field)))
+                return ANSI(dim(_chat_status(cfg, st, cols - 1, active_field=field)))
 
             body.children.insert(0, Window(height=lambda: Dimension.exact(menu_height())))
             body.children.insert(1, border())
@@ -719,7 +713,7 @@ def _make_reader(cfg, st, transcript=None):
         reserve_space_for_menu=0,
         erase_when_done=True,
         key_bindings=keys,
-        mouse_support=Condition(lambda: mouse_enabled),
+        mouse_support=transcript is not None,
         style=Style.from_dict({
             "completion-menu": "bg:#20252c",
             "completion-menu.completion": "bg:#20252c fg:#bce9f1",
@@ -787,7 +781,7 @@ def _chat_loop(cfg, st, reader, transcript=None) -> int:
         with redirect_stdout(terminal):
             return choose(title, options, default)
 
-    prompt_str = f"{cyan('>')} "
+    prompt_str = _CHAT_PROMPT
     while True:
         try:
             if reader:
@@ -821,8 +815,6 @@ def _chat_loop(cfg, st, reader, transcript=None) -> int:
             if cmd == "/help":
                 for k, (vi, en) in HELP.items():
                     print(f"  {bold(k.ljust(14))}{L(vi, en)}")
-                if transcript is not None:
-                    print(f"  {bold('F2'.ljust(14))}{L('Chuyển giữa cuộn chuột và chọn văn bản', 'Toggle between mouse scrolling and text selection')}")
             elif cmd == "/new":
                 st["sid"] = None
                 if transcript is not None:

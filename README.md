@@ -1,199 +1,95 @@
-<p align="center"><img src="docs/assets/nestor-logo.png" alt="Nestor" width="320"></p>
+<p align="center"><img src="docs/assets/nestor-cli-wordmark.svg" alt="Nestor Agent" width="880"></p>
 
 # Nestor Agent
 
 <p align="center">
-  <a href="README.vi.md">🇻🇳 Tiếng Việt</a> · <b>🇬🇧 English</b>
+  <b>English</b> · <a href="README.vi.md">Tiếng Việt</a> · <a href="docs/README.md">Documentation</a> · <a href="docs/screenshots.md#english">Screenshots</a>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB">
-  <img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen">
 </p>
 
-An **open-source** personal AI assistant that runs on your own machine and keeps your data there: a background gateway, web UI, the **`nestor` CLI**, `SKILL.md` skills, markdown memory, tools, MCP, Telegram and automations.
+Nestor Agent is an open-source personal AI assistant that runs on your machine. Chat in the terminal or browser, ask questions about your documents, and hand off jobs to a background gateway. Nestor stores conversations, workspace files, and memory locally. You choose whether to use a local model or a cloud provider.
 
-## Screenshots
+## What Nestor can do
 
-<p align="center"><img src="docs/assets/screenshots/11-documents-category.png" alt="Documents: a category with its own files and a chat that answers only from them, with source citations" width="880"><br><sub><b>Documents, NotebookLM-style: each category has its own files and a chat that answers only from them, with clickable citations</b></sub></p>
+| Capability | How it works |
+|---|---|
+| **Your choice of models** | Run Ollama or another OpenAI-compatible local endpoint, or configure cloud providers such as Gemini, Claude, OpenAI, and OpenRouter. Set fallback providers in your configuration. |
+| **Terminal, browser, and messaging** | Use the interactive CLI with streaming responses and slash commands, open the web UI with a workspace panel, or connect Telegram or Zalo OA through the gateway. |
+| **Ask across your documents** | Index PDF, Word, spreadsheets, slides, Markdown, and text. Search a single category or the whole library and follow citations back to source passages. OCR supports scanned PDFs when Tesseract is available. |
+| **Notes and office files** | Edit notebook pages with an AI panel. Create Word documents, Excel workbooks with formulas, and PowerPoint decks. Dedicated assistants support Vietnamese administrative documents. |
+| **Background work and automations** | Dispatch a Kanban card, monitor long-running tasks, schedule recurring jobs, and use Heartbeat to check for things that need attention. |
+| **Memory, skills, and tools** | Reuse Markdown memory and search past conversations. Install `SKILL.md` skills or connect MCP servers to add tools. |
+| **Integrate with other apps** | Invoke Nestor with an API token through `POST /v1/run` or expose it to an MCP client through `agent_run`. |
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/assets/screenshots/01-home.png" alt="Home"><br><sub><b>Home: recent work, notifications, upcoming runs</b></sub></td>
-    <td width="50%"><img src="docs/assets/screenshots/02-chat.png" alt="Chat"><br><sub><b>Chat: Markdown answers, tables, tool calls inline</b></sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/assets/screenshots/05-kanban.png" alt="Kanban board"><br><sub><b>Kanban: dispatch a card and watch it move to Done</b></sub></td>
-    <td width="50%"><img src="docs/assets/screenshots/06-automations.png" alt="Scheduled jobs"><br><sub><b>Automations: cron jobs, Heartbeat, ready-made ideas</b></sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/assets/screenshots/03-tools.png" alt="Tools"><br><sub><b>Tools: guided workflows for office work</b></sub></td>
-    <td width="50%"><img src="docs/assets/screenshots/04-tasks.png" alt="Tasks"><br><sub><b>Tasks: give the agent a long job and let it run</b></sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/assets/screenshots/07-skills.png" alt="Skills"><br><sub><b>Skills: SKILL.md packs you can toggle on and off</b></sub></td>
-    <td width="50%"><img src="docs/assets/screenshots/12-ai-models.png" alt="AI models"><br><sub><b>AI models: local (Ollama) or cloud</b></sub></td>
-  </tr>
-</table>
+## Quick install
 
-### Notebook, Notion-style
+### From source
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/assets/screenshots/08-notebook-editor.png" alt="Notebook block editor with callout, to-do list, toggle, code block and table"><br><sub><b>Block editor: callouts, to-dos, toggles, highlighted code, tables, subpages</b></sub></td>
-    <td width="50%"><img src="docs/assets/screenshots/09-notebook-ai.png" alt="Notebook with the AI panel open"><br><sub><b>AI panel: ask, or let the agent edit the note directly</b></sub></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="docs/assets/screenshots/10-notebook-slash.png" alt="Slash menu for inserting blocks" width="440"><br><sub><b>Type <code>/</code> to insert a block</b></sub></td>
-  </tr>
-</table>
+Requires Python 3.11 or newer. Building the web interface also requires Node.js 20 or newer.
 
-### Terminal
+```bash
+git clone https://github.com/tranvanhuy-hichan/ai-nestor-agent.git
+cd ai-nestor-agent
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e app/backend
+nestor onboard
+```
 
-<p align="center"><img src="docs/assets/screenshots/13-cli-chat.png" alt="Interactive Nestor CLI with cyberpunk ASCII banner" width="880"><br><sub><b>Interactive CLI (<code>nestor</code>) with the ASCII banner and a live status card</b></sub></p>
+For the web interface, build the frontend from the repository root.
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/assets/screenshots/14-cli-status.png" alt="nestor status"><br><sub><b><code>nestor status</code></b></sub></td>
-    <td width="50%"><img src="docs/assets/screenshots/15-cli-help.png" alt="nestor --help"><br><sub><b><code>nestor --help</code>: every command in one place</b></sub></td>
-  </tr>
-</table>
+```bash
+(cd app/frontend && npm install && npm run build)
+nestor start
+nestor open
+```
 
-> Screenshots use a clean demo workspace with sample data, not real user data.
+### Docker
 
-## Features
+```bash
+docker compose up -d --build
+```
 
-- **Models**: Ollama and local servers (LM Studio, vLLM), Gemini, Claude, OpenAI, OpenRouter, DeepSeek (R1, V3), Mistral, xAI, Groq, Cerebras, Together, Fireworks, Qwen, and any OpenAI-compatible API. Fallbacks, automatic retry on 429/503, cost estimates, and a visual local-model browser/picker.
-- **Chat**: a right-hand Workspace panel (Files, Terminal, Activity); every tool/MCP call shown inline; collapsible "deep thinking" (`<think>`) blocks; Live Preview for HTML/SVG files the agent creates; file/image attachments; voice input; edit and regenerate messages; `/skill` commands and `@service` mentions. Each session gets its own working directory (`user-data/workspace/sessions/<id>/`).
-- **Knowledge Base & RAG**: ingest and index PDF, Word `.docx`, Excel `.xlsx`, `.csv`, PowerPoint `.pptx`, Markdown and text with a progress bar. Turn on "Ask from documents" in the chat bar and answers come with clickable citations `[1]`, `[2]` that jump to the source passage and page.
-- **Document categories (NotebookLM-style)**: group files into categories. Opening a category shows its files on the left and a chat on the right that answers **only from that category's documents**, with clickable source citations. The row menu opens the original file in a new tab, you can drag the divider to resize the chat, and **Ask across all documents** still searches everything. Files you added before are gathered into a default category automatically.
-- **Notebook (Notion-style)**: a block editor with a `/` menu for headings, bullet/numbered/to-do lists, toggles, callouts, code blocks with syntax highlighting, tables, images and subpages; a per-page full-width view; and one-click Markdown export. The AI panel on the right can read the note, edit it in place, or create linked subpages. Notes are stored as block JSON in `workspace/pages/<id>.json`; notes from earlier versions (`.md`) are left untouched on disk but are not migrated automatically.
-- **Kanban & tasks**: plan work as cards, drag to reorder, press Dispatch to run a card in the background; cards move through To do, In progress, Blocked/Error and Done as the run progresses. Give the agent a long job from the Tasks page and follow it there.
-- **Streamlined toolbar, deep customization**:
-  - Pick the AI model directly, with detailed labels.
-  - **Reasoning & Parameters**: reasoning level (`Auto`, `Deep thinking`, `Low`, `Medium`, `High`), **Temperature** slider (0.0–1.5) and **Max Tokens** (1k–8k).
-  - **Permissions & Quota**: execution permission (`Default`, `Safe`, `Full access`) and token quota charts (5h / 7 days).
-- **Smart conversation management**: automatic short titles after the first reply, pinned chats, wrapped sidebar titles, full-text search across chat history.
-- **Skills**: reads the `SKILL.md` format (compatible with [ClawHub](https://clawhub.ai)); browse, install and update from ClawHub.
-- **MCP client**: connect your MCP servers (stdio, HTTP, SSE); tools appear as `servername__toolname`.
-- **Call the agent from other apps**: `POST /v1/run` with an API token, or the MCP server (`agent_run`) usable from Claude Code, Cursor, etc.
-- **Office assistant (COffice-AI style)**: creates real Word / Excel (live formulas) / PowerPoint files, drafts and **checks Vietnamese administrative document formatting per Decree 30/2020**; 10 **specialist assistants** (records, Party documents, report synthesis, secretary, accounting, HR, sales, project, legal, IT) plus custom ones; **Zalo OA** channel (send tasks, receive results, pairing like Telegram); a **Morning digest** automation; one-click **distill a chat into a Skill/Rule**; multi-agent **teams** running in parallel with a shared notebook; the agent can **write and run scripts** for batch jobs and save them as skills.
-- **Proactive**: Automations (cron), Heartbeat (the agent checks `HEARTBEAT.md` and pings you when needed), a notification inbox, and a **Telegram** channel (approval buttons in chat, file send/receive).
-- **Memory**: `MEMORY.md`, full-text search over all past chats (`memory_search`), automatic summarization of long conversations.
-- **Bilingual Vietnamese/English UI**: switch language at the top of the sidebar (CLI follows `--lang`). To add strings, wrap them in `t('Vietnamese text')` and add the English version under `app/frontend/src/i18n/en/`; `npm run i18n:check` catches missing, untranslated or conflicting strings.
-- **Safe by default**: shell commands, files outside the session directory and MCP tools ask for confirmation; optional Docker sandbox (no network); optional login password; audit log of every tool call; localhost-only by default; API tokens stored only as hashes.
+Open the web UI at `http://127.0.0.1:8787`. The Compose setup stores data in `./user-data`. See the [installation guide](docs/huong-dan-su-dung.md#2-cài-đặt-và-chạy-lần-đầu) for desktop packages and setup details.
 
-## Advanced web interface
+## Getting started
 
-- In **Chat**, use the profile switcher and **Tool permissions** drawer. A context banner appears when the last model call reaches 80% of its context window. Compact older turns or review highlights before saving them to memory.
-- **Assistant profiles** have their own instructions, model priorities, skills, tool allowlist, and memory. A profile can reference existing server environment variables by name using `TARGET=SOURCE`.
-- **Automations** includes blueprints for Decree 30 weekly reports, YouTube Live summaries, memory review, and GitHub pull requests. Use **Integrations → Chat channels** to approve pairing requests from Telegram and Zalo OA.
-- **System health** shows resource usage, gateway status, and live logs. Restart is available when the gateway runs in the background through `nestor start` or the `nestor.service` user systemd unit. **Settings** stores themes and code fonts per browser.
+```bash
+nestor                         # Start an interactive terminal chat
+nestor run "Summarize this file" # Run a single task and exit
+nestor onboard                 # Configure models, workspace, and integrations
+nestor status                  # Inspect the gateway and current configuration
+nestor skills list             # Browse installed and available skills
+nestor logs -f                 # Follow gateway logs
+nestor doctor                  # Diagnose setup problems
+```
 
-To open **Chat → Terminal** on POSIX, set a Nestor password and start the gateway with `NESTOR_WEB_TERMINAL=1`. The shell runs under the gateway's operating-system account.
+`nestor` and `nestor run` work without a running gateway. Start the gateway for the web UI or messaging channels. For automatic startup, see `nestor service install` in the [CLI reference](docs/cli.md). The CLI defaults to English. Use `--lang vi` or `NESTOR_LANG=vi` for Vietnamese.
 
 ## Documentation
 
-> The in-depth docs are currently written in Vietnamese. English translations are welcome as contributions.
-
-- [User guide](docs/huong-dan-su-dung.md): for everyday users
-- [`nestor` CLI reference](docs/cli.md)
-- [Architecture](docs/kien-truc.md): for developers
-
-## Installation
-
-Requires Python 3.11+ (and Node 20+ if you want to build the UI yourself).
-
-```bash
-git clone https://github.com/tranvanhuy-hichan/nestor-agent.git && cd nestor-agent
-python3 -m venv .venv && .venv/bin/pip install -e app/backend
-(cd app/frontend && npm install && npm run build)     # web UI
-.venv/bin/nestor onboard                           # wizard: model, safety, Telegram, start
-```
-
-Add `.venv/bin` to your `PATH` (or `source .venv/bin/activate`) to type just `nestor ...`.
-
-## `nestor` CLI
-
-| Command | Purpose |
+| Guide | What's covered |
 |---|---|
-| `nestor onboard` | First-time setup: menus driven by **↑/↓, Space (tick), Enter**, Yes/No toggled with ←/→. Falls back to numbered prompts without a real terminal (pipe, CI, Windows); `--non-interactive` + flags for automation |
-| `nestor start` / `stop` / `restart` / `status` | Manage the background server (`start -f` runs in the foreground, `--host 0.0.0.0` exposes it to other machines) |
-| `nestor logs -f` | Follow logs |
-| `nestor open` | Open the web UI |
-| `nestor doctor` | Diagnostics (`--fix` repairs safe issues, `--offline`, `--json`) |
-| `nestor chat` | Chat in the terminal (asks `y/N` for approvals; `/help` lists commands) |
-| `nestor run "task"` | One-shot run then exit: `--json`, `--exec-policy deny\|allow\|allowlist`, `--allow "git status"`, `--ask`, `--permission readonly`, `-` to read stdin |
-| `nestor token create\|list\|revoke` | API tokens for `/v1/run` and the MCP server |
-| `nestor skills list\|search\|install\|remove\|update` | Skills from ClawHub |
-| `nestor service install\|uninstall\|start\|stop\|status` | Run at login (systemd on Linux, launchd on macOS; `install --dry-run` to preview) |
-| `nestor backup` / `restore` | Back up and restore config, database and workspace. `--encrypt` password-protects, `--include-key` adds the master key, `restore --force` backs up the current state first |
-| `nestor secrets status\|encrypt\|decrypt\|keychain\|file\|rotate` | Manage encryption of secrets in `config.json` |
-| `nestor config path\|show` | Show config (API keys masked) |
+| [User guide](docs/huong-dan-su-dung.md) | Installation, models, chat, documents, automations, and troubleshooting |
+| [CLI reference](docs/cli.md) | Commands, flags, environment variables, and examples |
+| [API and assistant workflows](docs/api-assistants.md) | Calling specialized assistants from other applications |
+| [Architecture](docs/kien-truc.md) | Gateway, agent loop, tool permissions, and storage |
+| [Screenshot gallery](docs/screenshots.md#english) | Web UI, document citations, notebooks, and terminal screens |
 
-`chat` and `run` execute the agent in-process (no running server needed) and share config, skills, MCP and conversations with the web UI. Change CLI language with `--lang vi|en` or `NESTOR_LANG`.
+Most in-depth guides are currently in Vietnamese.
 
-Environment variables: `NESTOR_HOME` (data directory), `NESTOR_PORT`, `NESTOR_HOST`, `NESTOR_CONFIG`, `NESTOR_ALLOWED_HOSTS`, `NESTOR_TOKEN`/`NESTOR_URL` (MCP server). Legacy `AGENT_*` names are still accepted.
+## Data and security
 
-`./run.sh` still works as a thin wrapper around `nestor`.
-
-## Docker, service, tests
-
-```bash
-docker compose up -d --build         # open http://127.0.0.1:8787 (personal data in ./user-data)
-nestor service install                # run at login, no Docker needed
-cd app/backend && pip install -e ".[dev]" && python -m pytest -q
-```
-
-To reach Ollama on the host from inside a container, set the Base URL to `http://host.docker.internal:11434/v1`.
+Nestor uses `user-data/` by default. Set `NESTOR_HOME` to choose another location. The gateway binds to localhost by default. Review downloaded skills and MCP servers before enabling them, and keep tool approval enabled for actions you want to confirm. Use `nestor backup` before moving your workspace. See the [security policy](SECURITY.md) for reporting vulnerabilities.
 
 ## Contributing
 
-Nestor is open source and contributions are very welcome: bug reports, feature ideas, docs, translations, skills and code.
-
-1. Open an [issue](https://github.com/tranvanhuy-hichan/nestor-agent/issues) to report a bug or discuss an idea before large changes.
-2. Fork the repo and branch from `main` (e.g. `feat/my-feature`).
-3. Before submitting, run `cd app/backend && python -m pytest -q` and `cd app/frontend && npm run i18n:check`.
-4. Open a Pull Request describing what changed and why. Use conventional commit prefixes (`feat:`, `fix:`, `docs:`, ...).
-5. To add a language or fix a translation, see the *Bilingual UI* item under Features.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). For security vulnerabilities, do not post publicly: see [SECURITY.md](SECURITY.md).
+Bug reports, translations, docs, skills, and code contributions are welcome. See the [contribution guide](CONTRIBUTING.md) and [code of conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-Nestor Agent is free software under the **GNU AGPL-3.0-or-later** (see [LICENSE](LICENSE)). If you modify it and offer it as a network service, you must make the modified source available to that service's users.
-
-Copyright (C) 2026 tranvanhuy-hichan
-
-## Project layout
-
-The project is split in two so your source code and your data are never confused:
-
-```
-nestor-agent/
-├── app/                  # FIXED SOURCE CODE: safe to delete/reinstall, you lose nothing
-│   ├── backend/nestor/
-│   │   ├── api/          # FastAPI routers: chat, skills, providers, integrations, external API (/v1)
-│   │   ├── services/     # agent loop, providers, tools, skills, MCP, Telegram, scheduler, browser…
-│   │   ├── core/         # config, SQLite, paths
-│   │   └── cli/          # the `nestor` command (start, doctor, onboard, chat, run, tasks, memory…)
-│   ├── frontend/src/     # React + TypeScript + Tailwind (features/ per page, i18n/)
-│   ├── templates/workspace/   # SOUL.md and sample skills used to seed a new workspace
-│   ├── deploy/           # sample systemd unit
-│   └── examples/         # sample MCP server for trying integrations
-├── user-data/            # YOUR PERSONAL DATA: don't delete, back it up (`nestor backup`)
-│   ├── config.json       # config (API keys encrypted)
-│   ├── data/             # database, master key (master.key), logs
-│   ├── workspace/        # SOUL.md, USER.md, MEMORY.md, skills/, sessions/ (personality, memory, agent files)
-│   └── backups/          # backups
-├── Dockerfile, docker-compose.yml, run.sh, LICENSE, README.md, README.vi.md
-```
-
-To keep data elsewhere (another drive, a synced folder…), set `NESTOR_HOME=/path`. If you installed an older version (data in the repo root), Nestor keeps using it until you move `config.json`, `data/`, `workspace/`, `backups/` into `user-data/`.
-
-## Security notes
-
-- Skills downloaded from the internet are only instructions, but they can tell the agent to run commands. Read `SKILL.md` before installing and keep shell-command confirmation on.
-- stdio MCP servers run the command you configure with your own privileges. Only add servers you trust.
-- `user-data/config.json` (the whole `user-data/` folder is in `.gitignore`). Every secret in it (API keys, Telegram token, MCP env vars/headers, skill keys) is **encrypted** with a master key taken from `NESTOR_MASTER_KEY`, the OS keychain (`pip install keyring` then `nestor secrets keychain`) or `user-data/data/master.key` (mode 600). This protects you if the config file leaks on its own (attached to a bug report, pushed to git by mistake, backed up apart from the key); it does **not** protect against an attacker who has both files or is running on your machine. Back up the master key (`nestor backup --include-key --encrypt`): without it nothing can be decrypted. `nestor doctor` checks this.
+GNU AGPL-3.0-or-later. See [LICENSE](LICENSE).
