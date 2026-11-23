@@ -3,12 +3,11 @@
 # Nestor Agent
 
 <p align="center">
-  <b>English</b> · <a href="README.vi.md">Tiếng Việt</a> · <a href="docs/README.md">Documentation</a> · <a href="docs/screenshots.md#english">Screenshots</a>
-</p>
-
-<p align="center">
-  <a href="LICENSE"><img alt="License: AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue"></a>
-  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB">
+  <a href="docs/README.md"><img alt="Documentation" src="https://img.shields.io/badge/DOCS-NESTOR_AGENT-f4c430?style=for-the-badge"></a>
+  <a href="docs/screenshots.md#english"><img alt="Screenshots" src="https://img.shields.io/badge/GALLERY-SCREENSHOTS-5457de?style=for-the-badge"></a>
+  <a href="LICENSE"><img alt="License: AGPL-3.0-or-later" src="https://img.shields.io/badge/LICENSE-AGPL--3.0--OR--LATER-4d8a16?style=for-the-badge"></a>
+  <br>
+  <a href="README.vi.md"><img alt="Tiếng Việt" src="https://img.shields.io/badge/LANG-TI%E1%BA%BENG_VI%E1%BB%86T-c83e47?style=for-the-badge"></a>
 </p>
 
 Nestor Agent is an open-source personal AI assistant that runs on your machine. Chat in the terminal or browser, ask questions about your documents, and hand off jobs to a background gateway. Nestor stores conversations, workspace files, and memory locally. You choose whether to use a local model or a cloud provider.

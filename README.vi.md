@@ -3,12 +3,11 @@
 # Nestor Agent
 
 <p align="center">
-  <a href="README.md">English</a> · <b>Tiếng Việt</b> · <a href="docs/README.md">Tài liệu</a> · <a href="docs/screenshots.md#tiếng-việt">Ảnh chụp màn hình</a>
-</p>
-
-<p align="center">
-  <a href="LICENSE"><img alt="Giấy phép: AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue"></a>
-  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB">
+  <a href="docs/README.md"><img alt="Tài liệu" src="https://img.shields.io/badge/DOCS-T%C3%80I_LI%E1%BB%86U-f4c430?style=for-the-badge"></a>
+  <a href="docs/screenshots.md#tiếng-việt"><img alt="Ảnh chụp màn hình" src="https://img.shields.io/badge/GALLERY-%E1%BA%A2NH_CH%E1%BB%A4P-5457de?style=for-the-badge"></a>
+  <a href="LICENSE"><img alt="Giấy phép: AGPL-3.0-or-later" src="https://img.shields.io/badge/LICENSE-AGPL--3.0--OR--LATER-4d8a16?style=for-the-badge"></a>
+  <br>
+  <a href="README.md"><img alt="English" src="https://img.shields.io/badge/LANG-ENGLISH-7c3aed?style=for-the-badge"></a>
 </p>
 
 Nestor Agent là trợ lý AI cá nhân mã nguồn mở chạy trên máy của bạn. Bạn có thể trò chuyện trong terminal hoặc trình duyệt, hỏi đáp về tài liệu và giao việc cho gateway chạy nền. Nestor lưu hội thoại, tệp workspace và bộ nhớ ngay trên máy. Bạn có thể chọn mô hình cục bộ hoặc nhà cung cấp đám mây.
