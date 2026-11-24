@@ -48,7 +48,7 @@ SHORTCUTS = {
 
 
 def _button(label: str, data: str) -> dict:
-    return {"text": label[:60], "callback_data": data}
+    return {"text": label if len(label) <= 60 else label[:59] + "…", "callback_data": data}
 
 
 def _choice_id(chat: int, group: str, value) -> str:
@@ -61,12 +61,39 @@ def _menu_shortcuts(chat: int) -> list[list[dict]]:
     return [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
 
 
+_PROVIDER_ICONS = (
+    (("antigravity", "agy"), "🪐"),
+    (("openrouter",), "🔀"),
+    (("cloudflare",), "☁️"),
+    (("groq",), "⚡"),
+    (("cohere", "command-a", "command-r"), "🧩"),
+    (("ollama", "11434"), "🦙"),
+    (("google", "gemini", "generativelanguage"), "✨"),
+    (("claude", "anthropic"), "🟠"),
+    (("openai", "codex", "gpt"), "🟢"),
+    (("deepseek",), "🐋"),
+    (("qwen",), "🔮"),
+    (("mistral",), "🌬️"),
+    (("grok", "xai"), "✖️"),
+)
+
+
+def _provider_label(name: str, provider: cfgmod.ProviderCfg) -> str:
+    # Inline button labels support Unicode rather than the web picker's SVG assets.
+    cli = provider.cli if provider.type == "cli" else ""
+    identity = f"{name} {cli} {provider.base_url}".lower()
+    icon = next((icon for value in (identity, provider.model.lower()) for aliases, icon in _PROVIDER_ICONS
+                 if any(alias in value for alias in aliases)), "🤖")
+    label = f"{icon} {name}"
+    return f"{label} · {provider.model}" if provider.model else label
+
+
 def _choices(command: str, cfg, settings: dict):
     if command == "model":
         selected = settings.get("provider")
         if selected not in cfg.providers:
             selected = None
-        items = [(name, f"{name} · {provider.model}" if provider.model else name) for name, provider in cfg.providers.items()]
+        items = [(name, _provider_label(name, provider)) for name, provider in cfg.providers.items()]
         if selected is None:
             selected = cfg.default_provider
         items.append((None, "Dùng model mặc định"))

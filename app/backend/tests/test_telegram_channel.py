@@ -210,3 +210,22 @@ def test_shortcut_and_option_buttons_cover_chat_controls(tmp_env, monkeypatch):
     _click(telegram, f"reply:{_choice_id(25, 'question1', 1)}")
     assert answered == [("question1", "Hai")]
     assert calls[-1][0] == "editMessageReplyMarkup" and calls[-1][1]["reply_markup"] == {"inline_keyboard": []}
+
+
+
+def test_model_menu_uses_provider_icons_even_with_third_party_models(tmp_env, monkeypatch):
+    telegram, calls = _channel(monkeypatch)
+    cfg = config.load()
+    cfg.providers.update({
+        "Antigravity": config.ProviderCfg(model="gemini"),
+        "OpenRouter": config.ProviderCfg(model="anthropic/claude"),
+        "cloudflare": config.ProviderCfg(model="gpt"),
+        "google2": config.ProviderCfg(model="gemini"),
+        "private": config.ProviderCfg(base_url="https://example.test/api", model="internal"),
+    })
+    config.save(cfg)
+    telegram._handle(_message("/model"))
+    labels = [row[0]["text"] for row in calls[-1][1]["reply_markup"]["inline_keyboard"]]
+    assert {"🪐 Antigravity · gemini", "🔀 OpenRouter · anthropic/claude", "☁️ cloudflare · gpt",
+            "✨ google2 · gemini", "🤖 private · internal"}.issubset(labels)
+    assert labels[0].startswith("✓ ")
