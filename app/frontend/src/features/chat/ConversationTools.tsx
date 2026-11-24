@@ -30,7 +30,7 @@ function TeamProgress({ sid, busy }: { sid: string; busy: boolean }) {
 }
 
 /** Reuse a conversation as a skill or a durable rule, and show team activity. */
-export function ConversationTools({ sid, busy }: { sid: string; busy: boolean }) {
+export function ConversationTools({ sid, busy, onAction }: { sid: string; busy: boolean; onAction: () => void }) {
   const toast = useToast()
   const [saved, setSaved] = useState(false)
   const distill = useMutation({
@@ -39,11 +39,11 @@ export function ConversationTools({ sid, busy }: { sid: string; busy: boolean })
     onError: (e) => toast(errMsg(e), 'bad'),
   })
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
+    <div className="space-y-0.5">
       <TeamProgress sid={sid} busy={busy} />
-      <SkillDraftButton key={sid} sid={sid} busy={busy} />
-      <Button size="sm" className="shrink-0 whitespace-nowrap" disabled={busy} loading={distill.isPending} onClick={() => distill.mutate()} aria-label={t('Ghi nhớ quy tắc')} title={t('Ghi nhớ một yêu cầu cố định, ví dụ: văn bản của phòng luôn ký thừa lệnh')}>
-        {saved ? <Check className="size-3.5" /> : <Pin className="size-3.5" />}<span className="hidden 2xl:inline">{t('Ghi nhớ quy tắc')}</span>
+      <SkillDraftButton key={sid} sid={sid} busy={busy} onAction={onAction} />
+      <Button size="sm" variant="ghost" className="w-full justify-start" disabled={busy} loading={distill.isPending} onClick={() => { onAction(); distill.mutate() }} aria-label={t('Ghi nhớ quy tắc')} title={t('Ghi nhớ một yêu cầu cố định, ví dụ: văn bản của phòng luôn ký thừa lệnh')}>
+        {saved ? <Check className="size-3.5" /> : <Pin className="size-3.5" />}<span>{t('Ghi nhớ quy tắc')}</span>
       </Button>
     </div>
   )

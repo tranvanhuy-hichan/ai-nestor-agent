@@ -240,6 +240,13 @@ def _attachment_context(cfg, sid, workdir, names, *, vision):
     return "\n\n".join(excerpts), images
 
 
+_TEXT_TOOL_CALL = re.compile(
+    r"<(?:tool[_ -]?call|function[_ -]?call|tool_use|function[=:]|tool[=:]|\|(?:python_tag|tool_call))"
+    r'|^\s*(?:```(?:json)?\s*)?\{\s*"(?:tool_calls|tool_call|function_call)"\s*:'
+    r'|^\s*(?:```(?:json)?\s*)?\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"(?:arguments|parameters)"\s*:',
+    re.IGNORECASE,
+)
+
 PERMISSIONS = ("default", "readonly", "guarded", "full", "plan")
 READONLY_BLOCKED = {"write", "edit", "remember", "http_request", "generate_image", "browser_click", "browser_type", "browser_press", "task_start", "page_create", "page_update"} | {
     "computer_screenshot", "computer_click", "computer_type", "computer_key", "computer_move", "computer_scroll"}
@@ -597,7 +604,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
         tools.configure_discovery(ctx)
     preferred = [n for n in (profile or {}).get("providers", []) if n in cfg.providers]
     first = provider if provider in cfg.providers else (preferred or [cfg.default_provider])[0]
-    if not preferred and first == cfg.default_provider and cfg.agent.fast_provider in cfg.providers and cfg.agent.fast_provider != first and is_simple(user_text, attachments, bool(project), only_tools):
+    if source != "telegram" and not preferred and first == cfg.default_provider and cfg.agent.fast_provider in cfg.providers and cfg.agent.fast_provider != first and is_simple(user_text, attachments, bool(project), only_tools):
         first = cfg.agent.fast_provider  # cau don gian: dung model nhanh/re de tiet kiem
     names = list(dict.fromkeys([first, *preferred, *(n for n in cfg.fallback if n in cfg.providers)]))
 
@@ -655,6 +662,7 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
         ctx.enabled = {name: False for name in [*tools.TOOLS, *ctx.extra]}
     limit = max_steps or cfg.agent.max_steps
     empty_retries = 0
+    tool_format_retry = False
     from nestor.services.deliverable_quality import snapshot, changed_issues
     from nestor.assistant_defs.experience import CONTRACTS
     quality_enabled = not document_ids and sess.get('assistant') in CONTRACTS
@@ -709,6 +717,17 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
                     emit({"type": "error", "message": f"{name}: {e}"})
                     return
                 emit(ui_event("notice", "{name} lỗi ({error}), chuyển sang provider dự phòng", name=name, error=str(e)[:200]))
+        if source == "telegram" and not result["tool_calls"] and _TEXT_TOOL_CALL.search(result["content"]):
+            if not tool_format_retry and tools.schemas(ctx):
+                tool_format_retry = True
+                messages.append({"role": "user", "content": (
+                    "Nếu cần công cụ để thực hiện yêu cầu trên, hãy gọi ngay bằng cơ chế gọi công cụ của model. "
+                    "Không in cú pháp gọi công cụ ra tin nhắn và không yêu cầu người dùng nhắc lại. "
+                    "Nếu không thể gọi công cụ, hãy nói rõ giới hạn."
+                )})
+                continue
+            emit(ui_event("error", "Model không gửi được lời gọi công cụ hợp lệ. Hãy thử model khác."))
+            return
         if quality_enabled and not result['tool_calls']:
             quality_issues = changed_issues(workdir, quality_before, allow_blank)
             if quality_issues:
@@ -736,7 +755,8 @@ def run_turn(sid: str, user_text: str, provider: str | None, approver: Callable[
         sessions.add_message(sid, msg)
         if result["content"] or not result["tool_calls"]:
             emit({"type": "assistant", "content": result["content"], "provider": result["provider"], "usage": result["usage"],
-                  "duration_ms": int((time.time() - t0) * 1000)})
+                  "duration_ms": int((time.time() - t0) * 1000),
+                  **({"has_tool_calls": True} if result["tool_calls"] else {})})
         if not result["tool_calls"]:
             if mutated_files and verification_retries < 2:
                 verify_issues = verify_turn_outputs(workdir, mutated_files)

@@ -2,7 +2,7 @@ import { useAttachments } from './useAttachments'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AgentLogoStacked } from '../../components/ui/AgentMark'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Activity, Copy, Download, FileCode, FileSearch, FileText, Folder, FolderTree, GitCompare, LoaderCircle, PanelLeft, Shield, Terminal, Upload } from 'lucide-react'
+import { Activity, Copy, Ellipsis, FileCode, FileSearch, FileText, Folder, FolderTree, GitCompare, LoaderCircle, PanelLeft, Shield, Terminal, Upload } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FALLBACK_ASSISTANTS, useAssistants } from '@/lib/assistants'
 import { ConversationTools } from './ConversationTools'
@@ -37,6 +37,8 @@ const store = {
   get: (k: string, d: string) => { try { return localStorage.getItem(k) ?? d } catch { return d } },
   set: (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* che do rieng tu */ } },
 }
+
+const actionClass = 'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-panel2'
 
 const PANEL_BUTTONS: { id: PanelTab; label: string; icon: typeof Terminal }[] = [
   { id: 'changes', label: tk('Thay đổi'), icon: GitCompare },
@@ -136,15 +138,16 @@ export function ChatPage() {
   const gitInfo = useQuery({ queryKey: ['git', chat.sessionId, chat.filesTick], queryFn: () => api.get<GitStatus>(`/api/sessions/${chat.sessionId}/git`), enabled: !!project && !!chat.sessionId, refetchInterval: 15000 })
   const scroller = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
-  const [exportOpen, setExportOpen] = useState(false)
-  const exportBoxRef = useRef<HTMLDivElement>(null)
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const actionsButtonRef = useRef<HTMLButtonElement>(null)
+  const actionsBoxRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!exportOpen) return
-    const down = (e: MouseEvent) => { if (!exportBoxRef.current?.contains(e.target as Node)) setExportOpen(false) }
+    if (!actionsOpen) return
+    const down = (e: MouseEvent) => { if (!actionsBoxRef.current?.contains(e.target as Node)) setActionsOpen(false) }
     document.addEventListener('mousedown', down)
     return () => document.removeEventListener('mousedown', down)
-  }, [exportOpen])
+  }, [actionsOpen])
 
   const initial = (location.state as { prompt?: string } | null)?.prompt
   const wantDocs = (location.state as { docs?: boolean } | null)?.docs
@@ -286,7 +289,7 @@ export function ChatPage() {
     a.download = t('hoi-thoai-{id}.md', { id: chat.sessionId ?? t('moi') })
     a.click()
     URL.revokeObjectURL(a.href)
-    setExportOpen(false)
+    setActionsOpen(false)
   }
 
   const downloadJson = () => {
@@ -297,13 +300,13 @@ export function ChatPage() {
     a.download = t('hoi-thoai-{id}.json', { id: chat.sessionId ?? t('moi') })
     a.click()
     URL.revokeObjectURL(a.href)
-    setExportOpen(false)
+    setActionsOpen(false)
   }
 
   const copyConversation = () => {
     navigator.clipboard.writeText(exportMarkdown(chat.items))
     toast(t('Đã sao chép toàn bộ hội thoại vào bộ nhớ tạm'))
-    setExportOpen(false)
+    setActionsOpen(false)
   }
 
   return (
@@ -353,35 +356,6 @@ export function ChatPage() {
             <span title={active} className="grid size-5 shrink-0 place-items-center rounded-full bg-ok text-[10px] font-bold text-white" aria-hidden>{active.slice(0, 1).toUpperCase()}</span>
           </div>
           <div className="flex items-center gap-1">
-            {chat.items.length > 0 && (
-              <div className="relative" ref={exportBoxRef}>
-                <button
-                  onClick={() => setExportOpen(!exportOpen)}
-                  aria-label={t('Xuất hoặc chia sẻ hội thoại')}
-                  title={t('Xuất hội thoại')}
-                  className={cn('rounded-lg p-2 transition hover:bg-panel2', exportOpen ? 'bg-panel2 text-fg' : 'text-muted hover:text-fg')}
-                >
-                  <Download className="size-4" />
-                </button>
-                {exportOpen && (
-                  <div className="absolute right-0 top-full z-40 mt-1.5 w-52 overflow-hidden rounded-xl border border-line bg-panel p-1 shadow-xl">
-                    <button onClick={downloadMd} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs hover:bg-panel2">
-                      <FileText className="size-3.5 text-accent" />
-                      <span>{t('Tải file Markdown (.md)')}</span>
-                    </button>
-                    <button onClick={downloadJson} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs hover:bg-panel2">
-                      <FileCode className="size-3.5 text-accent" />
-                      <span>{t('Tải file JSON (.json)')}</span>
-                    </button>
-                    <div className="my-1 border-t border-line/60" />
-                    <button onClick={copyConversation} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs hover:bg-panel2">
-                      <Copy className="size-3.5 text-muted" />
-                      <span>{t('Sao chép vào Clipboard')}</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
             <Select className="h-8 max-w-32 px-2 sm:max-w-48" aria-label={t('Hồ sơ trợ lý')} value={assistantId || ''} disabled={chat.busy || uploading}
               onChange={(event) => event.target.value === '__manage__' ? nav('/profiles') : selectProfile(event.target.value)}>
               <option value="">{t('Trợ lý mặc định')}</option>
@@ -389,20 +363,51 @@ export function ChatPage() {
               {registeredAssistants.data?.map((assistant) => <option key={assistant.id} value={assistant.id}>{t(assistant.name)}</option>)}
               <option value="__manage__">{t('Quản lý hồ sơ')}</option>
             </Select>
-            <button type="button" onClick={() => setToolsOpen(true)} className="rounded-lg p-2 text-muted hover:bg-panel2 hover:text-fg" aria-label={t('Quyền công cụ')} title={t('Quyền công cụ')}><Shield className="size-4" /></button>
-            {chat.sessionId && chat.items.length > 0 && <ConversationTools key={chat.sessionId} sid={chat.sessionId} busy={chat.busy} />}
-            <div className={cn('flex items-center gap-0.5')} role="group" aria-label={t('Không gian làm việc')}>
-              {PANEL_BUTTONS.filter((x) => project || x.id !== 'changes').map(({ id, label, icon: Icon }) => {
-                const on = panelOpen && tab === id
-                const count = id === 'terminal' ? chat.items.filter((i) => i.kind === 'tool' && i.name === 'exec').length : id === 'activity' ? chat.items.filter((i) => i.kind === 'tool').length : 0
-                return (
-                  <button key={id} onClick={() => togglePanel(id)} aria-pressed={on} aria-label={t(label)} title={t(label)}
-                    className={`relative rounded-lg p-2 transition hover:bg-panel2 ${id !== "terminal" ? "hidden xl:block" : ""} ${on ? 'bg-panel2 text-fg' : 'text-muted hover:text-fg'}`}>
-                    <Icon className="size-4" />
-                    {count > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-accent px-1 text-center text-[9px] font-semibold leading-4 text-accent-fg">{count}</span>}
-                  </button>
-                )
-              })}
+            <div ref={actionsBoxRef} className="relative shrink-0" onKeyDown={(event) => {
+              if (event.key === 'Escape' && actionsOpen) {
+                setActionsOpen(false)
+                actionsButtonRef.current?.focus()
+              }
+            }}>
+              <button ref={actionsButtonRef} type="button" onClick={() => setActionsOpen(!actionsOpen)}
+                aria-label={t('Thao tác hội thoại')} title={t('Thao tác hội thoại')} aria-expanded={actionsOpen}
+                className={cn('rounded-lg p-2 hover:bg-panel2 hover:text-fg', actionsOpen ? 'bg-panel2 text-fg' : 'text-muted')}>
+                <Ellipsis className="size-5" />
+                {chat.items.some((item) => item.kind === 'tool') && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
+              </button>
+              <div hidden={!actionsOpen} className="absolute right-0 top-full z-40 mt-1.5 max-h-[70dvh] w-60 max-w-[85vw] overflow-auto rounded-xl border border-line bg-panel p-1 shadow-xl">
+                {chat.items.length > 0 && <>
+                    <button onClick={downloadMd} className={actionClass}>
+                      <FileText className="size-3.5 text-accent" />
+                      <span>{t('Tải file Markdown (.md)')}</span>
+                    </button>
+                    <button onClick={downloadJson} className={actionClass}>
+                      <FileCode className="size-3.5 text-accent" />
+                      <span>{t('Tải file JSON (.json)')}</span>
+                    </button>
+                    <button onClick={copyConversation} className={actionClass}>
+                      <Copy className="size-3.5 text-muted" />
+                      <span>{t('Sao chép vào Clipboard')}</span>
+                    </button>
+                  <div className="my-1 border-t border-line/60" />
+                </>}
+                <button type="button" onClick={() => { setActionsOpen(false); setToolsOpen(true) }} className={actionClass}>
+                  <Shield className="size-4" />{t('Quyền công cụ')}
+                </button>
+                {chat.sessionId && chat.items.length > 0 && <ConversationTools key={chat.sessionId} sid={chat.sessionId} busy={chat.busy} onAction={() => setActionsOpen(false)} />}
+                <div className="my-1 border-t border-line/60" />
+                {PANEL_BUTTONS.filter((item) => project || item.id !== 'changes').map(({ id, label, icon: Icon }) => {
+                  const on = panelOpen && tab === id
+                  const count = id === 'terminal' ? chat.items.filter((item) => item.kind === 'tool' && item.name === 'exec').length : id === 'activity' ? chat.items.filter((item) => item.kind === 'tool').length : 0
+                  return (
+                    <button type="button" key={id} onClick={() => { togglePanel(id); setActionsOpen(false) }} aria-pressed={on}
+                      className={cn(actionClass, on && 'bg-panel2 text-accent')}>
+                      <Icon className="size-4" />{t(label)}
+                      {count > 0 && <span className="ml-auto rounded-full bg-accent/15 px-2 text-xs text-accent">{count}</span>}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </header>

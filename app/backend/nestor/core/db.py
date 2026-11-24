@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS habit_suggestions(
   draft TEXT, created REAL NOT NULL, updated REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS channel_links(
   channel TEXT NOT NULL, external_id TEXT NOT NULL, session_id TEXT NOT NULL, PRIMARY KEY(channel, external_id));
+CREATE TABLE IF NOT EXISTS telegram_chat_settings(
+  chat_id TEXT PRIMARY KEY, settings TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS kanban_cards(
   id TEXT PRIMARY KEY, title TEXT NOT NULL, body TEXT DEFAULT '', role TEXT DEFAULT '', permission TEXT DEFAULT 'default',
   job_id TEXT, sort REAL NOT NULL, created REAL NOT NULL, updated REAL NOT NULL);
