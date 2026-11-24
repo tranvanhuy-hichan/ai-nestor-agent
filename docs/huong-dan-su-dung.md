@@ -406,13 +406,13 @@ Chỉ tài khoản đã ghép đôi mới dùng được bot, nên người lạ
 | Lệnh | Tác dụng |
 |---|---|
 | `/new` | Bắt đầu hội thoại mới |
-| `/model`, `/model <số hoặc tên>` | Xem và chọn model cho các lượt tiếp theo |
+| `/model` | Bấm chọn model ngay trong Telegram, dấu ✓ là model đang dùng |
 | `/status` | Xem model, quyền, mức suy luận và chế độ tài liệu |
-| `/permission`, `/effort`, `/docs` | Xem tùy chọn hoặc chỉnh cài đặt cho chat Telegram |
-| `/answer <nội dung hoặc số>` | Trả lời câu hỏi hoặc chọn phương án agent đang chờ |
+| `/permission`, `/effort`, `/docs` | Bấm chọn quyền, mức suy luận hoặc chế độ tài liệu |
+| `/answer <nội dung hoặc số>` | Nhập câu trả lời tự do. Khi có lựa chọn sẵn, bấm nút dưới câu hỏi |
 | `/stop` | Dừng lượt đang chạy, kể cả khi đang chờ phê duyệt |
 | `/id` | Cho biết ID Telegram của bạn |
-| `/help` | Hiện trợ giúp |
+| `/help` | Hiện trợ giúp và các nút mở nhanh |
 
 Khi agent cần xin phép (ví dụ chạy lệnh), bot gửi nút **Cho phép** và **Từ chối** trên Telegram. Tin xin quyền thu gọn sau khi đã xử lý. Câu trả lời hỗ trợ các định dạng Markdown thường dùng. Agent chạy trên máy bạn và nhận tin bằng long polling, nên **không cần mở cổng ra internet**.
 

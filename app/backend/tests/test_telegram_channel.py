@@ -148,3 +148,65 @@ def test_stale_approval_is_shortened_and_answer_uses_choice(tmp_env, monkeypatch
     telegram._questions[25] = ("q1", ["Một", "Hai"])
     telegram._handle(_message("/answer 2"))
     assert answers == [("q1", "Hai")] and not telegram._questions
+
+
+def _click(telegram, data, chat=25, user=11):
+    telegram._on_callback({"from": _message("", user=user)["message"]["from"], "id": "button-id", "data": data,
+                           "message": {"chat": {"id": chat, "type": "private"}, "message_id": 100}})
+
+
+def test_model_buttons_change_selection_without_typing(tmp_env, monkeypatch):
+    telegram, calls = _channel(monkeypatch)
+    cfg = config.load()
+    cfg.providers["long-" + "x" * 80] = config.ProviderCfg(model="vision")
+    config.save(cfg)
+    telegram._handle(_message("/model"))
+    menu = calls[-1][1]["reply_markup"]["inline_keyboard"]
+    assert menu[0][0]["text"].startswith("✓ ")
+    other = menu[1][0]["callback_data"]
+    assert len(other.encode()) <= 64
+    _click(telegram, other, chat=24)
+    _click(telegram, other, user=99)
+    assert not _preferences(25) and not _preferences(24)
+    _click(telegram, other)
+    assert _preferences(25)["provider"] == "long-" + "x" * 80
+    method, edit = calls[-1]
+    assert method == "editMessageText" and edit["reply_markup"]["inline_keyboard"][1][0]["text"].startswith("✓ ")
+    cfg.providers.pop("long-" + "x" * 80)
+    config.save(cfg)
+    _click(telegram, other)
+    assert calls[-1][0] == "answerCallbackQuery" and "không còn khả dụng" in calls[-1][1]["text"]
+    _click(telegram, menu[-1][0]["callback_data"])
+    assert _preferences(25)["provider"] is None
+
+
+def test_shortcut_and_option_buttons_cover_chat_controls(tmp_env, monkeypatch):
+    from nestor.services.channels.telegram_channel import _choice_id
+
+    telegram, calls = _channel(monkeypatch)
+    telegram._handle(_message("/help"))
+    shortcuts = {item["text"]: item["callback_data"] for row in calls[-1][1]["reply_markup"]["inline_keyboard"] for item in row}
+    for label, choice, key, value in (
+        ("Quyền", "Chỉ đọc", "permission", "readonly"),
+        ("Mức suy luận", "Cao", "effort", "high"),
+        ("Tài liệu", "Bật", "docs", True),
+    ):
+        _click(telegram, shortcuts[label])
+        buttons = [button for row in calls[-1][1]["reply_markup"]["inline_keyboard"] for button in row]
+        _click(telegram, next(button["callback_data"] for button in buttons if button["text"] == choice))
+        assert _preferences(25)[key] == value
+
+    _click(telegram, shortcuts["Hội thoại mới"])
+    sid = _link_get(25)
+    assert sessions.get(sid)["title"] == "Telegram · Huy Trần"
+    stopped = []
+    monkeypatch.setattr(chat_runner, "stop", lambda session: stopped.append(session) or True)
+    _click(telegram, shortcuts["Dừng lượt"])
+    assert stopped == [sid]
+
+    answered = []
+    monkeypatch.setattr(chat_runner, "answer_question", lambda qid, text: answered.append((qid, text)) or True)
+    telegram._questions[25] = ("question1", ["Một", "Hai"])
+    _click(telegram, f"reply:{_choice_id(25, 'question1', 1)}")
+    assert answered == [("question1", "Hai")]
+    assert calls[-1][0] == "editMessageReplyMarkup" and calls[-1][1]["reply_markup"] == {"inline_keyboard": []}

@@ -5,6 +5,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass
+from hashlib import blake2s
 
 import httpx
 
@@ -33,6 +34,61 @@ COMMANDS = {
 }
 COMMAND = re.compile(r"^/([a-z0-9_]+)(?:@([a-z0-9_]+))?(?:\s+(.*))?$", re.I | re.S)
 APPROVAL = re.compile(r"ap:([a-f0-9]{32}):([01])")
+CHOICE_LABELS = {
+    "permission": {"guarded": "Hỏi trước", "readonly": "Chỉ đọc", "default": "Mặc định", "plan": "Lập kế hoạch"},
+    "effort": {"auto": "Tự động", "low": "Thấp", "medium": "Trung bình", "high": "Cao", "thinking": "Suy nghĩ sâu"},
+    "docs": {"on": "Bật", "off": "Tắt"},
+}
+CHOICE_TITLES = {"model": "Model", "permission": "Quyền", "effort": "Mức suy luận", "docs": "Hỏi từ tài liệu"}
+CHOICE_DEFAULTS = {"permission": "guarded", "effort": "auto", "docs": "off"}
+SHORTCUTS = {
+    "model": "Model", "permission": "Quyền", "effort": "Mức suy luận", "docs": "Tài liệu",
+    "new": "Hội thoại mới", "stop": "Dừng lượt",
+}
+
+
+def _button(label: str, data: str) -> dict:
+    return {"text": label[:60], "callback_data": data}
+
+
+def _choice_id(chat: int, group: str, value) -> str:
+    key = json.dumps([chat, group, value], ensure_ascii=False).encode()
+    return blake2s(key, digest_size=12).hexdigest()
+
+
+def _menu_shortcuts(chat: int) -> list[list[dict]]:
+    buttons = [_button(label, f"menu:{_choice_id(chat, 'menu', key)}") for key, label in SHORTCUTS.items()]
+    return [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+
+
+def _choices(command: str, cfg, settings: dict):
+    if command == "model":
+        selected = settings.get("provider")
+        if selected not in cfg.providers:
+            selected = None
+        items = [(name, f"{name} · {provider.model}" if provider.model else name) for name, provider in cfg.providers.items()]
+        if selected is None:
+            selected = cfg.default_provider
+        items.append((None, "Dùng model mặc định"))
+        return selected, items
+    values = CHOICE_LABELS[command]
+    current = ("on" if settings.get("docs") else "off") if command == "docs" else settings.get(command, CHOICE_DEFAULTS[command])
+    return current, list(values.items())
+
+
+def _choice_picker(chat: int, command: str, cfg, settings: dict) -> tuple[str, list[list[dict]]]:
+    current, items = _choices(command, cfg, settings)
+    current_label = dict(items)[current] if command != "model" else current
+    buttons = [[_button(("✓ " if value == current else "") + label, f"pick:{command}:{_choice_id(chat, command, value)}")]
+               for value, label in items]
+    return f"{CHOICE_TITLES[command]} đang dùng: {current_label}", buttons
+
+
+def _save_choice(chat: int, command: str, value) -> None:
+    key = "provider" if command == "model" else command
+    _set_preference(chat, key, value == "on" if command == "docs" else value)
+
+
 TURN_INSTRUCTIONS = (
     "Người dùng đang giao việc qua Telegram. Khi yêu cầu cần hành động và có công cụ phù hợp, "
     "hãy dùng cơ chế gọi công cụ được cung cấp ngay trong lượt này. Hệ thống sẽ tự gửi nút xin quyền khi cần. "
@@ -236,7 +292,9 @@ class TelegramChannel:
         provider = settings.get("provider") or cfg.default_provider
         if provider not in cfg.providers:
             provider = cfg.default_provider
+        keyboard = None
         if command in ("help", "start"):
+            keyboard = _menu_shortcuts(chat)
             answer = ("Nhắn trực tiếp để giao việc. Khi cần quyền, bot sẽ hỏi bằng nút bấm.\n\n"
                       + "\n".join(f"/{name} — {description}" for name, description in COMMANDS.items()))
         elif command == "stop":
@@ -266,6 +324,7 @@ class TelegramChannel:
                 finally:
                     lock.release()
         elif command == "status":
+            keyboard = _menu_shortcuts(chat)
             answer = (f"Model: {provider} ({cfg.providers[provider].model})\n"
                       f"Quyền: {settings.get('permission', 'guarded')}\n"
                       f"Mức suy luận: {settings.get('effort', 'auto')}\n"
@@ -273,38 +332,29 @@ class TelegramChannel:
         elif command == "model":
             names = list(cfg.providers)
             if not argument:
-                lines = ["Model đang dùng: " + provider, "Dùng /model <số> hoặc /model <tên> để đổi:"]
-                lines.extend(f"{number}. {name} — {cfg.providers[name].model}" for number, name in enumerate(names, 1))
-                answer = "\n".join(lines)
+                answer, keyboard = _choice_picker(chat, command, cfg, settings)
             elif argument == "default":
-                _set_preference(chat, "provider", None)
+                _save_choice(chat, command, None)
                 answer = f"Đã chọn model mặc định: {cfg.default_provider}."
             else:
                 selected = argument
                 if selected not in names and selected.isdecimal() and len(selected) <= 6 and 1 <= int(selected) <= len(names):
                     selected = names[int(selected) - 1]
                 if selected in names:
-                    _set_preference(chat, "provider", selected)
+                    _save_choice(chat, command, selected)
                     answer = f"Lượt tiếp theo dùng model {selected} ({cfg.providers[selected].model})."
                 else:
                     answer = "Không có model này. Gõ /model để xem danh sách."
-        elif command in ("permission", "effort", "docs"):
-            values = {
-                "permission": ("guarded", "readonly", "default", "plan"),
-                "effort": ("auto", "low", "medium", "high", "thinking"),
-                "docs": ("on", "off"),
-            }[command]
+        elif command in CHOICE_LABELS:
             value = argument.lower()
-            if value not in values:
-                default = {"permission": "guarded", "effort": "auto", "docs": "off"}[command]
-                current = ("on" if settings.get("docs") else "off") if command == "docs" else settings.get(command, default)
-                answer = f"Đang dùng: {current}\n/{command} " + " | ".join(values)
+            if value not in CHOICE_LABELS[command]:
+                answer, keyboard = _choice_picker(chat, command, cfg, settings)
             else:
-                _set_preference(chat, command, value == "on" if command == "docs" else value)
-                answer = f"Đã lưu cho lượt tiếp theo: {value}."
+                _save_choice(chat, command, value)
+                answer = f"Đã lưu cho lượt tiếp theo: {CHOICE_LABELS[command][value]}."
         else:
             return False  # các lệnh skill vẫn được xử lý như tin nhắn chat
-        self._say(chat, answer)
+        self._say(chat, answer, keyboard=keyboard)
         return True
 
     def _new_session(self, chat: int, msg: dict) -> str:
@@ -313,7 +363,7 @@ class TelegramChannel:
         _link_set(chat, sid)
         return sid
 
-    def _say(self, chat: int, text: str, *, markdown: bool = False) -> None:
+    def _say(self, chat: int, text: str, *, markdown: bool = False, keyboard: list[list[dict]] | None = None) -> None:
         text = clean_reply(text)
         try:
             parts = formatted_chunks(text, CHUNK) if markdown else []
@@ -321,18 +371,19 @@ class TelegramChannel:
             parts = []
         if not parts:
             parts = [(None, part) for part in _chunks(text)]
-        for formatted, plain in parts:
+        for index, (formatted, plain) in enumerate(parts):
+            markup = {"reply_markup": {"inline_keyboard": keyboard}} if keyboard and index == len(parts) - 1 else {}
             for attempt in range(3):
                 try:
                     if formatted is not None:
                         try:
-                            self.api("sendMessage", chat_id=chat, text=formatted, parse_mode="HTML")
+                            self.api("sendMessage", chat_id=chat, text=formatted, parse_mode="HTML", **markup)
                             break
                         except TelegramAPIError as error:
                             if "entit" not in str(error).lower():
                                 raise
                             formatted = None
-                    self.api("sendMessage", chat_id=chat, text=plain)
+                    self.api("sendMessage", chat_id=chat, text=plain, **markup)
                     break
                 except TelegramAPIError as error:
                     log.warning("telegram sendMessage (lan %d): %s", attempt + 1, error)
@@ -440,11 +491,13 @@ class TelegramChannel:
                     with self._approval_lock:
                         self._questions[chat] = (ev["id"], options)
                     lines = [ev["question"]]
-                    lines.extend(f"{i}. {option}" for i, option in enumerate(options, 1))
                     lines.extend(f"{i}. {item['question']} " + " / ".join(item.get("options", []))
                                  for i, item in enumerate(ev.get("form") or [], 1))
-                    lines.append("Trả lời bằng /answer <nội dung hoặc số lựa chọn>.")
-                    self._say(chat, "\n".join(lines), markdown=True)
+                    lines.append("Bấm một lựa chọn hoặc dùng /answer để nhập câu trả lời." if options
+                                 else "Dùng /answer để nhập câu trả lời.")
+                    keyboard = [[_button(option, f"reply:{_choice_id(chat, ev['id'], index)}")]
+                                for index, option in enumerate(options)]
+                    self._say(chat, "\n".join(lines), markdown=True, keyboard=keyboard)
                 elif ev["type"] == "question_done":
                     with self._approval_lock:
                         self._questions.pop(chat, None)
@@ -481,12 +534,66 @@ class TelegramChannel:
         except httpx.HTTPError:
             raise TelegramAPIError("Không gửi được tệp qua Telegram.") from None
 
+    def _choice_callback(self, cq: dict, message: dict, chat: int, data: str) -> bool:
+        def acknowledge(text: str = "") -> None:
+            self.api("answerCallbackQuery", callback_query_id=cq["id"], text=text)
+
+        def edit(method: str, **params) -> None:
+            try:
+                self.api(method, chat_id=chat, message_id=message["message_id"], **params)
+            except TelegramAPIError as error:
+                if "message is not modified" not in str(error).lower():
+                    log.warning("Telegram button update: %s", error)
+
+        kind, _, payload = data.partition(":")
+        if kind == "menu":
+            command = next((key for key in SHORTCUTS if _choice_id(chat, "menu", key) == payload), None)
+            if command:
+                acknowledge()
+                self._command(chat, {**message, "from": cq["from"]}, command, "")
+            else:
+                acknowledge("Nút này đã hết hạn.")
+        elif kind == "pick":
+            command, _, ident = payload.partition(":")
+            if command not in CHOICE_TITLES:
+                acknowledge("Nút này đã hết hạn.")
+                return True
+            cfg = cfgmod.load()
+            settings = _preferences(chat)
+            _, items = _choices(command, cfg, settings)
+            for value, _ in items:
+                if _choice_id(chat, command, value) == ident:
+                    _save_choice(chat, command, value)
+                    text, keyboard = _choice_picker(chat, command, cfg, _preferences(chat))
+                    acknowledge("Đã lưu cho lượt tiếp theo.")
+                    edit("editMessageText", text=text, reply_markup={"inline_keyboard": keyboard})
+                    return True
+            acknowledge("Tùy chọn này không còn khả dụng. Hãy mở lại menu.")
+        elif kind == "reply":
+            accepted = False
+            with self._approval_lock:
+                if pending := self._questions.get(chat):
+                    qid, options = pending
+                    for index, option in enumerate(options):
+                        if _choice_id(chat, qid, index) == payload:
+                            accepted = chat_runner.answer_question(qid, option)
+                            self._questions.pop(chat, None)
+                            break
+            acknowledge("Đã gửi câu trả lời." if accepted else "Câu hỏi đã hết hạn.")
+            edit("editMessageReplyMarkup", reply_markup={"inline_keyboard": []})
+        else:
+            return False
+        return True
+
     def _on_callback(self, cq: dict) -> None:
         if not self._allowed(cq["from"]["id"]):
             return self.api("answerCallbackQuery", callback_query_id=cq["id"], text="Bạn không có quyền.")
-        match = APPROVAL.fullmatch(cq.get("data", ""))
+        data = cq.get("data", "")
+        match = APPROVAL.fullmatch(data)
         m = cq.get("message") or {}
         chat = (m.get("chat") or {}).get("id")
+        if chat is not None and m.get("message_id") and self._choice_callback(cq, m, chat, data):
+            return
         done = False
         if match and chat is not None:
             aid, ok = match.groups()
