@@ -341,7 +341,7 @@ def print_chat_banner(cfg: Config, provider: str, perm: str, sid: str | None = N
     sess_disp = (sid[:18] + "…") if sid and len(sid) > 18 else (sid or (L("Mới", "New")))
     perm_color = yellow(perm) if perm != "full" else paint("31", "full (no confirm)")
 
-    title = L("Nestor Agent v0.7.4 · Trò chuyện", "Nestor Agent v0.7.4 · Chat")
+    title = L("Nestor Agent v0.7.5 · Trò chuyện", "Nestor Agent v0.7.5 · Chat")
     sidebar = (
         banner_heading(model_str),
         banner_field(L("Phiên", "Session"), sess_disp),
@@ -407,7 +407,7 @@ def print_onboard_banner(cfg: Config | None = None) -> None:
         *document_processing_rows(cfg),
         banner_field(L("Tự lập chỉ mục", "Automatic indexing"), on if cfg.memory.auto_index else off),
     ]
-    title = L("Nestor Agent v0.7.4 · Trình thiết lập", "Nestor Agent v0.7.4 · Setup Wizard")
+    title = L("Nestor Agent v0.7.5 · Trình thiết lập", "Nestor Agent v0.7.5 · Setup Wizard")
     tip = L("↑/↓ Di chuyển · Enter Chọn · Space Đánh dấu", "↑/↓ Navigate · Enter Select · Space Toggle")
     print_banner(
         title, [(line, "") for line in details], tip,
@@ -431,7 +431,7 @@ def print_open_banner(url: str, cfg: Config | None = None) -> None:
     if len(model_str) > 34:
         model_str = model_str[:31] + "…"
 
-    title = L("  Nestor Agent v0.7.4 · Mở Giao diện Web (Web UI)", "  Nestor Agent v0.7.4 · Web UI")
+    title = L("  Nestor Agent v0.7.5 · Mở Giao diện Web (Web UI)", "  Nestor Agent v0.7.5 · Web UI")
     rows = [
         (f"  {L('Địa chỉ', 'URL')}:   {cyan(url)}", f"{L('Trạng thái', 'Status')}:  {green(L('Đang chạy', 'Running'))}  "),
         (f"  {L('Mô hình', 'Model')}: {model_str}", f"{L('Kỹ năng', 'Skills')}:   {green(f'{skills_count} loaded')}  "),
