@@ -1,6 +1,9 @@
 """File trong thu muc lam viec cua phien (panel Workspace): liet ke, xem, sua, xoa, tai len, tai xuong."""
 import mimetypes
 import re
+import shutil
+from pathlib import Path
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -37,7 +40,10 @@ def list_files(sid: str):
 
 @router.get("/sessions/{sid}/file")
 def read_file(sid: str, path: str, raw: bool = False):
-    p = _path(sid, path)
+    try:
+        p = workfiles.attachment_path(cfgmod.load(), sid, path, _base(sid))
+    except workfiles.PathError as e:
+        raise HTTPException(400, str(e)) from e
     if not p.is_file():
         raise HTTPException(404, "không có file")
     if raw:
@@ -89,3 +95,40 @@ async def upload(sid: str, name: str, request: Request):
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(data)
     return {"path": dest.relative_to(base).as_posix(), "size": len(data)}
+
+
+@router.post("/sessions/{sid}/chat-attachment")
+async def upload_chat_attachment(sid: str, name: str, request: Request):
+    _base(sid)
+    cfg = cfgmod.load()
+    safe = re.sub(r"[^\w.\- ]", "_", name.replace("\\", "/").rsplit("/", 1)[-1]).strip(". ")
+    if len(safe.encode()) > 255:
+        raise HTTPException(422, "Tên tệp quá dài.")
+    ext = Path(safe).suffix.lower()
+    if ext not in workfiles.IMAGE_EXT | workfiles.DOCUMENT_EXT:
+        raise HTTPException(415, "Định dạng tệp đính kèm không được hỗ trợ.")
+    limits = cfg.chat_attachments
+    limit_mb = limits.image_max_mb if ext in workfiles.IMAGE_EXT else limits.file_max_mb
+    limit = limit_mb * 1024 * 1024
+    too_large = f"Tệp vượt quá giới hạn {limit_mb} MB."
+    if int(request.headers.get("content-length") or 0) > limit:
+        raise HTTPException(413, too_large)
+
+    root = workfiles.session_dir(cfg, sid)
+    path = f"{workfiles.CHAT_ATTACHMENT_DIR}/{uuid4().hex}/{safe}"
+    dest = workfiles.attachment_path(cfg, sid, path, root)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    size = 0
+    try:
+        with dest.open("xb") as handle:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > limit:
+                    raise HTTPException(413, too_large)
+                handle.write(chunk)
+        if not size:
+            raise HTTPException(422, "Tệp đính kèm trống.")
+    except BaseException:
+        shutil.rmtree(dest.parent, ignore_errors=True)
+        raise
+    return {"path": path, "size": size}

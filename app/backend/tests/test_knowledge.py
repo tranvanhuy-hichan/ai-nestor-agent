@@ -427,3 +427,52 @@ def test_category_crud_api(tmp_path):
     assert c.get("/api/knowledge", params={"category_id": cid}).json()["docs"][0]["name"] == "f.txt"
     assert c.delete(f"/api/knowledge/categories/{cid}").json()["deleted"] == 1
     assert c.put(f"/api/knowledge/categories/{cid}", json={"name": "x"}).status_code == 404
+
+
+def test_selected_document_scope_applies_to_both_search_rankings_and_citations(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from nestor.main import app
+    from nestor.services import agent, chat_runner, sessions
+
+    cfg = cfgmod.load()
+    cfg.memory.embeddings = "hash"
+    cfgmod.save(cfg)
+    first = knowledge.create_category("First")
+    second = knowledge.create_category("Second")
+    a = knowledge.add_bytes("A.txt", b"Equipment warranty is twenty months.", category_id=first["id"])
+    b = knowledge.add_bytes("B.txt", b"Equipment warranty is thirty months.", category_id=second["id"])
+    other = knowledge.add_bytes("excluded.txt", b"Equipment warranty is ninety months.", category_id=first["id"])
+    query = "equipment warranty"
+    hits = knowledge.search(query, document_ids=[a["id"], b["id"]])
+    assert {hit["doc_id"] for hit in hits} == {a["id"], b["id"]}
+    assert all(set(hit["how"]) == {"từ khóa", "ngữ nghĩa"} for hit in hits)
+    assert [hit["doc_id"] for hit in knowledge.search(query, category_id=first["id"], document_ids=[a["id"], b["id"]])] == [a["id"]]
+    assert knowledge.search(query, document_ids=[]) == []
+
+    class Fake:
+        def stream(self, messages, tool_defs, **kwargs):
+            context = messages[0]["content"]
+            assert not tool_defs
+            assert all(word in context for word in ("twenty", "thirty"))
+            assert "ninety" not in context
+            text = f"Warranties differ. [[src:{other['id']}|excluded.txt|line 1]]"
+            yield {"type": "delta", "text": text}
+            yield {"type": "final", "content": text, "tool_calls": [], "usage": {"prompt": 1, "completion": 1}}
+
+    monkeypatch.setattr(agent, "make_provider", lambda cfg: Fake())
+    monkeypatch.setattr(chat_runner, "_auto_name_session", lambda *args: None)
+    sid = sessions.create("Selection")
+    client = TestClient(app)
+    assert client.get("/api/knowledge/matches", params={"q": "thirty"}).json() == [b["id"]]
+    assert client.get("/api/knowledge/matches", params={"q": "thirty", "category_id": first["id"]}).json() == []
+    body = {"session": sid, "text": query, "document_ids": [a["id"], b["id"]]}
+    invalid = client.post("/api/chat", json={**body, "context": f"kb-category:{first['id']}"})
+    assert invalid.status_code == 422
+    response = client.post("/api/chat", json=body)
+    assert response.status_code == 200
+    assert f"[[src:{other['id']}" not in response.text
+    saved = client.get(f"/api/sessions/{sid}").json()["messages"]
+    assert saved[0]["document_ids"] == body["document_ids"]
+    assert f"[[src:{a['id']}|A.txt|" in saved[1]["content"]
+    assert f"[[src:{b['id']}|B.txt|" in saved[1]["content"]

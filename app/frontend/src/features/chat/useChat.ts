@@ -8,7 +8,7 @@ import { errMsg } from '@/lib/utils'
 
 export type ToolItem = { key: string; kind: 'tool'; callId: string; name: string; args: Record<string, unknown>; risk?: string; result?: string; ok?: boolean; duration?: number; decision?: string }
 export type Item =
-  | { key: string; kind: 'user'; text: string; attachments?: string[] }
+  | { key: string; kind: 'user'; text: string; attachments?: string[]; document_ids?: string[] }
   | { key: string; kind: 'assistant'; text: string; provider?: string; streaming?: boolean; duration?: number }
   | { key: string; kind: 'thinking'; text: string; streaming: boolean; provider?: string }
   | ToolItem
@@ -25,7 +25,7 @@ export function fromWire(msgs: WireMessage[]): Item[] {
   const results = new Map(msgs.filter((m) => m.role === 'tool').map((m) => [m.tool_call_id, m.content]))
   const out: Item[] = []
   for (const m of msgs) {
-    if (m.role === 'user') out.push({ key: k(), kind: 'user', text: m.content, attachments: m.attachments })
+    if (m.role === 'user') out.push({ key: k(), kind: 'user', text: m.content, attachments: m.attachments, document_ids: m.document_ids })
     else if (m.role === 'assistant') {
       if (m.content) out.push({ key: k(), kind: 'assistant', text: m.content })
       for (const c of m.tool_calls ?? []) out.push({ key: k(), kind: 'tool', callId: c.id, name: c.name, args: c.args, result: results.get(c.id) ?? '', ok: true })
@@ -126,12 +126,12 @@ export function useChat() {
   const requestStop = useCallback((sid: string, runId: string) =>
     api.post<{ ok: boolean }>(`/api/sessions/${sid}/stop?run_id=${encodeURIComponent(runId)}`, {}), [])
 
-  const send = useCallback(async (text: string, provider: string | null, attachments: string[] = [], opts: { assistant?: string; context?: string; permission?: string; effort?: string; docs?: boolean; temperature?: number; max_tokens?: number } = {}) => {
+  const send = useCallback(async (text: string, provider: string | null, attachments: string[] = [], opts: { assistant?: string; context?: string; permission?: string; effort?: string; docs?: boolean; document_ids?: string[]; temperature?: number; max_tokens?: number } = {}) => {
     if (busy || abort.current || !text.trim()) return
     currentProviderRef.current = provider
     setBusy(true)
     setStatus(t('Đang gửi…'))
-    setItems((p) => [...p, { key: k(), kind: 'user', text, attachments }])
+    setItems((p) => [...p, { key: k(), kind: 'user', text, attachments, document_ids: opts.document_ids }])
     const ctl = new AbortController()
     abort.current = ctl
     runIdRef.current = null
@@ -285,7 +285,7 @@ export function useChat() {
     const m = s.messages[idx]
     await api.post(`/api/sessions/${sid}/truncate`, { index: idx })
     setItems(fromWire(s.messages.slice(0, idx)))
-    return { text: m.content, attachments: m.attachments ?? [] }
+    return { text: m.content, attachments: m.attachments ?? [], document_ids: m.document_ids ?? [] }
   }, [])
 
   return { sessionId, plan, items, busy, status, filesTick, send, stop, open, reset, decide, answer, undo, ensureSession, rewindLast, bumpFiles: () => setFilesTick((n) => n + 1) }

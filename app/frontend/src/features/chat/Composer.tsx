@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { ArrowUp, AtSign, Code2, FileSearch, FileText, Folder, GitBranch, Terminal, Mic, Paperclip, Plus, Puzzle, Square, X } from 'lucide-react'
+import { ArrowUp, AtSign, Code2, FileSearch, FileText, Folder, GitBranch, Terminal, Mic, Puzzle, Square, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { BrandIcon, type Brand } from '@/components/ui/BrandIcon'
 import { t, useLang } from '@/lib/i18n.ts'
@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 import { SLASH_COMMANDS } from './slashCommands'
 import { SettingsMenu } from './SettingsMenu'
 import type { Effort, Permission } from './permissions'
+import { AttachmentMenu, AttachmentPreview } from './Attachments'
+import type { AttachmentDraft } from './useAttachments'
 import { useDictation } from './useDictation'
 
 /** MCP server/dich vu goi duoc bang dau @ trong tin nhan. */
@@ -20,12 +22,9 @@ interface Props {
   onSend: () => void
   onStop: () => void
   busy: boolean
-  attachments: string[]
-  onAttach: (files: File[]) => void
-  onRemoveAttachment: (path: string) => void
+  attachmentDraft: AttachmentDraft
   skills: Skill[]
   mentions: MentionOption[]
-  uploading: boolean
   permission: Permission
   onPermission: (p: Permission) => void
   providers: ProviderOption[]
@@ -52,14 +51,11 @@ interface Props {
 
 export function Composer(p: Props) {
   const lang = useLang()
-  const fileInput = useRef<HTMLInputElement>(null)
-  const plusBox = useRef<HTMLDivElement>(null)
   const textarea = useRef<HTMLTextAreaElement>(null)
   const valueRef = useRef(p.value)
   valueRef.current = p.value
   const [hi, setHi] = useState(0)
   const [caret, setCaret] = useState(0)
-  const [plusOpen, setPlusOpen] = useState(false)
   const [codeOpen, setCodeOpen] = useState(false)
   const codeBox = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -105,15 +101,6 @@ export function Composer(p: Props) {
   const current = p.providers.find((x) => x.id === p.provider)
   const effortOff = current?.type === 'anthropic' || current?.type === 'cli'
 
-  useEffect(() => {
-    if (!plusOpen) return
-    const down = (e: MouseEvent) => { if (!plusBox.current?.contains(e.target as Node)) setPlusOpen(false) }
-    const key = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setPlusOpen(false) }
-    document.addEventListener('mousedown', down)
-    document.addEventListener('keydown', key)
-    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key) }
-  }, [plusOpen])
-
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (atItems.length) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setHi((hi + 1) % atItems.length); return }
@@ -131,7 +118,7 @@ export function Composer(p: Props) {
   }
 
   return (
-    <div className="shrink-0 bg-bg px-5 pb-4 pt-2">
+    <div onDragOver={p.attachmentDraft.dragOver} onDrop={p.attachmentDraft.drop} className="shrink-0 bg-bg px-5 pb-4 pt-2">
       <div className="relative mx-auto max-w-4xl">
         {atQuery !== null && (atItems.length > 0 || (p.mentions.length === 0 && !p.files?.length)) && (
           <div className="absolute bottom-full z-20 mb-2 max-h-80 w-full overflow-y-auto rounded-xl border border-line bg-panel shadow-xl" role="listbox" aria-label={t('Tiện ích và tệp')}>
@@ -168,32 +155,17 @@ export function Composer(p: Props) {
                 <button onClick={() => { p.onSkill(null); textarea.current?.focus() }} aria-label={t('Bỏ {name}', { name: p.skill })} className="grid size-4 place-items-center rounded hover:bg-accent/20"><X className="size-3" /></button></span>
             </div>
           )}
-          {(p.attachments.length > 0 || p.uploading) && (
-            <div className="flex flex-wrap gap-1.5 px-1.5 pb-2">
-              {p.attachments.map((a) => (
-                <span key={a} className="flex items-center gap-1 rounded-md border border-line bg-bg px-2 py-0.5 text-xs"><Paperclip className="size-3 text-muted" />{a.split('/').pop()}
-                  <button onClick={() => p.onRemoveAttachment(a)} aria-label={t('Bỏ {name}', { name: a })} className="text-muted hover:text-fg"><X className="size-3" /></button></span>
-              ))}
-              {p.uploading && <span className="text-xs text-muted">{t('Đang tải lên…')}</span>}
-            </div>
-          )}
-          <textarea ref={textarea} value={p.value} onChange={(e) => { p.onChange(e.target.value); setCaret(e.target.selectionStart); setHi(0) }} onKeyDown={onKey} onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)} onClick={(e) => setCaret(e.currentTarget.selectionStart)} rows={1}
+          <AttachmentPreview draft={p.attachmentDraft} />
+          <textarea onPaste={p.attachmentDraft.paste} ref={textarea} value={p.value} onChange={(e) => { p.onChange(e.target.value); setCaret(e.target.selectionStart); setHi(0) }} onKeyDown={onKey} onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)} onClick={(e) => setCaret(e.currentTarget.selectionStart)} rows={1}
             placeholder={t('Nhắn tin cho agent…  (Enter để gửi, Shift+Enter xuống dòng, / để chọn skill, @ để gọi dịch vụ)')} aria-label={t('Tin nhắn')}
             className="block max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-2 text-sm placeholder:text-muted/70 focus:outline-none focus-visible:outline-none" style={{ fieldSizing: 'content' } as React.CSSProperties} />
 
           <div className="mt-1 flex flex-wrap items-center gap-1">
-            <input ref={fileInput} type="file" multiple hidden onChange={(e) => { if (e.target.files) p.onAttach([...e.target.files]); e.target.value = '' }} />
-            <div ref={plusBox} className="relative">
-              <button onClick={() => setPlusOpen(!plusOpen)} aria-haspopup="menu" aria-expanded={plusOpen} aria-label={t('Thêm')} title={t('Thêm')} className="grid size-8 place-items-center rounded-full text-muted transition hover:bg-panel2 hover:text-fg"><Plus className="size-[18px]" /></button>
-              {plusOpen && (
-                <div role="menu" className="fade-in absolute bottom-full left-0 z-30 mb-2 w-56 rounded-xl border border-line bg-panel p-1.5 shadow-2xl">
-                  <button role="menuitem" onClick={() => { setPlusOpen(false); fileInput.current?.click() }} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2"><Paperclip className="size-4 text-muted" />{t('Đính kèm tệp')}</button>
-                  <button role="menuitem" onClick={() => { setPlusOpen(false); const v = p.value; const sep = v && !/\s$/.test(v) ? ' ' : ''; p.onChange(`${v}${sep}@`); setTimeout(() => { const el = textarea.current; if (el) { el.focus(); setCaret(el.value.length) } }, 0) }} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2"><AtSign className="size-4 text-muted" />{t('Gọi một dịch vụ (@)')}</button>
-                  <button role="menuitem" disabled={!p.docsReady} onClick={() => { setPlusOpen(false); p.onDocs(!p.docs) }} title={p.docsReady ? t('Trả lời dựa trên tài liệu bạn đã thêm, có ghi nguồn') : t('Chưa có tài liệu nào. Thêm ở mục Tài liệu.')} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2 disabled:opacity-40"><FileSearch className="size-4 text-muted" />{t('Hỏi từ tài liệu')}{p.docs && <span className="ml-auto text-xs text-accent">✓</span>}</button>
-                  <button role="menuitem" onClick={() => { setPlusOpen(false); p.onChange('/'); textarea.current?.focus() }} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2"><Puzzle className="size-4 text-muted" />{t('Dùng một skill')}</button>
-                </div>
-              )}
-            </div>
+            <AttachmentMenu draft={p.attachmentDraft}>{(close) => <>
+              <button type="button" onClick={() => { close(); const v = p.value; const sep = v && !/\s$/.test(v) ? ' ' : ''; p.onChange(`${v}${sep}@`); setTimeout(() => { const el = textarea.current; if (el) { el.focus(); setCaret(el.value.length) } }, 0) }} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2"><AtSign className="size-4 text-muted" />{t('Gọi một dịch vụ (@)')}</button>
+              <button type="button" disabled={!p.docsReady} onClick={() => { close(); p.onDocs(!p.docs) }} title={p.docsReady ? t('Trả lời dựa trên tài liệu bạn đã thêm, có ghi nguồn') : t('Chưa có tài liệu nào. Thêm ở mục Tài liệu.')} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2 disabled:opacity-40"><FileSearch className="size-4 text-muted" />{t('Hỏi từ tài liệu')}{p.docs && <span className="ml-auto text-xs text-accent">✓</span>}</button>
+              <button type="button" onClick={() => { close(); p.onChange('/'); textarea.current?.focus() }} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-panel2"><Puzzle className="size-4 text-muted" />{t('Dùng một skill')}</button>
+            </>}</AttachmentMenu>
 
             {p.onCode && (
               <div ref={codeBox} className="relative">
@@ -230,7 +202,7 @@ export function Composer(p: Props) {
               {p.busy ? (
                 <button onClick={p.onStop} aria-label={t('Dừng')} className="ml-1 grid size-9 place-items-center rounded-full bg-panel2 transition hover:bg-line"><Square className="size-3.5 fill-current" /></button>
               ) : (
-                <button onClick={p.onSend} disabled={!p.value.trim() || p.uploading} aria-label={t('Gửi')} className="ml-1 grid size-9 place-items-center rounded-full bg-accent text-accent-fg transition hover:brightness-110 disabled:opacity-40"><ArrowUp className="size-4" /></button>
+                <button onClick={p.onSend} disabled={!p.value.trim() || p.attachmentDraft.uploading} aria-label={t('Gửi')} className="ml-1 grid size-9 place-items-center rounded-full bg-accent text-accent-fg transition hover:brightness-110 disabled:opacity-40"><ArrowUp className="size-4" /></button>
               )}
             </div>
           </div>

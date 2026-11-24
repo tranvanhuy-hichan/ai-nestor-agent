@@ -406,11 +406,15 @@ Chỉ tài khoản đã ghép đôi mới dùng được bot, nên người lạ
 | Lệnh | Tác dụng |
 |---|---|
 | `/new` | Bắt đầu hội thoại mới |
-| `/stop` | Hủy yêu cầu đang chờ phê duyệt |
+| `/model` | Bấm chọn model ngay trong Telegram, dấu ✓ là model đang dùng |
+| `/status` | Xem model, quyền, mức suy luận và chế độ tài liệu |
+| `/permission`, `/effort`, `/docs` | Bấm chọn quyền, mức suy luận hoặc chế độ tài liệu |
+| `/answer <nội dung hoặc số>` | Nhập câu trả lời tự do. Khi có lựa chọn sẵn, bấm nút dưới câu hỏi |
+| `/stop` | Dừng lượt đang chạy, kể cả khi đang chờ phê duyệt |
 | `/id` | Cho biết ID Telegram của bạn |
-| `/help` | Hiện trợ giúp |
+| `/help` | Hiện trợ giúp và các nút mở nhanh |
 
-Khi agent cần xin phép (ví dụ chạy lệnh), bot hỏi lại ngay trên Telegram với nút Cho phép/Từ chối. Agent chạy trên máy bạn và nhận tin bằng long polling, nên **không cần mở cổng ra internet**.
+Khi agent cần xin phép (ví dụ chạy lệnh), bot gửi nút **Cho phép** và **Từ chối** trên Telegram. Tin xin quyền thu gọn sau khi đã xử lý. Câu trả lời hỗ trợ các định dạng Markdown thường dùng. Agent chạy trên máy bạn và nhận tin bằng long polling, nên **không cần mở cổng ra internet**.
 
 > Giữ **token bot** bí mật. Nếu lỡ lộ, vào @BotFather gửi `/revoke` để lấy token mới.
 

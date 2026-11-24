@@ -1,3 +1,5 @@
+import { AttachmentMenu, AttachmentPreview } from '@/features/chat/Attachments'
+import { useAttachments } from '@/features/chat/useAttachments'
 import { useDialogs } from '@/components/ui/Dialogs'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -474,8 +476,13 @@ function PageChat({ page, notebookId, onClose, draft, onToggleDraft, beforeSend,
   const ideas = [...CHAT_IDEAS, { label: draft ? tk('Đề xuất trang con cho từng mục chính') : tk('Tạo và chèn trang con theo từng mục'), Icon: FilePlus }]
   const active = provider && provs[provider] ? provider : (cfg.data?.config.default_provider ?? null)
   const pickProvider = (id: string) => { setProvider(id); store.set('pages-chat-provider', id) }
+  const attachmentDraft = useAttachments(async () => {
+    const { id } = await loadNotebookChat(page.id, notebookId, true)
+    if (!id) throw new Error(t('Không thể mở hội thoại.'))
+    return id
+  })
   const submit = async (v: string) => {
-    if (!v.trim() || !ready || loadError || chat.busy || preparing) return
+    if (!v.trim() || !ready || loadError || chat.busy || preparing || attachmentDraft.uploading) return
     setPreparing(true)
     try {
       if (!await beforeSend() || !mounted.current) return
@@ -485,7 +492,10 @@ function PageChat({ page, notebookId, onClose, draft, onToggleDraft, beforeSend,
       if (!mounted.current) return
       setText('')
       stick.current = true
-      await chat.send(v, active, [], { context: `${draft ? 'page-draft' : 'page'}:${page.id}`, permission: draft ? 'readonly' : 'guarded' })
+      const paths = attachmentDraft.paths
+      const documentIds = attachmentDraft.documents.map((doc) => doc.id)
+      attachmentDraft.reset()
+      await chat.send(v, active, paths, { document_ids: documentIds, context: `${draft ? 'page-draft' : 'page'}:${page.id}`, permission: draft ? 'readonly' : 'guarded' })
     } catch (error) {
       if (mounted.current) setLoadError(error)
     } finally {
@@ -547,19 +557,21 @@ function PageChat({ page, notebookId, onClose, draft, onToggleDraft, beforeSend,
             {chat.busy && chat.status && <p className="flex items-center gap-2 text-xs text-muted" role="status"><LoaderCircle className="size-3.5 animate-spin text-accent" />{chat.status}</p>}
           </div>
         </div>
-        <form className="border-t border-line bg-panel p-4" onSubmit={(e) => { e.preventDefault(); void submit(text) }}>
+        <form onDragOver={attachmentDraft.dragOver} onDrop={ready && !loadError && !preparing ? attachmentDraft.drop : undefined} className="border-t border-line bg-panel p-4" onSubmit={(e) => { e.preventDefault(); void submit(text) }}>
           <div className="rounded-xl border border-line bg-bg shadow-sm transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/12">
-            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={t('Nhắn cho agent… (Enter để gửi)')} aria-label={t('Nhắn cho agent')}
+            <AttachmentPreview draft={attachmentDraft} />
+            <textarea onPaste={ready && !loadError && !preparing ? attachmentDraft.paste : undefined} value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={t('Nhắn cho agent… (Enter để gửi)')} aria-label={t('Nhắn cho agent')}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void submit(text) } }}
               className="block min-h-12 w-full resize-none bg-transparent px-3 pt-2.5 text-sm focus:outline-none" />
             <div className="flex items-center justify-between gap-2 px-2 pb-2">
+              <AttachmentMenu draft={attachmentDraft} disabled={!ready || !!loadError || preparing} />
               <select value={active ?? ''} onChange={(e) => pickProvider(e.target.value)} aria-label={t('Chọn model')} title={t('Chọn model')}
                 className="min-w-0 max-w-[15rem] flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-xs text-muted hover:border-line hover:text-fg focus:outline-none">
                 {Object.entries(provs).map(([id, c]) => <option key={id} value={id}>{id}{c.model ? ` · ${c.model}` : ''}</option>)}
               </select>
               {chat.busy
                 ? <Button type="button" size="sm" onClick={chat.stop} aria-label={t('Dừng')}><Square className="size-3.5" /></Button>
-                : <Button type="submit" size="sm" variant="primary" disabled={!text.trim() || preparing || !ready || !!loadError} aria-label={t('Gửi')}><Send className="size-3.5" /></Button>}
+                : <Button type="submit" size="sm" variant="primary" disabled={!text.trim() || attachmentDraft.uploading || preparing || !ready || !!loadError} aria-label={t('Gửi')}><Send className="size-3.5" /></Button>}
             </div>
           </div>
         </form>

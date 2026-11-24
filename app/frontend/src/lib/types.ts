@@ -57,6 +57,7 @@ export interface McpServerInfo { name: string; config: McpServerCfg; status: 'co
 export interface ApiToken { id: string; name: string; prefix: string; allow_exec: boolean; allow_docs?: boolean; created: number; last_used: number | null }
 export interface SkillEntry { enabled: boolean; api_key: string; env: Record<string, string> }
 export interface AppConfig {
+  chat_attachments: { image_max_mb: number; file_max_mb: number }
   default_provider: string
   fallback: string[]
   providers: Record<string, ProviderCfg>
@@ -88,7 +89,7 @@ export interface ConfigResponse { config: AppConfig; tools: ToolInfo[]; secrets?
 
 export interface SessionInfo { id: string; title: string; updated: number; created: number; source: string; turns: number; project?: string; pinned?: number; assistant?: string }
 export interface ToolCall { id: string; name: string; args: Record<string, unknown> }
-export interface WireMessage { role: 'user' | 'assistant' | 'tool'; content: string; tool_calls?: ToolCall[]; tool_call_id?: string; attachments?: string[] }
+export interface WireMessage { role: 'user' | 'assistant' | 'tool'; content: string; tool_calls?: ToolCall[]; tool_call_id?: string; attachments?: string[]; document_ids?: string[] }
 export interface FileEntry { path: string; dir: boolean; size: number; mtime: number }
 
 export interface Skill {

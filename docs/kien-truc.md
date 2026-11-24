@@ -278,7 +278,7 @@ Thông điệp hướng người dùng do backend sinh ra đều là **mẫu ti�
 | `cli` (`nestor chat`) | Hỏi `y/N` trong terminal | |
 | `cli` (`nestor run`) | Theo `--exec-policy` | Mặc định từ chối |
 | `api` (`/v1/run`) | Theo `exec_policy` và quyền của token | Mặc định từ chối |
-| `telegram` | Nút Cho phép/Từ chối trong Telegram | Tin nhắn mới hoặc `/stop` tự từ chối phê duyệt đang chờ |
+| `telegram` | Nút Cho phép/Từ chối trong Telegram | `/stop` dừng lượt đang chạy và đóng phê duyệt đang chờ |
 | `automation`, `heartbeat` | Không có → từ chối | Mọi thao tác cần phê duyệt bị từ chối |
 | `task`, `subagent` | Việc nền: không có (từ chối). Agent con: dùng lại người duyệt của agent cha | |
 

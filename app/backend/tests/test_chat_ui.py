@@ -260,3 +260,50 @@ def test_busy_footer_restores_terminal_on_interrupt(capsys):
 
     set_attrs.assert_called_with(0, termios.TCSANOW, previous)
     assert "\033[r" in capsys.readouterr().out
+
+
+def test_chat_upload_limits_session_storage_and_model_input(tmp_env, monkeypatch):
+    import base64
+
+    from fastapi.testclient import TestClient
+
+    from nestor.core import config
+    from nestor.main import app
+    from nestor.services import agent, chat_runner, sessions
+
+    cfg = config.load()
+    cfg.chat_attachments.image_max_mb = 1
+    cfg.providers[cfg.default_provider].vision = True
+    config.save(cfg)
+    sid = sessions.create("With files")
+    project = tmp_env / "project"
+    project.mkdir()
+    sessions.set_project(sid, str(project))
+    client = TestClient(app)
+    endpoint = f"/api/sessions/{sid}/chat-attachment"
+    assert client.post(endpoint, params={"name": "bad.html"}, content=b"<html>").status_code == 415
+    assert client.post(endpoint, params={"name": "large.png"}, content=b"x" * (1024**2 + 1)).status_code == 413
+    image = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aFSsAAAAASUVORK5CYII=")
+    uploads = [("demo.txt", b"Attachment excerpt"), ("demo.txt", b"Second attachment"), ("pixel.png", image)]
+    paths = []
+    for name, data in uploads:
+        result = client.post(endpoint, params={"name": name}, content=data)
+        assert result.status_code == 200, result.text
+        path = result.json()["path"]
+        assert client.get(f"/api/sessions/{sid}/file", params={"path": path, "raw": True}).content == data
+        paths.append(path)
+    assert len(set(paths)) == len(uploads) and not list(project.iterdir())
+    assert client.get(f"/api/sessions/{sid}/file", params={"path": ".chat-attachments/../other.txt"}).status_code == 400
+
+    class Fake:
+        def stream(self, messages, tool_defs, **kwargs):
+            current = messages[-1]
+            assert "Attachment excerpt" in current["content"] and "Second attachment" in current["content"]
+            assert base64.b64decode(current["images"][0]["b64"]) == image
+            yield {"type": "final", "content": "Read both files", "tool_calls": [], "usage": {"prompt": 1, "completion": 1}}
+
+    monkeypatch.setattr(agent, "make_provider", lambda cfg: Fake())
+    monkeypatch.setattr(chat_runner, "_auto_name_session", lambda *args: None)
+    response = client.post("/api/chat", json={"session": sid, "text": "Read", "attachments": paths})
+    assert "Read both files" in response.text
+    assert client.get(f"/api/sessions/{sid}").json()["messages"][0]["attachments"] == paths

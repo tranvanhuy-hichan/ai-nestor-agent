@@ -117,6 +117,8 @@ def _row_to_msg(r) -> dict:
         m["tool_calls"] = json.loads(r["tool_calls"])
     if r["tool_call_id"]:
         m["tool_call_id"] = r["tool_call_id"]
+    if r["document_ids"]:
+        m["document_ids"] = json.loads(r["document_ids"])
     if r["attachments"]:
         m["attachments"] = json.loads(r["attachments"])
     return m
@@ -124,7 +126,7 @@ def _row_to_msg(r) -> dict:
 
 def messages(sid: str, after_id: int = 0, with_ids: bool = False) -> list[dict]:
     with db() as c:
-        rows = c.execute("SELECT id,role,content,tool_calls,tool_call_id,attachments FROM messages WHERE session_id=? AND id>? ORDER BY id", (sid, after_id)).fetchall()
+        rows = c.execute("SELECT id,role,content,tool_calls,tool_call_id,attachments,document_ids FROM messages WHERE session_id=? AND id>? ORDER BY id", (sid, after_id)).fetchall()
     out = [_row_to_msg(r) for r in rows]
     if with_ids:
         for m, r in zip(out, rows):
@@ -135,9 +137,10 @@ def messages(sid: str, after_id: int = 0, with_ids: bool = False) -> list[dict]:
 def add_message(sid: str, msg: dict) -> int:
     now = time.time()
     with db() as c:
-        inserted = c.execute("INSERT INTO messages(session_id,role,content,tool_calls,tool_call_id,attachments,ts) VALUES(?,?,?,?,?,?,?)",
+        inserted = c.execute("INSERT INTO messages(session_id,role,content,tool_calls,tool_call_id,attachments,document_ids,ts) VALUES(?,?,?,?,?,?,?,?)",
                   (sid, msg["role"], msg.get("content", ""), json.dumps(msg["tool_calls"], ensure_ascii=False) if msg.get("tool_calls") else None,
-                   msg.get("tool_call_id"), json.dumps(msg["attachments"]) if msg.get("attachments") else None, now))
+                   msg.get("tool_call_id"), json.dumps(msg["attachments"]) if msg.get("attachments") else None,
+                   json.dumps(msg["document_ids"]) if msg.get("document_ids") else None, now))
         mid = inserted.lastrowid
         c.execute("UPDATE sessions SET updated=? WHERE id=?", (now, sid))
         if dbmod.fts_enabled and msg["role"] in ("user", "assistant") and msg.get("content"):

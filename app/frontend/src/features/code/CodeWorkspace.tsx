@@ -1,3 +1,4 @@
+import { useAttachments } from '@/features/chat/useAttachments'
 import { useDialogs } from '@/components/ui/Dialogs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -109,7 +110,7 @@ function ProjectWorkspace({ sid }: { sid: string }) {
   const setPermission = (p: Permission) => { setPermissionState(p); permStore.set(sid, p) }
   useEffect(() => { setPermissionState(permStore.get(sid) ?? 'default') }, [sid])
   const [effort, setEffort] = useState<Effort>('auto')
-  const [attachments, setAttachments] = useState<string[]>([])
+  const attachmentDraft = useAttachments(async () => sid)
   const wide = useMediaQuery('(min-width: 768px)')
   const scroller = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
@@ -178,17 +179,17 @@ function ProjectWorkspace({ sid }: { sid: string }) {
   const dirtyCount = Object.keys(drafts).length
 
   const submit = () => {
-    if (!text.trim() || chat.busy) return
+    if (!text.trim() || chat.busy || attachmentDraft.uploading) return
     stick.current = true
-    void chat.send(text, prov, attachments, { permission, effort })
+    void chat.send(text, prov, attachmentDraft.paths, { permission, effort, document_ids: attachmentDraft.documents.map((doc) => doc.id) })
     setText('')
-    setAttachments([])
+    attachmentDraft.reset()
   }
   const resend = async (override?: string) => {
     const last = await chat.rewindLast()
     if (!last) return
     stick.current = true
-    void chat.send(override ?? last.text, prov, last.attachments)
+    void chat.send(override ?? last.text, prov, last.attachments, { document_ids: last.document_ids, permission, effort })
   }
   const idea = (s: string) => { stick.current = true; void chat.send(s, prov) }
   const afterRevert = () => { void qc.invalidateQueries({ queryKey: ['git', sid] }); void qc.invalidateQueries({ queryKey: ['files', sid] }); void qc.invalidateQueries({ queryKey: ['file', sid] }) }
@@ -281,8 +282,7 @@ function ProjectWorkspace({ sid }: { sid: string }) {
             </div>
             <PlanCard items={chat.plan} />
             <Composer skill={null} onSkill={() => {}} mentions={(mcp.data ?? []).filter((s) => s.config.enabled).map((s) => ({ name: s.name, brand: mcpBrand(s.config), status: s.status, tools: s.tools.length }))}
-              value={text} onChange={setText} onSend={submit} onStop={chat.stop} busy={chat.busy} attachments={attachments} uploading={false}
-              onAttach={() => toast(t('Chế độ Code đọc file trực tiếp từ dự án, không cần đính kèm.'))} onRemoveAttachment={(p) => setAttachments((a) => a.filter((x) => x !== p))} skills={skills.data ?? []}
+              value={text} onChange={setText} onSend={submit} onStop={chat.stop} busy={chat.busy} attachmentDraft={attachmentDraft} skills={skills.data ?? []}
               docs={false} onDocs={() => {}} docsReady={false} permission={permission} onPermission={setPermission} provider={prov} onProvider={setProvider} effort={effort} onEffort={setEffort}
               providers={providers.map((id) => ({ id, model: cfg.data.config.providers[id].model, type: cfg.data.config.providers[id].type }))} />
           </section>

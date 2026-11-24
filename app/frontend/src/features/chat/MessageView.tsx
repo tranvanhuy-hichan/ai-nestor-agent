@@ -1,9 +1,10 @@
+import { SentAttachments } from './Attachments'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { openLogin } from '../integrations/ServicesTab'
 import { useState } from 'react'
 import { AgentMark } from '../../components/ui/AgentMark'
-import { Brain, Cable, CircleCheck, HelpCircle, Undo2, Check, ChevronRight, ExternalLink, Eye, FileText, Globe, Info, Paperclip, Pencil, RefreshCw, ShieldAlert, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
+import { Brain, Cable, CircleCheck, HelpCircle, Undo2, Check, ChevronRight, ExternalLink, Eye, FileText, Globe, Info, Pencil, RefreshCw, ShieldAlert, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { BrandIcon, detectBrand } from '@/components/ui/BrandIcon'
 import { Button } from '@/components/ui/Button'
@@ -339,11 +340,7 @@ export function MessageView({ item, sid, onDecide, onOpenFile, isLastUser, isLas
           ) : (
             <>
               <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-accent/15 px-4 py-2.5"><WithMentions text={item.text} /></div>
-              {item.attachments && item.attachments.length > 0 && (
-                <div className="flex max-w-[85%] flex-wrap justify-end gap-1.5">
-                  {item.attachments.map((a) => <button key={a} onClick={() => onOpenFile(a)} className="flex items-center gap-1 rounded-md border border-line bg-panel px-2 py-0.5 text-[11px] text-muted hover:text-fg"><Paperclip className="size-3" />{a.split('/').pop()}</button>)}
-                </div>
-              )}
+              <SentAttachments sid={sid} paths={item.attachments} documentIds={item.document_ids} onOpenFile={onOpenFile} />
               {isLastUser && canAct && <button onClick={() => { setDraft(item.text); setEditing(true) }} className="flex items-center gap-1 text-[11px] text-muted opacity-0 transition hover:text-fg focus:opacity-100 group-hover:opacity-100"><Pencil className="size-3" />{t('Sửa và gửi lại')}</button>}
             </>
           )}

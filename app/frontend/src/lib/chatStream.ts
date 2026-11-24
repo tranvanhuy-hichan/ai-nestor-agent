@@ -21,7 +21,7 @@ export type ChatEvent =
   | { type: 'done' }
 
 export async function streamChat(
-  body: { text: string; session: string | null; provider: string | null; attachments?: string[]; permission?: string; effort?: string; assistant?: string; context?: string },
+  body: { text: string; session: string | null; provider: string | null; attachments?: string[]; document_ids?: string[]; permission?: string; effort?: string; assistant?: string; context?: string },
   onEvent: (e: ChatEvent) => void,
   signal: AbortSignal,
 ) {
@@ -30,11 +30,14 @@ export async function streamChat(
 }
 
 export type FormQuestion = { question: string; options: string[]; multi?: boolean }
-export type RunState = { active: boolean; cursor: number; run_id: string | null; base_count: number; user: { text: string; attachments: string[] } | null }
+export type RunState = { active: boolean; cursor: number; run_id: string | null; base_count: number; user: { text: string; attachments: string[]; document_ids?: string[] } | null }
 
 async function readSse(r: Response, onEvent: (e: ChatEvent) => void) {
   if (r.status === 401) window.dispatchEvent(new Event('auth-required'))
-  if (!r.ok || !r.body) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status })
+  if (!r.ok || !r.body) {
+    const error = await r.json().catch(() => null)
+    throw Object.assign(new Error(typeof error?.detail === 'string' ? error.detail : `HTTP ${r.status}`), { status: r.status })
+  }
   const reader = r.body.getReader()
   const dec = new TextDecoder()
   let buf = ''
