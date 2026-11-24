@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { BookmarkPlus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -13,7 +14,7 @@ type SkillText = { name: string; description: string; body: string }
 type Candidate = SkillText & { revision: string }
 type Draft = SkillText & { matches: Candidate[] }
 
-export function SkillDraftButton({ sid, busy }: { sid: string; busy: boolean }) {
+export function SkillDraftButton({ sid, busy, onAction }: { sid: string; busy: boolean; onAction: () => void }) {
   const toast = useToast()
   const qc = useQueryClient()
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -38,10 +39,10 @@ export function SkillDraftButton({ sid, busy }: { sid: string; busy: boolean }) 
   })
   const close = () => { if (!save.isPending) setDraft(null) }
   return <>
-    <Button size="sm" className="shrink-0 whitespace-nowrap" disabled={busy} loading={generate.isPending} onClick={() => generate.mutate()} aria-label={t('Lưu thành kỹ năng')} title={t('Tạo bản nháp kỹ năng từ hội thoại')}>
-      <BookmarkPlus className="size-3.5" /><span className="hidden 2xl:inline">{t('Lưu thành kỹ năng')}</span>
+    <Button size="sm" variant="ghost" className="w-full justify-start" disabled={busy} loading={generate.isPending} onClick={() => { onAction(); generate.mutate() }} aria-label={t('Lưu thành kỹ năng')} title={t('Tạo bản nháp kỹ năng từ hội thoại')}>
+      <BookmarkPlus className="size-3.5" /><span>{t('Lưu thành kỹ năng')}</span>
     </Button>
-    {draft && <Modal open wide onClose={close} title={t('Xem trước kỹ năng')}
+    {draft && createPortal(<Modal open wide onClose={close} title={t('Xem trước kỹ năng')}
       footer={<><Button onClick={close} disabled={save.isPending}>{t('Hủy')}</Button>
         <Button variant="primary" loading={save.isPending}
           disabled={(!current && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.name)) || !draft.description.trim() || !draft.body.trim()}
@@ -70,6 +71,6 @@ export function SkillDraftButton({ sid, busy }: { sid: string; busy: boolean }) 
           </div>
         </div>
       </div>
-    </Modal>}
+    </Modal>, document.body)}
   </>
 }

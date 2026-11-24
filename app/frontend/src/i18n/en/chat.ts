@@ -1,4 +1,5 @@
 const dict: Record<string, string> = {
+  'Thao tác hội thoại': 'Conversation actions',
   'Danh sách hội thoại': 'Conversation list',
   'Cuộc trò chuyện mới': 'New conversation',
   'Bạn làm được những gì?': 'What can you do?',
