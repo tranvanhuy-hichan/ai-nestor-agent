@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..core import config as cfgmod
-from ..services import assistants, chat_runner, compaction, sessions, tools, usage, workfiles
+from ..services import assistants, chat_runner, compaction, knowledge, sessions, tools, usage, workfiles
 
 router = APIRouter()
 
@@ -147,7 +147,8 @@ class ChatBody(BaseModel):
     text: str
     session: str | None = None
     provider: str | None = None
-    attachments: list[str] = []
+    attachments: list[str] = Field(default_factory=list)
+    document_ids: list[str] = Field(default_factory=list, max_length=100)
     permission: Literal["default", "readonly", "guarded", "full", "plan"] = "default"
     effort: Literal["auto", "low", "medium", "high", "thinking"] = "auto"
     docs: bool = False  # "Hỏi từ tài liệu": chỉ trả lời dựa trên kho tài liệu, có nguồn
@@ -180,6 +181,13 @@ def chat(body: ChatBody):
     eff = body.assistant if body.assistant is not None else stored  # khong gui thi dung tro ly da luu cua phien
     draft = body.context.startswith("page-draft:")
     kb_category_id = _kb_category(body.context)
+    if body.document_ids:
+        available = {
+            doc["id"] for doc in knowledge.list_docs(kb_category_id)
+            if doc["status"] == "ready" and doc["chunks"] > 0
+        }
+        if not available.issuperset(body.document_ids):
+            raise HTTPException(422, "Tài liệu đã chọn không còn sẵn sàng trong phạm vi hội thoại.")
     tool_allow = assistants.tool_allow(eff)
     if draft:
         page_tools = {"page_read", "page_list", "page_search"}
@@ -190,7 +198,7 @@ def chat(body: ChatBody):
                                             effort=None if body.effort == "auto" else body.effort, docs=body.docs or bool(kb_category_id),
                                             temperature=body.temperature, max_tokens=body.max_tokens, detach=True,
                                             system_extra="\n\n".join(x for x in (assistants.prompt_for(eff), _context(body.context)) if x), tool_allow=tool_allow, assistant=body.assistant,
-                                            kb_category_id=kb_category_id):
+                                            kb_category_id=kb_category_id, document_ids=body.document_ids):
             yield _sse(ev)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)

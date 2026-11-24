@@ -153,7 +153,13 @@ class AgentsCfg(BaseModel):
     }
 
 
+class ChatAttachmentCfg(BaseModel):
+    image_max_mb: int = Field(10, ge=1)
+    file_max_mb: int = Field(25, ge=1)
+
+
 class Config(BaseModel):
+    chat_attachments: ChatAttachmentCfg = ChatAttachmentCfg()
     default_provider: str = "local"
     fallback: list[str] = []
     providers: dict[str, ProviderCfg] = {

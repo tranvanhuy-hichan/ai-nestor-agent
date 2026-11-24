@@ -689,49 +689,77 @@ def _terms(query: str) -> list[str]:
     return [w for w in re.findall(r"[a-z0-9]+", fold(query)) if len(w) > 1][:12]
 
 
-def _keyword_hits(query: str, k: int, category_id: str | None = None) -> list[int]:
+def _search_scope(category_id, document_ids):
+    clauses, params = [], []
+    if category_id:
+        clauses.append("d.category_id=?")
+        params.append(category_id)
+    if document_ids is not None:
+        placeholders = ",".join("?" for _ in document_ids)
+        clauses.extend(["d.chunks>0", "d.status='ready'", f"d.id IN ({placeholders})" if document_ids else "0"])
+        params.extend(document_ids)
+    return "".join(f" AND {clause}" for clause in clauses), params
+
+
+def match_document_ids(query: str, category_id: str | None = None) -> list[str]:
+    """Find document IDs whose indexed text matches the picker keywords."""
     terms = _terms(query)
     if not terms:
         return []
+    ensure_schema()
+    scope, params = _search_scope(category_id, None)
+    with db() as c:
+        if _fts(c):
+            match = " OR ".join(f'"{term}"' for term in terms)
+            rows = c.execute(
+                "SELECT DISTINCT ch.doc_id FROM kb_fts f JOIN kb_chunks ch ON ch.id=f.chunk_id "
+                "JOIN kb_docs d ON d.id=ch.doc_id WHERE kb_fts MATCH ?" + scope, (match, *params)
+            )
+            return [row["doc_id"] for row in rows]
+        rows = c.execute(
+            "SELECT ch.doc_id, ch.text FROM kb_chunks ch JOIN kb_docs d ON d.id=ch.doc_id WHERE 1=1" + scope, params
+        )
+        return list(dict.fromkeys(row["doc_id"] for row in rows if any(term in fold(row["text"]) for term in terms)))
+
+
+def _keyword_hits(query: str, k: int, category_id: str | None = None, document_ids: list[str] | None = None) -> list[int]:
+    terms = _terms(query)
+    if not terms:
+        return []
+    scope, params = _search_scope(category_id, document_ids)
     with db() as c:
         if _fts(c):
             try:
                 q = " OR ".join(f'"{t}"' for t in terms)
-                if category_id:
-                    rows = c.execute("""SELECT f.chunk_id FROM kb_fts f JOIN kb_chunks ch ON ch.id=f.chunk_id JOIN kb_docs d ON d.id=ch.doc_id
-                        WHERE kb_fts MATCH ? AND d.category_id=? ORDER BY rank LIMIT ?""", (q, category_id, k))
-                else:
-                    rows = c.execute("SELECT chunk_id FROM kb_fts WHERE kb_fts MATCH ? ORDER BY rank LIMIT ?", (q, k))
+                rows = c.execute(
+                    "SELECT f.chunk_id FROM kb_fts f JOIN kb_chunks ch ON ch.id=f.chunk_id "
+                    "JOIN kb_docs d ON d.id=ch.doc_id WHERE kb_fts MATCH ?" + scope + " ORDER BY rank LIMIT ?",
+                    (q, *params, k),
+                )
                 return [r["chunk_id"] for r in rows]
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - fallback for SQLite without FTS
                 pass
-        if category_id:
-            rows = c.execute("SELECT c.id, c.text FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id WHERE d.category_id=?", (category_id,)).fetchall()
-        else:
-            rows = c.execute("SELECT id, text FROM kb_chunks").fetchall()
+        rows = c.execute("SELECT ch.id, ch.text FROM kb_chunks ch JOIN kb_docs d ON d.id=ch.doc_id WHERE 1=1" + scope, params).fetchall()
     scored = [(sum(fold(r["text"]).count(t) for t in terms), r["id"]) for r in rows]
     return [cid for s, cid in sorted(scored, reverse=True)[:k] if s > 0]
 
 
-def _vector_hits(query: str, k: int, category_id: str | None = None) -> list[int]:
+def _vector_hits(query: str, k: int, category_id: str | None = None, document_ids: list[str] | None = None) -> list[int]:
     cfg = cfgmod.load()
     try:
         e = embeddings.get_embedder(cfg)
         if e is None:
             return []
         vecs, model = e.embed([query])
+        scope, params = _search_scope(category_id, document_ids)
         with db() as c:
-            if category_id:
-                rows = c.execute("""SELECT v.chunk_id, v.dim, v.vec FROM kb_vecs v JOIN kb_chunks ch ON ch.id=v.chunk_id JOIN kb_docs d ON d.id=ch.doc_id
-                    WHERE v.model=? AND d.category_id=?""", (model, category_id)).fetchall()
-            else:
-                rows = c.execute("SELECT chunk_id, dim, vec FROM kb_vecs WHERE model=?", (model,)).fetchall()
+            rows = c.execute(
+                "SELECT v.chunk_id, v.dim, v.vec FROM kb_vecs v JOIN kb_chunks ch ON ch.id=v.chunk_id "
+                "JOIN kb_docs d ON d.id=ch.doc_id WHERE v.model=?" + scope, (model, *params)
+            ).fetchall()
         rows = [r for r in rows if r["dim"] == len(vecs[0])]
         with db() as c:
-            if category_id:
-                total = c.execute("SELECT COUNT(*) n FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id WHERE d.category_id=?", (category_id,)).fetchone()["n"]
-            else:
-                total = c.execute("SELECT COUNT(*) n FROM kb_chunks").fetchone()["n"]
+            total = c.execute("SELECT COUNT(*) n FROM kb_chunks ch JOIN kb_docs d ON d.id=ch.doc_id WHERE 1=1" + scope, params).fetchone()["n"]
         if len(rows) < total:  # còn đoạn chưa có vector của model này: nhúng nền để lần hỏi sau tìm theo nghĩa được đầy đủ
             _spawn(ensure_vectors)
         if not rows:
@@ -747,23 +775,24 @@ def _vector_hits(query: str, k: int, category_id: str | None = None) -> list[int
         return []
 
 
-def search(query: str, limit: int = 6, category_id: str | None = None) -> list[dict]:
+def search(query: str, limit: int = 6, category_id: str | None = None, *, document_ids: list[str] | None = None) -> list[dict]:
     """Gộp từ khóa và ngữ nghĩa bằng reciprocal-rank fusion; mỗi kết quả kèm tên file và vị trí.
     Khi category_id được truyền, chỉ tìm trong tài liệu của danh mục đó."""
     ensure_schema()
     limit = max(1, min(int(limit), 15))
     score: dict[int, float] = {}
     how: dict[int, set[str]] = {}
-    for label, ids in (("từ khóa", _keyword_hits(query, limit * 3, category_id)), ("ngữ nghĩa", _vector_hits(query, limit * 3, category_id))):
+    for label, ids in (("từ khóa", _keyword_hits(query, limit * 3, category_id, document_ids)), ("ngữ nghĩa", _vector_hits(query, limit * 3, category_id, document_ids))):
         for rank, cid in enumerate(ids):
             score[cid] = score.get(cid, 0.0) + 1.0 / (RRF_K + rank)
             how.setdefault(cid, set()).add(label)
     top = sorted(score, key=lambda c: -score[c])[:limit]
     if not top:
         return []
+    scope, params = _search_scope(category_id, document_ids)
     with db() as c:
         q = ",".join("?" * len(top))
-        rows = {r["id"]: r for r in c.execute(f"SELECT c.id, c.loc, c.text, d.id AS doc_id, d.name FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id WHERE c.id IN ({q})", top)}
+        rows = {r["id"]: r for r in c.execute(f"SELECT c.id, c.loc, c.text, d.id AS doc_id, d.name FROM kb_chunks c JOIN kb_docs d ON d.id=c.doc_id WHERE c.id IN ({q})" + scope, (*top, *params))}
     return [{"chunk_id": i, "doc_id": rows[i]["doc_id"], "name": rows[i]["name"], "loc": rows[i]["loc"], "text": rows[i]["text"], "score": round(score[i], 4), "how": sorted(how[i])} for i in top if i in rows]
 
 

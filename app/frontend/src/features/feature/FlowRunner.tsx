@@ -1,3 +1,5 @@
+import { AttachmentMenu, AttachmentPreview } from '@/features/chat/Attachments'
+import { useAttachments } from '@/features/chat/useAttachments'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Check, CheckCircle2, Circle, Download, FileText, PartyPopper, RotateCcw, SkipForward, TriangleAlert } from 'lucide-react'
@@ -66,6 +68,7 @@ export function FlowRunner({ a, flow, provider = null, navigation, renderSidebar
   const [values, setValues] = useState<Values>(() => draftValues(k, load(k).idx, flow.steps[Math.min(load(k).idx, flow.steps.length - 1)].fields))
   const [files, setFiles] = useState<Files>({})
   const [fix, setFix] = useState('')
+  const fixAttachments = useAttachments(() => chat.ensureSession(a.id))
   const [ticks, setTicks] = useState<string[]>([])
   const [busyUp, setBusyUp] = useState(false)
   const [err, setErr] = useState('')
@@ -93,7 +96,7 @@ export function FlowRunner({ a, flow, provider = null, navigation, renderSidebar
     queryFn: () => api.get<FileEntry[]>(`/api/sessions/${st.sid}/files`).then((fs) => fs.filter((f) => !f.dir && !f.path.startsWith('uploads/')).sort((x, y) => y.mtime - x.mtime)),
   })
 
-  const send = (text: string, attachments: string[] = []) => chat.send(text, provider, attachments, { assistant: a.id, permission: 'guarded' })
+  const send = (text: string, attachments: string[] = [], document_ids?: string[]) => chat.send(text, provider, attachments, { document_ids, assistant: a.id, permission: 'guarded' })
 
   const run = async () => {
     setBusyUp(true); setErr('')
@@ -141,12 +144,21 @@ export function FlowRunner({ a, flow, provider = null, navigation, renderSidebar
     update({ idx: st.idx + 1, done: skipped ? st.done : [...st.done, step.id] })
     const next = draftValues(k, st.idx + 1, flow.steps[st.idx + 1]?.fields ?? [])
     if (a.id === 'cv-viec-lam' && values.mau_cv && flow.steps[st.idx + 1]?.fields.some((f) => f.key === 'mau_cv')) next.mau_cv = values.mau_cv
+    fixAttachments.reset()
     setValues(next); setFiles({}); setFix(''); setTicks([])
   }
   const redo = () => {
     try { for (let i = 0; i < total; i++) localStorage.removeItem(`${k}:draft:${i}`) } catch { /* storage unavailable */ }
+    fixAttachments.reset()
     setValues(initialValues(flow.steps[0].fields)); setFiles({}); setTicks([]); chat.reset(); setSt(EMPTY); save(k, EMPTY); restored.current = true }
-  const requestFix = () => { const text = fix.trim(); if (!text) return; setFix(''); setTicks([]); void send(`${t('Cần sửa lại bước này')}: ${text}`) }
+  const requestFix = () => {
+    const text = fix.trim()
+    if (!text || chat.busy || fixAttachments.uploading) return
+    setFix('')
+    setTicks([])
+    void send(`${t('Cần sửa lại bước này')}: ${text}`, fixAttachments.paths, fixAttachments.documents.map((doc) => doc.id))
+    fixAttachments.reset()
+  }
 
   const missing = step.fields.filter((f) => f.required && !isFilled(f, values, files))
   const ready = missing.length === 0 && (step.fields.some((f) => f.required) || step.fields.length === 0 || step.fields.some((f) => isFilled(f, values, files)))
@@ -229,9 +241,11 @@ export function FlowRunner({ a, flow, provider = null, navigation, renderSidebar
                 </div>
                 {!hasArtifact && <p role="status" className="text-[11px] text-bad">{t('Chưa có file đầu ra mới của bước này. Yêu cầu trợ lý tạo đủ file trước khi duyệt.')}</p>}
                 <details className="rounded-md border border-line bg-panel px-2.5 py-2"><summary className="cursor-pointer text-xs text-muted">{t('Yêu cầu chỉnh sửa')}</summary>
-                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                  <input value={fix} onChange={(e) => setFix(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && fix.trim()) requestFix() }} placeholder={t('Ví dụ: bổ sung phân tích, sửa bố cục hoặc làm rõ một mục…')} aria-label={t('Yêu cầu sửa')} className="h-10 min-w-0 flex-1 rounded-md bg-transparent px-2 text-sm outline-none" />
-                  <Button disabled={!fix.trim()} onClick={requestFix} className="shrink-0">{t('Yêu cầu sửa')}</Button>
+                <AttachmentPreview draft={fixAttachments} />
+                <div className="mt-2 flex items-center gap-2" onDragOver={fixAttachments.dragOver} onDrop={fixAttachments.drop}>
+                  <AttachmentMenu draft={fixAttachments} />
+                  <input onPaste={fixAttachments.paste} value={fix} onChange={(e) => setFix(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && fix.trim()) requestFix() }} placeholder={t('Ví dụ: bổ sung phân tích, sửa bố cục hoặc làm rõ một mục…')} aria-label={t('Yêu cầu sửa')} className="h-10 min-w-0 flex-1 rounded-md bg-transparent px-2 text-sm outline-none" />
+                  <Button disabled={!fix.trim() || fixAttachments.uploading} onClick={requestFix} className="shrink-0">{t('Yêu cầu sửa')}</Button>
                 </div></details>
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs"><button onClick={() => { const starts = { ...st.starts }; delete starts[step.id]; update({ starts }); setTicks([]); setErr('') }} className="text-muted hover:text-accent">{t('Chỉnh đầu vào và chạy lại')}</button><button onClick={redo} className="text-muted hover:text-fg">{t('Làm lại từ đầu')}</button></div>

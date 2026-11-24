@@ -82,6 +82,11 @@ def list_docs(category_id: str | None = None):
     return {"docs": docs, "stats": knowledge.stats(category_id), "supported": sorted(knowledge.SUPPORTED), "semantic": e.kind if e else None}
 
 
+@router.get("/knowledge/matches")
+def match_documents(q: str = Query(max_length=160), category_id: str | None = None):
+    return knowledge.match_document_ids(q, category_id)
+
+
 @router.post("/knowledge/upload")
 async def upload(name: str, request: Request, category_id: str | None = None):
     if int(request.headers.get("content-length") or 0) > knowledge.MAX_UPLOAD:

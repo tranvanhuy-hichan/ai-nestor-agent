@@ -76,6 +76,7 @@ MIGRATIONS = [
     ("sessions", "pinned", "INTEGER DEFAULT 0"),
     ("sessions", "assistant", "TEXT DEFAULT ''"),
     ("messages", "attachments", "TEXT"),
+    ("messages", "document_ids", "TEXT"),
     ("jobs", "assistant", "TEXT NOT NULL DEFAULT ''"),
     ("jobs", "assistant_scope", "TEXT NOT NULL DEFAULT ''"),
     ("cron_jobs", "notify", "INTEGER DEFAULT 1"),

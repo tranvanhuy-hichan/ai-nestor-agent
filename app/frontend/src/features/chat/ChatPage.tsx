@@ -1,3 +1,4 @@
+import { useAttachments } from './useAttachments'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AgentLogoStacked } from '../../components/ui/AgentMark'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
@@ -95,14 +96,17 @@ export function ChatPage() {
   const [text, setText] = useState('')
   const [skill, setSkill] = useState<string | null>(null)
   const [provider, setProvider] = useState<string | null>(null)
+  const attachmentDraft = useAttachments(() => chat.ensureSession(assistantRef.current))
+  const { reset: resetAttachments, uploading } = attachmentDraft
   const openChat = chat.open
   const openSession = useCallback(async (sid: string) => {
+    resetAttachments()
     const session = await openChat(sid)
     if (!session) return
     setAssistantId(session.assistant || undefined)
     setProvider(null)
     setSkill(null)
-  }, [openChat])
+  }, [openChat, resetAttachments])
   const [permission, setPermission] = useState<Permission>(NEW_CHAT_PERMISSION)
   const changePermission = (p: Permission) => { setPermission(p); permStore.set(chat.sessionId, p) }
   useEffect(() => { // hoi thoai moi vua co id: giu quyen da chon luc chua co id
@@ -114,8 +118,6 @@ export function ChatPage() {
   const [maxTokens, setMaxTokens] = useState(() => Number(store.get('chat_max_tokens', '4096')))
   const changeTemperature = (v: number) => { setTemperature(v); store.set('chat_temperature', String(v)) }
   const changeMaxTokens = (v: number) => { setMaxTokens(v); store.set('chat_max_tokens', String(v)) }
-  const [attachments, setAttachments] = useState<string[]>([])
-  const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [panelOpen, setPanelOpen] = useState(() => store.get('panel-open', '0') === '1')
   const [panelWidth, setPanelWidth] = useState(() => Number(store.get('panel-width', '460')))
@@ -222,12 +224,12 @@ export function ChatPage() {
     store.set('last-session', '')
     setProvider(null)
     setSkill(null)
-    setAttachments([])
+    resetAttachments()
     setOpenPath(null)
     setPermission(NEW_CHAT_PERMISSION)
     permStore.clear(null)
     setUseDocs(false)
-  }, [resetChat])
+  }, [resetChat, resetAttachments])
   const onNew = useCallback(() => selectProfile(''), [selectProfile])
   useEffect(() => {
     if (!selectedProfile || !registeredAssistants.data) return
@@ -252,29 +254,8 @@ export function ChatPage() {
 
   const onOpen = (id: string) => {
     setOpenPath(null)
-    setAttachments([])
     setPermission(permStore.get(id) ?? NEW_CHAT_PERMISSION)
     void openSession(id).catch((error) => toast(errMsg(error), 'bad'))
-  }
-
-  const upload = async (files: File[]) => {
-    if (!files.length) return
-    setUploading(true)
-    try {
-      const sid = await chat.ensureSession(assistantRef.current)
-      const paths: string[] = []
-      for (const f of files) {
-        const r = await fetch(`/api/sessions/${sid}/upload?name=${encodeURIComponent(f.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f })
-        if (!r.ok) throw new Error(`${f.name}: ${(await r.json().catch(() => ({ detail: r.statusText }))).detail}`)
-        paths.push((await r.json()).path)
-      }
-      setAttachments((a) => [...a, ...paths])
-      chat.bumpFiles()
-    } catch (e) {
-      toast(errMsg(e), 'bad')
-    } finally {
-      setUploading(false)
-    }
   }
 
   if (!cfg.data) return <Loading />
@@ -287,16 +268,16 @@ export function ChatPage() {
     const raw = override ?? text
     if (!raw.trim() || chat.busy || uploading) return
     stick.current = true
-    void chat.send(skill && override === undefined ? `${t('Dùng skill `{name}`: ', { name: skill })}${raw}` : raw, active, attachments, { permission, effort, docs: isDocs, temperature, max_tokens: maxTokens, assistant: assistantRef.current })
+    void chat.send(skill && override === undefined ? `${t('Dùng skill `{name}`: ', { name: skill })}${raw}` : raw, active, attachmentDraft.paths, { document_ids: attachmentDraft.documents.map((doc) => doc.id), permission, effort, docs: isDocs, temperature, max_tokens: maxTokens, assistant: assistantRef.current })
     if (override === undefined) setText('')
     setSkill(null)
-    setAttachments([])
+    resetAttachments()
   }
   const resend = async (override?: string) => {
     const last = await chat.rewindLast()
     if (!last) return
     stick.current = true
-    void chat.send(override ?? last.text, active, last.attachments)
+    void chat.send(override ?? last.text, active, last.attachments, { document_ids: last.document_ids, permission, effort, docs: isDocs })
   }
   const downloadMd = () => {
     const blob = new Blob([exportMarkdown(chat.items)], { type: 'text/markdown' })
@@ -360,7 +341,7 @@ export function ChatPage() {
       <section className="relative flex min-w-0 flex-1 flex-col"
         onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }}
         onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false) }}
-        onDrop={(e) => { e.preventDefault(); setDragging(false); void upload([...e.dataTransfer.files]) }}>
+        onDrop={(e) => { setDragging(false); if (!e.defaultPrevented) attachmentDraft.drop(e) }}>
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line px-4">
           <div className="flex min-w-0 items-center gap-2 text-sm">
             <button onClick={() => setSessionsOpen(!sessionsOpen)} aria-pressed={sessionsOpen} aria-label={t('Danh sách hội thoại')} title={t('Danh sách hội thoại')}
@@ -463,8 +444,8 @@ export function ChatPage() {
         </div>}
         {chat.sessionId && <ContextBanner key={chat.sessionId} sid={chat.sessionId} size={chat.items.length} busy={chat.busy} provider={active} newSession={() => selectProfile(assistantId ?? '')} />}
         <PlanCard items={chat.plan} />
-        <Composer gitBadge={gitInfo.data?.repo ? { branch: gitInfo.data.branch, changes: gitInfo.data.files.length } : null} codeExtra={chat.sessionId ? <GitPanel sid={chat.sessionId} tick={chat.filesTick} /> : null} project={project} onCode={() => (project ? void setProject(null) : setPickOpen(true))} mentions={(mcp.data ?? []).filter((s) => s.config.enabled).map((s) => ({ name: s.name, brand: mcpBrand(s.config), status: s.status, tools: s.tools.length }))} value={text} onChange={setText} skill={skill} onSkill={setSkill} onSend={() => submit()} onRunCommand={(c) => submit(c)} files={mentionFiles.data} onStop={chat.stop} busy={chat.busy} attachments={attachments} uploading={uploading}
-          onAttach={(f) => void upload(f)} onRemoveAttachment={(p) => setAttachments((a) => a.filter((x) => x !== p))} skills={(skills.data ?? []).filter((item) => !activeAssistant?.scoped || activeAssistant.skills?.includes(item.name))}
+        <Composer gitBadge={gitInfo.data?.repo ? { branch: gitInfo.data.branch, changes: gitInfo.data.files.length } : null} codeExtra={chat.sessionId ? <GitPanel sid={chat.sessionId} tick={chat.filesTick} /> : null} project={project} onCode={() => (project ? void setProject(null) : setPickOpen(true))} mentions={(mcp.data ?? []).filter((s) => s.config.enabled).map((s) => ({ name: s.name, brand: mcpBrand(s.config), status: s.status, tools: s.tools.length }))} value={text} onChange={setText} skill={skill} onSkill={setSkill} onSend={() => submit()} onRunCommand={(c) => submit(c)} files={mentionFiles.data} onStop={chat.stop} busy={chat.busy} attachmentDraft={attachmentDraft}
+          skills={(skills.data ?? []).filter((item) => !activeAssistant?.scoped || activeAssistant.skills?.includes(item.name))}
           docs={isDocs} onDocs={setUseDocs} docsReady={docsReady} permission={permission} onPermission={changePermission} provider={active} onProvider={setProvider} effort={effort} onEffort={setEffort}
           temperature={temperature} onTemperature={changeTemperature} maxTokens={maxTokens} onMaxTokens={changeMaxTokens}
           providers={providers.map((id) => ({ id, model: cfg.data.config.providers[id].model, type: cfg.data.config.providers[id].type }))} />

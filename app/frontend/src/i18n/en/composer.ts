@@ -23,6 +23,21 @@ const dict: Record<string, string> = {
   'Dừng ghi âm': 'Stop dictation',
   'gửi yêu cầu HTTP thay đổi dữ liệu': 'send a state-changing HTTP request',
   'Toàn quyền (không hỏi)': 'Full access (no prompt)',
+  'Không thể tải tệp lên.': 'Could not upload the file.',
+  'Xem ảnh {name}': 'View image {name}',
+  'Tài liệu đã chọn': 'Selected document',
+  'Đính kèm tệp hoặc ảnh': 'Attach files or images',
+  'Chọn từ Kho tài liệu (Document RAG)': 'Choose from Document Library (RAG)',
+  'Tìm tài liệu': 'Find documents',
+  'Tìm theo tên hoặc từ khóa': 'Search by name or keyword',
+  'Tất cả danh mục': 'All categories',
+  'Không tìm thấy tài liệu.': 'No documents found.',
+  'Đã chọn {n} tài liệu': '{n} documents selected',
+  'Hủy bỏ': 'Cancel',
+  'Đính kèm vào đoạn chat': 'Attach to chat',
+  'Không thể mở hội thoại.': 'Could not open the conversation.',
+  'Dung lượng tối đa mỗi ảnh đính kèm (MB)': 'Maximum attachment size per image (MB)',
+  'Dung lượng tối đa mỗi tệp đính kèm (MB)': 'Maximum attachment size per file (MB)',
 }
 
 export default dict

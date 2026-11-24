@@ -3,15 +3,19 @@ from nestor.services import knowledge
 from . import tool
 
 
+def source_tag(hit: dict) -> str:
+    loc = hit["loc"].replace("]", "］").replace("\n", " ").replace("\r", " ")
+    if hit.get("chunk_id") is not None:
+        loc = f"{loc}#chunk={hit['chunk_id']}"
+    name = hit["name"].translate(str.maketrans({"|": "｜", "]": "］", "\n": " ", "\r": " "}))
+    return f"[[src:{hit['doc_id']}|{name}|{loc}]]"
+
+
 def format_hits(hits: list[dict]) -> str:
     out = []
     for i, h in enumerate(hits, start=1):
         text = " ".join(h["text"].split())
-        loc = h["loc"].replace("]", "］").replace("\n", " ").replace("\r", " ")
-        if h.get("chunk_id") is not None:
-            loc = f"{loc}#chunk={h['chunk_id']}"
-        name = h["name"].translate(str.maketrans({"|": "｜", "]": "］", "\n": " ", "\r": " "}))
-        out.append(f"[{i}] thẻ nguồn: [[src:{h['doc_id']}|{name}|{loc}]]\n{text[:900]}")
+        out.append(f"[{i}] thẻ nguồn: {source_tag(h)}\n{text[:900]}")
     return "\n\n".join(out)
 
 

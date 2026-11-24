@@ -6,6 +6,9 @@ from pathlib import Path
 from nestor.core.config import Config
 
 SID_RE = re.compile(r"^[a-f0-9]{8}$")
+CHAT_ATTACHMENT_DIR = ".chat-attachments"
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+DOCUMENT_EXT = {".pdf", ".docx", ".xlsx", ".txt", ".csv", ".md", ".json"}
 MAX_UPLOAD = 25 * 1024 * 1024
 
 
@@ -24,6 +27,13 @@ def workdir_for(cfg: Config, sid: str) -> Path:
     from nestor.services import sessions
     project = (sessions.get(sid) or {}).get("project") or ""
     return Path(project) if project else session_dir(cfg, sid)
+
+
+def attachment_path(cfg: Config, sid: str, rel: str, workdir: Path) -> Path:
+    if rel.startswith(CHAT_ATTACHMENT_DIR + "/"):
+        root = safe_path(session_dir(cfg, sid), CHAT_ATTACHMENT_DIR)
+        return safe_path(root, rel.removeprefix(CHAT_ATTACHMENT_DIR + "/"))
+    return safe_path(workdir, rel)
 
 
 def safe_path(base: Path, rel: str) -> Path:

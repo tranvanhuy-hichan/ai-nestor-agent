@@ -234,6 +234,7 @@ export function SettingsPage() {
   const save = useSaveConfig()
   const toast = useToast()
   const [agentEdit, setAgentEdit] = useState<AppConfig['agent'] | null>(null)
+  const [attachmentEdit, setAttachmentEdit] = useState<AppConfig['chat_attachments'] | null>(null)
   const [hubEdit, setHubEdit] = useState<string | null>(null)
   const [extraEdit, setExtraEdit] = useState<ExtraCfg | null>(null)
   const [query, setQuery] = useState('')
@@ -250,10 +251,11 @@ export function SettingsPage() {
   if (!cfg.data) return <Loading />
   const { config, tools, secrets } = cfg.data
   const agent = agentEdit ?? config.agent
+  const attachments = attachmentEdit ?? config.chat_attachments
   const hub = hubEdit ?? config.clawhub_url
   const extra = extraEdit ?? extraConfig(config)
-  const dirty = JSON.stringify(agent) !== JSON.stringify(config.agent) || hub !== config.clawhub_url || JSON.stringify(extra) !== JSON.stringify(extraConfig(config))
-  const reset = () => { setAgentEdit(null); setHubEdit(null); setExtraEdit(null) }
+  const dirty = attachments.image_max_mb !== config.chat_attachments.image_max_mb || attachments.file_max_mb !== config.chat_attachments.file_max_mb || JSON.stringify(agent) !== JSON.stringify(config.agent) || hub !== config.clawhub_url || JSON.stringify(extra) !== JSON.stringify(extraConfig(config))
+  const reset = () => { setAgentEdit(null); setAttachmentEdit(null); setHubEdit(null); setExtraEdit(null) }
   const num = (k: 'max_steps' | 'max_history' | 'compact_chars') => (e: React.ChangeEvent<HTMLInputElement>) => setAgentEdit({ ...agent, [k]: Number(e.target.value) })
   const searchWords = searchableText(query.trim()).split(/\s+/).filter(Boolean)
   const matches = items.filter(({ label, desc, terms }) => {
@@ -261,7 +263,7 @@ export function SettingsPage() {
     return searchWords.every((word) => index.includes(word))
   })
   const clearSearch = () => setQuery('')
-  const saveChanges = () => save.mutate({ ...config, ...extra, agent, clawhub_url: hub }, {
+  const saveChanges = () => save.mutate({ ...config, ...extra, agent, chat_attachments: attachments, clawhub_url: hub }, {
     onSuccess: () => { reset(); toast(t('Đã lưu cài đặt')) }, onError: (e) => toast(errMsg(e), 'bad'),
   })
   const closeSettings = () => { if (!save.isPending) setParams({}, { replace: true }) }
@@ -327,6 +329,12 @@ export function SettingsPage() {
                   <p className="text-sm font-medium">{t('Gợi ý tạo kỹ năng từ việc lặp lại')}</p>
                   <Switch checked={agent.suggest_habits} onChange={(v) => setAgentEdit({ ...agent, suggest_habits: v })} label={t('Gợi ý kỹ năng')} />
                 </div>
+                <Field label={t('Dung lượng tối đa mỗi ảnh đính kèm (MB)')}>
+                  <Input type="number" min={1} value={attachments.image_max_mb} onChange={(e) => setAttachmentEdit({ ...attachments, image_max_mb: Number(e.target.value) })} />
+                </Field>
+                <Field label={t('Dung lượng tối đa mỗi tệp đính kèm (MB)')}>
+                  <Input type="number" min={1} value={attachments.file_max_mb} onChange={(e) => setAttachmentEdit({ ...attachments, file_max_mb: Number(e.target.value) })} />
+                </Field>
                 <Field label={t('Số bước tối đa mỗi lượt')}><Input type="number" min={1} max={50} value={agent.max_steps} onChange={num('max_steps')} /></Field>
                 <div className="col-span-full"><Field label={t('Thư mục workspace')}><Input value={agent.workspace} onChange={(e) => setAgentEdit({ ...agent, workspace: e.target.value })} /></Field></div>
               </div>
