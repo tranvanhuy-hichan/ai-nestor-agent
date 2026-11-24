@@ -35,7 +35,7 @@ def _output_files(sid: str, events: list[dict]) -> list[str]:
 def _auto_name_session(sid: str, user_text: str, provider: str | None) -> None:
     try:
         sess = sessions.get(sid)
-        if not sess:
+        if not sess or sess.get("source") == "telegram":
             return
         msgs = sessions.messages(sid)
         if len(msgs) <= 2:
